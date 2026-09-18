@@ -79,6 +79,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private SpriteBatch _spriteBatch = null!;
     private Texture2D _pixel = null!;
     private Texture2D _circle = null!;
+    private AudioManager _audio = null!;
 
     private RaceSimulation _race = null!;
     private RaceEntrant _player = null!;
@@ -89,6 +90,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private bool _newLapRecord;
     private bool _newRaceRecord;
     private bool _newScoreRecord;
+    private bool _playerWasCollidingLastTick;
 
     private int _windowWidth;
     private int _windowHeight;
@@ -141,6 +143,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         _newLapRecord = false;
         _newRaceRecord = false;
         _newScoreRecord = false;
+        _playerWasCollidingLastTick = false;
 
         _carColors.Clear();
         int aiIndex = 0;
@@ -278,6 +281,15 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         }
 
         _circle.SetData(circleData);
+
+        _audio = new AudioManager();
+        _audio.LoadContent();
+    }
+
+    protected override void UnloadContent()
+    {
+        _audio.Dispose();
+        base.UnloadContent();
     }
 
     protected override void Update(GameTime gameTime)
@@ -331,6 +343,8 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 if (_input.WasJustPressed(Keys.Space) || _input.WasJustPressed(Keys.Enter))
                 {
                     StartNewRaceAndResize(_selectedMode);
+                    _audio.PlayMusic(_selectedMode);
+                    _audio.StartEngine();
                     _state = State.Racing;
                 }
 
@@ -339,14 +353,36 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             case State.Racing:
                 if (_input.WasJustPressed(Keys.Escape))
                 {
+                    _audio.StopMusic();
+                    _audio.StopEngine();
                     _state = State.Intro;
                     break;
                 }
 
                 float dt = Math.Min((float)gameTime.ElapsedGameTime.TotalSeconds, 0.1f);
                 _race.Update(dt, _input.BuildCarInput());
+
+                _audio.UpdateEngine(_player.Car.Speed, _player.Car.Settings.MaxForwardSpeed, _player.Car.IsBoosting);
+
+                bool collidingNow = _player.Car.HadHeadOnCollisionThisTick
+                    || _player.Car.HadCarCollisionThisTick
+                    || _player.Car.HadHazardCollisionThisTick;
+                if (collidingNow && !_playerWasCollidingLastTick)
+                {
+                    _audio.PlayCollision();
+                }
+
+                _playerWasCollidingLastTick = collidingNow;
+
+                if (_player.Car.CheckpointCrossedThisTick)
+                {
+                    _audio.PlayCheckpoint();
+                }
+
                 if (_race.IsRaceOver)
                 {
+                    _audio.StopMusic();
+                    _audio.StopEngine();
                     ProcessRaceEndRecords();
                     _state = State.Results;
                 }
@@ -363,6 +399,8 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 if (_input.WasJustPressed(Keys.R) || _input.WasJustPressed(Keys.Space) || _input.WasJustPressed(Keys.Enter))
                 {
                     StartNewRaceAndResize(_race.Mode);
+                    _audio.PlayMusic(_race.Mode);
+                    _audio.StartEngine();
                     _state = State.Racing;
                 }
                 else if (_input.WasJustPressed(Keys.M))
