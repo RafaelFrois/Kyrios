@@ -20,6 +20,8 @@ public readonly struct Vector2D
 
     public float DistanceTo(Vector2D other) => (this - other).Length();
 
+    public static float Dot(Vector2D a, Vector2D b) => (a.X * b.X) + (a.Y * b.Y);
+
     public static Vector2D operator +(Vector2D a, Vector2D b) => new(a.X + b.X, a.Y + b.Y);
 
     public static Vector2D operator -(Vector2D a, Vector2D b) => new(a.X - b.X, a.Y - b.Y);

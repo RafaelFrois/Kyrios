@@ -11,6 +11,15 @@ public sealed class RaceSimulation
     private const float TimeAttackStartGraceSeconds = 3f;
     private const float TimeBonusPerCheckpoint = 3f;
     private const float TimeBonusPerLap = 6f;
+
+    /// <summary>A cada volta já completada, o bônus de tempo (checkpoint e volta) encolhe por este fator —
+    /// as primeiras voltas recuperam bastante relógio, as tardias recuperam bem menos, então o jogo fica
+    /// mais difícil de sustentar com o tempo em vez de dar sempre o mesmo bônus fixo pra sempre.</summary>
+    private const float TimeBonusDecayPerLap = 0.8f;
+
+    /// <summary>Piso do fator de decaimento: o bônus nunca cai abaixo desta fração do valor base.</summary>
+    private const float MinTimeBonusFactor = 0.35f;
+
     private const float ScorePerCheckpoint = 10f;
     private const float ScorePerLap = 100f;
     private const float WallCrashTimePenalty = 2f;
@@ -146,16 +155,22 @@ public sealed class RaceSimulation
     {
         float time = TimeRemaining ?? TimeAttackStartSeconds;
 
+        // Quantas voltas já estavam completas antes deste checkpoint/volta — usado pra encolher o bônus
+        // de tempo progressivamente. Se a volta acabou de ser completada, Car.LapsCompleted já foi
+        // incrementado, então subtrai 1 pra pegar o índice da volta que acabou de fechar (0-based).
+        int priorLaps = lapCompleted ? scored.Car.LapsCompleted - 1 : scored.Car.LapsCompleted;
+        float bonusFactor = MathF.Max(MinTimeBonusFactor, MathF.Pow(TimeBonusDecayPerLap, priorLaps));
+
         if (checkpointCrossed)
         {
             scored.Score += ScorePerCheckpoint;
-            time += TimeBonusPerCheckpoint;
+            time += TimeBonusPerCheckpoint * bonusFactor;
         }
 
         if (lapCompleted)
         {
             scored.Score += ScorePerLap;
-            time += TimeBonusPerLap;
+            time += TimeBonusPerLap * bonusFactor;
         }
 
         // Sem penalidade de batida logo no início: a largada em grade fica naturalmente apertada
@@ -253,8 +268,13 @@ public sealed class RaceSimulation
                 float overlap = minDistance - distance;
                 Vector2D normal = delta * (1f / distance);
 
+                // Direção "pra fora" de cada carro — a que o ricochete rígido deve empurrar a velocidade.
+                Vector2D outwardA = normal * -1f;
+                Vector2D outwardB = normal;
+
                 // Nunca empurra um carro pra dentro de uma parede: se um lado não tem pra onde ir,
-                // o outro absorve a separação inteira; se os dois estão travados, só freia sem mover.
+                // o outro absorve a separação inteira; se os dois estão travados, só o ricochete de
+                // velocidade acontece (sem empurrão de posição).
                 Vector2D halfPushA = normal * (-overlap / 2f);
                 Vector2D halfPushB = normal * (overlap / 2f);
                 bool aBlockedHalf = Track.CollidesWithWall(a.Position + halfPushA, a.Settings.Radius);
@@ -262,8 +282,8 @@ public sealed class RaceSimulation
 
                 if (!aBlockedHalf && !bBlockedHalf)
                 {
-                    a.ResolveCarCollision(halfPushA, a.Settings.CarCollisionSpeedFactor);
-                    b.ResolveCarCollision(halfPushB, b.Settings.CarCollisionSpeedFactor);
+                    a.ResolveCarCollision(halfPushA, outwardA);
+                    b.ResolveCarCollision(halfPushB, outwardB);
                     continue;
                 }
 
@@ -272,10 +292,14 @@ public sealed class RaceSimulation
                     Vector2D fullPushB = normal * overlap;
                     if (!Track.CollidesWithWall(b.Position + fullPushB, b.Settings.Radius))
                     {
-                        b.ResolveCarCollision(fullPushB, b.Settings.CarCollisionSpeedFactor);
+                        b.ResolveCarCollision(fullPushB, outwardB);
+                    }
+                    else
+                    {
+                        b.ResolveCarCollision(Vector2D.Zero, outwardB);
                     }
 
-                    a.ResolveCarCollision(Vector2D.Zero, a.Settings.CarCollisionSpeedFactor);
+                    a.ResolveCarCollision(Vector2D.Zero, outwardA);
                     continue;
                 }
 
@@ -284,16 +308,21 @@ public sealed class RaceSimulation
                     Vector2D fullPushA = normal * -overlap;
                     if (!Track.CollidesWithWall(a.Position + fullPushA, a.Settings.Radius))
                     {
-                        a.ResolveCarCollision(fullPushA, a.Settings.CarCollisionSpeedFactor);
+                        a.ResolveCarCollision(fullPushA, outwardA);
+                    }
+                    else
+                    {
+                        a.ResolveCarCollision(Vector2D.Zero, outwardA);
                     }
 
-                    b.ResolveCarCollision(Vector2D.Zero, b.Settings.CarCollisionSpeedFactor);
+                    b.ResolveCarCollision(Vector2D.Zero, outwardB);
                     continue;
                 }
 
-                // Os dois travados entre si e a parede: sem espaço pra separar, só perde velocidade.
-                a.ResolveCarCollision(Vector2D.Zero, a.Settings.CarCollisionSpeedFactor);
-                b.ResolveCarCollision(Vector2D.Zero, b.Settings.CarCollisionSpeedFactor);
+                // Os dois travados entre si e a parede: sem espaço pra separar, mas a velocidade ainda
+                // ricocheteia — é assim que dá pra perder o controle mesmo encostado numa parede.
+                a.ResolveCarCollision(Vector2D.Zero, outwardA);
+                b.ResolveCarCollision(Vector2D.Zero, outwardB);
             }
         }
     }

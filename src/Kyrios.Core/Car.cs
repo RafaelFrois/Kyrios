@@ -126,14 +126,43 @@ public sealed class Car
     }
 
     /// <summary>
-    /// Usado pela <see cref="RaceSimulation"/> para separar carros que se sobrepuseram e aplicar uma
-    /// pequena penalidade de velocidade na batida — colisão carro-com-carro não é resolvida aqui dentro
+    /// Usado pela <see cref="RaceSimulation"/> para separar carros que se sobrepuseram e ricochetear a
+    /// velocidade igual uma superfície rígida — colisão carro-com-carro não é resolvida aqui dentro
     /// porque um carro não conhece os outros, só a pista.
     /// </summary>
-    internal void ResolveCarCollision(Vector2D positionCorrection, float speedMultiplier)
+    /// <param name="positionCorrection">Deslocamento pra separar os carros sobrepostos.</param>
+    /// <param name="outwardNormal">Direção "pra fora", se afastando do outro carro — o eixo em que a
+    /// velocidade ricocheteia, como se fosse o normal de uma parede na hora do impacto.</param>
+    internal void ResolveCarCollision(Vector2D positionCorrection, Vector2D outwardNormal)
     {
         Position += positionCorrection;
-        Speed *= speedMultiplier;
+
+        Vector2D velocity = Vector2D.FromAngle(Angle) * Speed;
+        float velocityAlongNormal = Vector2D.Dot(velocity, outwardNormal);
+
+        // Só ricocheteia se o carro estava mesmo avançando pra dentro do outro (não bate duas vezes
+        // num carro que já está se afastando). O ricochete rígido soma de volta o componente de
+        // velocidade que ia "pra dentro", na proporção da elasticidade configurada — isso realoca a
+        // velocidade numa direção que o motorista não escolheu, exatamente a perda de controle esperada
+        // de uma batida contra uma superfície dura, em vez de só frear na mesma direção de antes.
+        if (velocityAlongNormal < 0f)
+        {
+            velocity -= outwardNormal * (velocityAlongNormal * (1f + Settings.CarCollisionRestitution));
+        }
+
+        velocity *= Settings.CarCollisionSpeedFactor;
+
+        float newSpeed = velocity.Length();
+        if (newSpeed > 0.05f)
+        {
+            Angle = MathF.Atan2(velocity.Y, velocity.X);
+            Speed = newSpeed;
+        }
+        else
+        {
+            Speed = 0f;
+        }
+
         HadCarCollisionThisTick = true;
     }
 

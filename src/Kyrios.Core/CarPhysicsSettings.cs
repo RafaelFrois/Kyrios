@@ -17,7 +17,13 @@ public sealed class CarPhysicsSettings
     public float WallBounceSpeedFactor { get; init; } = 0.25f;
     public float WallScrapeSpeedFactor { get; init; } = 0.92f;
 
-    public float CarCollisionSpeedFactor { get; init; } = 0.7f;
+    /// <summary>Quanto da velocidade sobrevive depois do ricochete carro-com-carro (energia perdida na batida).</summary>
+    public float CarCollisionSpeedFactor { get; init; } = 0.8f;
+
+    /// <summary>"Elasticidade" do ricochete carro-com-carro: 0 = só para o avanço na direção do outro carro
+    /// (como hoje), 1 = ricocheteia com a mesma força que veio — feito pra bater igual parede e jogar o
+    /// carro pra fora de controle, não simplesmente frear.</summary>
+    public float CarCollisionRestitution { get; init; } = 0.65f;
 
     public float BoostMaxFuel { get; init; } = 100f;
     public float BoostStartingFuel { get; init; } = 40f;

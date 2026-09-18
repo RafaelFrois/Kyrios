@@ -63,10 +63,31 @@ public class CarCollisionAndBoostTests
     }
 
     [Fact]
-    public void ResolveCarCollision_MovesCarByCorrectionAndDampensSpeed()
+    public void ResolveCarCollision_MovesCarByPositionCorrection()
     {
         var car = new Car("Test", new Vector2D(5f, 5f), 0f);
-        // Acelera um pouco pra ter velocidade > 0 antes da colisão.
+        Track track = OpenTrack();
+        for (int i = 0; i < 20; i++)
+        {
+            car.Update(0.05f, new CarInput(1f, 0f), track);
+        }
+
+        Vector2D positionBefore = car.Position;
+        var correction = new Vector2D(0.2f, -0.1f);
+
+        car.ResolveCarCollision(correction, new Vector2D(-1f, 0f));
+
+        Assert.Equal(positionBefore.X + 0.2f, car.Position.X, precision: 3);
+        Assert.Equal(positionBefore.Y - 0.1f, car.Position.Y, precision: 3);
+    }
+
+    [Fact]
+    public void ResolveCarCollision_DrivingIntoOtherCar_BouncesLikeARigidSurface()
+    {
+        // Restituição e fator de velocidade em 1 = ricochete perfeitamente elástico, sem perda de energia,
+        // pra deixar a matemática do teste simples: bater de frente deveria simplesmente inverter a velocidade.
+        var settings = new CarPhysicsSettings { CarCollisionRestitution = 1f, CarCollisionSpeedFactor = 1f };
+        var car = new Car("Test", new Vector2D(5f, 5f), 0f, settings); // encarando +X
         Track track = OpenTrack();
         for (int i = 0; i < 20; i++)
         {
@@ -74,14 +95,35 @@ public class CarCollisionAndBoostTests
         }
 
         float speedBefore = car.Speed;
-        Vector2D positionBefore = car.Position;
-        var correction = new Vector2D(0.2f, -0.1f);
+        Assert.True(speedBefore > 0f, "O carro precisa estar em movimento antes da colisão.");
 
-        car.ResolveCarCollision(correction, 0.5f);
+        // O outro carro está bem na frente: "pra fora" pra este carro é a direção oposta (-X).
+        car.ResolveCarCollision(Vector2D.Zero, new Vector2D(-1f, 0f));
 
-        Assert.Equal(positionBefore.X + 0.2f, car.Position.X, precision: 3);
-        Assert.Equal(positionBefore.Y - 0.1f, car.Position.Y, precision: 3);
-        Assert.Equal(speedBefore * 0.5f, car.Speed, precision: 3);
+        Assert.Equal(speedBefore, car.Speed, precision: 2);
+        // A batida jogou o carro de volta na direção que veio — perdeu o controle, não só freou.
+        Assert.Equal(MathF.PI, MathF.Abs(car.Angle), precision: 2);
+        Assert.True(car.HadCarCollisionThisTick);
+    }
+
+    [Fact]
+    public void ResolveCarCollision_MovingAwayFromOtherCar_DoesNotBounce()
+    {
+        var car = new Car("Test", new Vector2D(5f, 5f), 0f); // encarando +X
+        Track track = OpenTrack();
+        for (int i = 0; i < 20; i++)
+        {
+            car.Update(0.05f, new CarInput(1f, 0f), track);
+        }
+
+        float speedBefore = car.Speed;
+
+        // O outro carro está atrás: "pra fora" pra este carro é a mesma direção que ele já está indo (+X),
+        // ou seja, ele já está se afastando — não deveria ricochetear, só perder um pouco de energia.
+        car.ResolveCarCollision(Vector2D.Zero, new Vector2D(1f, 0f));
+
+        Assert.Equal(0f, car.Angle, precision: 3);
+        Assert.Equal(speedBefore * car.Settings.CarCollisionSpeedFactor, car.Speed, precision: 2);
     }
 
     [Fact]

@@ -156,6 +156,36 @@ public class TimeAttackModeTests
     }
 
     [Fact]
+    public void TimeAttack_TimeBonusPerLap_DecreasesOnLaterLaps()
+    {
+        RaceSimulation race = RaceFactory.CreateDefaultRace(
+            aiOpponents: 1, includeHuman: false, targetLaps: 5, randomSeed: 7, mode: RaceMode.TimeAttack);
+        RaceEntrant scored = race.ScoredEntrant;
+
+        const float dt = 0.05f;
+        var lapBonuses = new List<float>();
+        int lastLaps = 0;
+
+        for (int i = 0; i < 6000 && lapBonuses.Count < 2 && !race.IsRaceOver; i++)
+        {
+            float before = race.TimeRemaining!.Value;
+            race.Update(dt, CarInput.None);
+
+            if (scored.Car.LapsCompleted > lastLaps)
+            {
+                lastLaps = scored.Car.LapsCompleted;
+                float after = race.TimeRemaining!.Value;
+                // Soma o dt de volta pra isolar só o bônus ganho no tick da volta, sem o desconto normal do relógio.
+                lapBonuses.Add(after - before + dt);
+            }
+        }
+
+        Assert.True(lapBonuses.Count >= 2, "O teste precisa que o carro complete pelo menos 2 voltas.");
+        Assert.True(lapBonuses[1] < lapBonuses[0],
+            $"O bônus da 2ª volta ({lapBonuses[1]:0.00}) deveria ser menor que o da 1ª ({lapBonuses[0]:0.00}).");
+    }
+
+    [Fact]
     public void CreateDefaultRace_TimeAttack_ScoredEntrantIsTheHuman()
     {
         RaceSimulation race = RaceFactory.CreateDefaultRace(aiOpponents: 2, includeHuman: true, randomSeed: 1, mode: RaceMode.TimeAttack);
