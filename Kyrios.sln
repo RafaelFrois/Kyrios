@@ -1,0 +1,50 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{A7631652-3E01-4BAC-BC33-E8CB230CF3EC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kyrios.Core", "src\Kyrios.Core\Kyrios.Core.csproj", "{3917AF88-1029-4C91-8FCB-86D407504135}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kyrios.ConsoleGame", "src\Kyrios.ConsoleGame\Kyrios.ConsoleGame.csproj", "{50B79A77-12B0-4C85-85BE-9EEB646FAE0C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{1B0AAE52-2E85-4451-B12B-6D5378B779DA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kyrios.Core.Tests", "tests\Kyrios.Core.Tests\Kyrios.Core.Tests.csproj", "{5D215FAD-274A-439C-9413-898FD2481C67}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kyrios.Game", "src\Kyrios.Game\Kyrios.Game.csproj", "{2C71360B-DA99-4110-8B00-A24B6B55246D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3917AF88-1029-4C91-8FCB-86D407504135}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3917AF88-1029-4C91-8FCB-86D407504135}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3917AF88-1029-4C91-8FCB-86D407504135}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3917AF88-1029-4C91-8FCB-86D407504135}.Release|Any CPU.Build.0 = Release|Any CPU
+		{50B79A77-12B0-4C85-85BE-9EEB646FAE0C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{50B79A77-12B0-4C85-85BE-9EEB646FAE0C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{50B79A77-12B0-4C85-85BE-9EEB646FAE0C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{50B79A77-12B0-4C85-85BE-9EEB646FAE0C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5D215FAD-274A-439C-9413-898FD2481C67}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5D215FAD-274A-439C-9413-898FD2481C67}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5D215FAD-274A-439C-9413-898FD2481C67}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5D215FAD-274A-439C-9413-898FD2481C67}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2C71360B-DA99-4110-8B00-A24B6B55246D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2C71360B-DA99-4110-8B00-A24B6B55246D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2C71360B-DA99-4110-8B00-A24B6B55246D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2C71360B-DA99-4110-8B00-A24B6B55246D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{3917AF88-1029-4C91-8FCB-86D407504135} = {A7631652-3E01-4BAC-BC33-E8CB230CF3EC}
+		{50B79A77-12B0-4C85-85BE-9EEB646FAE0C} = {A7631652-3E01-4BAC-BC33-E8CB230CF3EC}
+		{5D215FAD-274A-439C-9413-898FD2481C67} = {1B0AAE52-2E85-4451-B12B-6D5378B779DA}
+		{2C71360B-DA99-4110-8B00-A24B6B55246D} = {A7631652-3E01-4BAC-BC33-E8CB230CF3EC}
+	EndGlobalSection
+EndGlobal
