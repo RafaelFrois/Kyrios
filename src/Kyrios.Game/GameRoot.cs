@@ -28,7 +28,6 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private static readonly Color GrassCellColorA = new(41, 112, 68);
     private static readonly Color GrassCellColorB = new(47, 124, 76);
     private static readonly Color TrackColor = new(46, 48, 58);
-    private static readonly Color CheckpointTint = new(255, 215, 0, 90);
     private static readonly Color TextColor = Color.White;
     private static readonly Color AccentColor = new(255, 200, 40);
     private static readonly Color CurbBase = new(44, 40, 40);
@@ -80,6 +79,15 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private Texture2D _pixel = null!;
     private Texture2D _circle = null!;
     private AudioManager _audio = null!;
+    private readonly ParticleSystem _particles = new();
+    private readonly Random _particleRandom = new();
+    private readonly Random _shakeRandom = new();
+
+    private float _visualTime;
+    private float _shakeTimer;
+    private float _shakeDuration;
+    private float _shakeMagnitude;
+    private Vector2 _shakeOffset;
 
     private RaceSimulation _race = null!;
     private RaceEntrant _player = null!;
@@ -91,6 +99,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private bool _newRaceRecord;
     private bool _newScoreRecord;
     private bool _playerWasCollidingLastTick;
+    private int _lastCountdownTickSecond = int.MaxValue;
 
     private int _windowWidth;
     private int _windowHeight;
@@ -144,6 +153,10 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         _newRaceRecord = false;
         _newScoreRecord = false;
         _playerWasCollidingLastTick = false;
+        _lastCountdownTickSecond = int.MaxValue;
+        _particles.Clear();
+        _shakeTimer = 0f;
+        _shakeOffset = Vector2.Zero;
 
         _carColors.Clear();
         int aiIndex = 0;
@@ -241,6 +254,98 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         _saveData.Save();
     }
 
+    /// <summary>Decide qual dos três jingles de resultado combina com o desfecho da corrida pro jogador.</summary>
+    private RaceOutcome DetermineOutcome()
+    {
+        switch (_race.Mode)
+        {
+            case RaceMode.Elimination:
+                return _player.Finished ? RaceOutcome.Victory : RaceOutcome.Defeat;
+
+            case RaceMode.TimeAttack:
+                return _newScoreRecord ? RaceOutcome.Victory : RaceOutcome.Neutral;
+
+            default:
+                int place = _player.FinishPlace ?? _race.Entrants.Count;
+                if (place == 1)
+                {
+                    return RaceOutcome.Victory;
+                }
+
+                return place == _race.Entrants.Count ? RaceOutcome.Defeat : RaceOutcome.Neutral;
+        }
+    }
+
+    private void TriggerScreenShake(float magnitude)
+    {
+        _shakeDuration = 0.18f;
+        _shakeTimer = _shakeDuration;
+        _shakeMagnitude = magnitude;
+    }
+
+    private void DecayScreenShake(float dt)
+    {
+        if (_shakeTimer <= 0f)
+        {
+            _shakeOffset = Vector2.Zero;
+            return;
+        }
+
+        _shakeTimer = MathF.Max(0f, _shakeTimer - dt);
+        float fraction = _shakeDuration > 0f ? _shakeTimer / _shakeDuration : 0f;
+        float magnitude = _shakeMagnitude * fraction;
+        _shakeOffset = new Vector2(
+            (((float)_shakeRandom.NextDouble() * 2f) - 1f) * magnitude,
+            (((float)_shakeRandom.NextDouble() * 2f) - 1f) * magnitude);
+    }
+
+    /// <summary>Poeira ao sair da pista, faíscas na colisão e um rastro atrás do carro ao usar turbo — nada
+    /// de novas texturas, só o mesmo círculo procedural de sempre, em pequeno, com vida curta.</summary>
+    private void UpdateParticleSpawns()
+    {
+        foreach (RaceEntrant entrant in _race.Entrants)
+        {
+            if (entrant.Eliminated)
+            {
+                continue;
+            }
+
+            Car car = entrant.Car;
+            var worldPos = new Vector2(car.Position.X * CellSize, car.Position.Y * CellSize);
+            Vector2 forward = Rotate(new Vector2(1f, 0f), car.Angle);
+
+            bool offTrack = _race.Track.IsOffTrack((int)MathF.Floor(car.Position.X), (int)MathF.Floor(car.Position.Y));
+            if (offTrack && MathF.Abs(car.Speed) > 2f && _particleRandom.NextDouble() < 0.5)
+            {
+                Vector2 dustVelocity = (-forward * car.Speed * 0.3f) + RandomSpread(30f);
+                _particles.Spawn(worldPos, dustVelocity, life: 0.5f, size: CellSize * 0.35f, new Color(150, 130, 90, 160));
+            }
+
+            if (car.IsBoosting)
+            {
+                Vector2 boostVelocity = (-forward * 40f) + RandomSpread(20f);
+                Vector2 spawnPos = worldPos - (forward * CellSize * 0.7f);
+                _particles.Spawn(spawnPos, boostVelocity, life: 0.35f, size: CellSize * 0.22f, new Color(255, 160, 60, 200));
+            }
+
+            bool colliding = car.HadHeadOnCollisionThisTick || car.HadCarCollisionThisTick || car.HadHazardCollisionThisTick;
+            if (colliding)
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    _particles.Spawn(worldPos, RandomSpread(90f), life: 0.25f, size: CellSize * 0.15f, new Color(255, 225, 150, 220));
+                }
+            }
+        }
+    }
+
+    private Vector2 RandomSpread(float maxSpeed)
+    {
+        float angle = (float)(_particleRandom.NextDouble() * Math.PI * 2.0);
+        float speed = (float)_particleRandom.NextDouble() * maxSpeed;
+        return new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * speed;
+    }
+
     private void SizeWindowForCurrentRace()
     {
         int trackPixelWidth = _race.Track.Width * CellSize;
@@ -296,6 +401,10 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     {
         _input.Update();
 
+        float frameSeconds = (float)gameTime.ElapsedGameTime.TotalSeconds;
+        _visualTime += frameSeconds;
+        DecayScreenShake(frameSeconds);
+
         bool altHeld = _input.IsDown(Keys.LeftAlt) || _input.IsDown(Keys.RightAlt);
         if (_input.WasJustPressed(Keys.F11) || (altHeld && _input.WasJustPressed(Keys.Enter)))
         {
@@ -304,6 +413,13 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             ToggleFullscreen();
             base.Update(gameTime);
             return;
+        }
+
+        if (_state is State.Intro or State.ModeSelect)
+        {
+            // Chamada idempotente: só entra em ação se o tema de menu ainda não estiver tocando, então é
+            // seguro chamar em todo quadro sem reiniciar a música toda vez.
+            _audio.PlayMenuTheme();
         }
 
         switch (_state)
@@ -333,16 +449,19 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                     || _input.WasJustPressed(Keys.Down) || _input.WasJustPressed(Keys.S))
                 {
                     _selectedMode = NextMode(_selectedMode);
+                    _audio.PlayMenuMove();
                 }
                 else if (_input.WasJustPressed(Keys.Left) || _input.WasJustPressed(Keys.A)
                     || _input.WasJustPressed(Keys.Up) || _input.WasJustPressed(Keys.W))
                 {
                     _selectedMode = PreviousMode(_selectedMode);
+                    _audio.PlayMenuMove();
                 }
 
                 if (_input.WasJustPressed(Keys.Space) || _input.WasJustPressed(Keys.Enter))
                 {
                     StartNewRaceAndResize(_selectedMode);
+                    _audio.PlayMenuConfirm();
                     _audio.PlayMusic(_selectedMode);
                     _audio.StartEngine();
                     _state = State.Racing;
@@ -359,10 +478,12 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                     break;
                 }
 
-                float dt = Math.Min((float)gameTime.ElapsedGameTime.TotalSeconds, 0.1f);
+                float dt = Math.Min(frameSeconds, 0.1f);
                 _race.Update(dt, _input.BuildCarInput());
 
                 _audio.UpdateEngine(_player.Car.Speed, _player.Car.Settings.MaxForwardSpeed, _player.Car.IsBoosting);
+                UpdateParticleSpawns();
+                _particles.Update(dt);
 
                 bool collidingNow = _player.Car.HadHeadOnCollisionThisTick
                     || _player.Car.HadCarCollisionThisTick
@@ -370,6 +491,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 if (collidingNow && !_playerWasCollidingLastTick)
                 {
                     _audio.PlayCollision();
+                    TriggerScreenShake(_player.Car.HadHeadOnCollisionThisTick ? 6f : 3.5f);
                 }
 
                 _playerWasCollidingLastTick = collidingNow;
@@ -379,11 +501,22 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                     _audio.PlayCheckpoint();
                 }
 
+                if (_race.Mode == RaceMode.TimeAttack && _race.TimeRemaining is { } timeRemaining && timeRemaining <= 3f)
+                {
+                    int currentSecond = Math.Max(0, (int)MathF.Ceiling(timeRemaining));
+                    if (currentSecond >= 1 && currentSecond != _lastCountdownTickSecond)
+                    {
+                        _audio.PlayCountdownTick();
+                        _lastCountdownTickSecond = currentSecond;
+                    }
+                }
+
                 if (_race.IsRaceOver)
                 {
                     _audio.StopMusic();
                     _audio.StopEngine();
                     ProcessRaceEndRecords();
+                    _audio.PlayResultJingle(DetermineOutcome());
                     _state = State.Results;
                 }
 
@@ -434,6 +567,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             case State.Racing:
                 DrawTrack();
                 DrawHazards();
+                DrawParticles();
                 DrawCars();
                 DrawLiveHud();
                 break;
@@ -441,6 +575,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             case State.Results:
                 DrawTrack();
                 DrawHazards();
+                DrawParticles();
                 DrawCars();
                 DrawResultsPopup();
                 break;
@@ -466,9 +601,11 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         float offsetX = (actualWidth - (_windowWidth * scale)) / 2f;
         float offsetY = (actualHeight - (_windowHeight * scale)) / 2f;
 
+        // O tremor de câmera é definido em pixels "lógicos" (antes da escala), então precisa escalar
+        // junto pra parecer do mesmo tamanho relativo em janela ou em tela cheia.
         return Matrix.CreateTranslation(TrackMargin, TrackMargin, 0f)
             * Matrix.CreateScale(scale, scale, 1f)
-            * Matrix.CreateTranslation(offsetX, offsetY, 0f);
+            * Matrix.CreateTranslation(offsetX + (_shakeOffset.X * scale), offsetY + (_shakeOffset.Y * scale), 0f);
     }
 
     // ---------- Primitivas de desenho ----------
@@ -508,6 +645,38 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         float cos = MathF.Cos(angle);
         float sin = MathF.Sin(angle);
         return new Vector2((local.X * cos) - (local.Y * sin), (local.X * sin) + (local.Y * cos));
+    }
+
+    /// <summary>Retângulo com os quatro cantos arredondados (corpo em cruz + um círculo em cada canto) —
+    /// só funciona bem com cores opacas, já que os círculos dos cantos se sobrepõem levemente ao corpo.</summary>
+    private void DrawRoundedRect(Rectangle rect, Color color, float radius)
+    {
+        radius = MathF.Max(0f, MathF.Min(radius, MathF.Min(rect.Width, rect.Height) / 2f));
+        if (radius < 1f)
+        {
+            _spriteBatch.Draw(_pixel, rect, color);
+            return;
+        }
+
+        int r = (int)radius;
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.X + r, rect.Y, rect.Width - (2 * r), rect.Height), color);
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Y + r, r, rect.Height - (2 * r)), color);
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.Right - r, rect.Y + r, r, rect.Height - (2 * r)), color);
+
+        DrawCircle(new Vector2(rect.X + r, rect.Y + r), radius, color);
+        DrawCircle(new Vector2(rect.Right - r, rect.Y + r), radius, color);
+        DrawCircle(new Vector2(rect.X + r, rect.Bottom - r), radius, color);
+        DrawCircle(new Vector2(rect.Right - r, rect.Bottom - r), radius, color);
+    }
+
+    private void DrawParticles()
+    {
+        foreach (Particle particle in _particles.Particles)
+        {
+            float lifeFraction = Math.Clamp(particle.Life / particle.MaxLife, 0f, 1f);
+            var color = new Color(particle.Color.R, particle.Color.G, particle.Color.B, (byte)(particle.Color.A * lifeFraction));
+            DrawCircle(particle.Position, particle.Size * lifeFraction, color);
+        }
     }
 
     private static Color Darken(Color color, float factor) =>
@@ -560,7 +729,10 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 }
                 else if (cell is >= '1' and <= '9')
                 {
-                    _spriteBatch.Draw(_pixel, rect, CheckpointTint);
+                    // Pulsa suavemente em vez de ficar num tom fixo — fica mais claro que é uma zona
+                    // "viva" do circuito, não só uma pintura estática no chão.
+                    int pulseAlpha = (int)(70 + (MathF.Sin(_visualTime * 4f) * 35f));
+                    _spriteBatch.Draw(_pixel, rect, new Color(255, 215, 0, pulseAlpha));
                 }
             }
         }
@@ -638,8 +810,11 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         var poleRect = new Rectangle((int)(cx - 2f), (int)(cy - (CellSize * 1.6f)), 4, (int)(CellSize * 1.7f));
         _spriteBatch.Draw(_pixel, poleRect, new Color(220, 220, 220));
 
-        var flagRect = new Rectangle((int)(cx + 2f), (int)(cy - (CellSize * 1.6f)), (int)(CellSize * 0.9f), (int)(CellSize * 0.55f));
-        _spriteBatch.Draw(_pixel, flagRect, AccentColor);
+        // Bandeira balançando: um leve ângulo oscilante em vez de um retângulo parado.
+        float flutterAngle = MathF.Sin(_visualTime * 6f) * 0.18f;
+        float flagWidth = CellSize * 0.9f;
+        var flagCenter = new Vector2(cx + 2f + (flagWidth / 2f), cy - (CellSize * 1.35f));
+        DrawFilledRectRotated(flagCenter, flagWidth, CellSize * 0.55f, flutterAngle, AccentColor);
     }
 
     private void DrawOuterTireStacks(Track track)
@@ -725,6 +900,18 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 }
             }
 
+            // Aerofólio traseiro e retrovisores — dão silhueta mais reconhecível de "carro de corrida"
+            // em vez de só uma cápsula lisa.
+            Color trimColor = Darken(color, 0.55f);
+            Vector2 spoilerCenter = center + Rotate(new Vector2(-halfLength * 0.98f, 0f), car.Angle);
+            DrawFilledRectRotated(spoilerCenter, width * 0.16f, width * 1.05f, car.Angle, trimColor);
+
+            foreach (float mirrorSide in new[] { -1f, 1f })
+            {
+                Vector2 mirrorPos = center + Rotate(new Vector2(halfLength * 0.1f, mirrorSide * (halfWidth + (width * 0.1f))), car.Angle);
+                DrawFilledRectRotated(mirrorPos, width * 0.16f, width * 0.13f, car.Angle, trimColor);
+            }
+
             DrawCapsule(center, length, width, car.Angle, color);
 
             Color roofColor = Darken(color, 0.5f);
@@ -733,6 +920,10 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
             if (!eliminated)
             {
+                // Brilho no para-brisa: um toque de reflexo pra não ficar um retângulo escuro liso.
+                Vector2 windshieldHighlight = center + Rotate(new Vector2(halfLength * 0.2f, -width * 0.14f), car.Angle);
+                DrawCircle(windshieldHighlight, width * 0.13f, new Color(255, 255, 255, 70));
+
                 Vector2 headlightL = center + Rotate(new Vector2(halfLength * 0.9f, halfWidth * 0.55f), car.Angle);
                 Vector2 headlightR = center + Rotate(new Vector2(halfLength * 0.9f, -halfWidth * 0.55f), car.Angle);
                 DrawCircle(headlightL, CellSize * 0.11f, new Color(255, 250, 210));
@@ -1063,9 +1254,18 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
     private void DrawSelectablePanel(Rectangle rect, bool selected)
     {
-        _spriteBatch.Draw(_pixel, rect, selected ? AccentColor : PanelBorderColor);
+        Color borderColor = PanelBorderColor;
+        if (selected)
+        {
+            // Um brilho suave e pulsante na borda do painel escolhido, pra chamar mais atenção do que
+            // só uma cor sólida.
+            float pulse = (MathF.Sin(_visualTime * 5f) + 1f) / 2f;
+            borderColor = Color.Lerp(AccentColor, Color.White, pulse * 0.35f);
+        }
+
+        DrawRoundedRect(rect, borderColor, 10f);
         var inner = new Rectangle(rect.X + 4, rect.Y + 4, rect.Width - 8, rect.Height - 8);
-        _spriteBatch.Draw(_pixel, inner, PanelFillColor);
+        DrawRoundedRect(inner, PanelFillColor, 8f);
     }
 
     private static readonly Vector2[] OutlineOffsets =
@@ -1077,9 +1277,9 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
     private void DrawPanel(Rectangle rect)
     {
-        _spriteBatch.Draw(_pixel, rect, PanelBorderColor);
+        DrawRoundedRect(rect, PanelBorderColor, 10f);
         var inner = new Rectangle(rect.X + 4, rect.Y + 4, rect.Width - 8, rect.Height - 8);
-        _spriteBatch.Draw(_pixel, inner, PanelFillColor);
+        DrawRoundedRect(inner, PanelFillColor, 8f);
     }
 
     private void DrawPanelText(Rectangle panel, string header, string[] lines)

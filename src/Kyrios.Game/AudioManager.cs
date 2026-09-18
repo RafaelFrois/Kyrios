@@ -4,6 +4,14 @@ using Microsoft.Xna.Framework.Audio;
 
 namespace Kyrios.Game;
 
+/// <summary>Qual dos três jingles de resultado combina com o desfecho da corrida pro jogador.</summary>
+public enum RaceOutcome
+{
+    Victory,
+    Neutral,
+    Defeat,
+}
+
 /// <summary>
 /// Dono de toda a trilha sonora e efeitos do jogo — tudo sintetizado em código (ver <see cref="Synth"/>
 /// e <see cref="Soundtrack"/>), sem nenhum arquivo de áudio externo. Se o dispositivo de áudio não
@@ -17,17 +25,26 @@ public sealed class AudioManager
     private const float EngineBoostPitchBonus = 0.15f;
     private const float EngineMinVolume = 0.22f;
     private const float EngineMaxVolume = 0.5f;
+    private const float SfxPitchJitter = 0.1f;
 
     private bool _available = true;
+    private readonly Random _random = new();
 
     private SoundEffectInstance _sprintMusic;
     private SoundEffectInstance _eliminationMusic;
     private SoundEffectInstance _timeAttackMusic;
+    private SoundEffectInstance _menuMusic;
     private SoundEffectInstance _activeMusic;
 
     private SoundEffectInstance _engine;
     private SoundEffect _checkpointSfx;
     private SoundEffect _collisionSfx;
+    private SoundEffect _victoryJingle;
+    private SoundEffect _defeatJingle;
+    private SoundEffect _neutralJingle;
+    private SoundEffect _menuMoveBlip;
+    private SoundEffect _menuConfirmBlip;
+    private SoundEffect _countdownTick;
 
     public void LoadContent()
     {
@@ -36,9 +53,16 @@ public sealed class AudioManager
             _sprintMusic = CreateLoop(Soundtrack.BuildSprintTheme());
             _eliminationMusic = CreateLoop(Soundtrack.BuildEliminationTheme());
             _timeAttackMusic = CreateLoop(Soundtrack.BuildTimeAttackTheme());
+            _menuMusic = CreateLoop(Soundtrack.BuildMenuTheme());
             _engine = CreateLoop(Soundtrack.BuildEngineLoop());
             _checkpointSfx = Soundtrack.BuildCheckpointChime();
             _collisionSfx = Soundtrack.BuildCollisionThud();
+            _victoryJingle = Soundtrack.BuildVictoryJingle();
+            _defeatJingle = Soundtrack.BuildDefeatJingle();
+            _neutralJingle = Soundtrack.BuildNeutralEndJingle();
+            _menuMoveBlip = Soundtrack.BuildMenuMoveBlip();
+            _menuConfirmBlip = Soundtrack.BuildMenuConfirmBlip();
+            _countdownTick = Soundtrack.BuildCountdownTick();
         }
         catch (Exception)
         {
@@ -64,19 +88,54 @@ public sealed class AudioManager
 
         try
         {
-            _activeMusic?.Stop();
-            _activeMusic = mode switch
+            SoundEffectInstance target = mode switch
             {
                 RaceMode.Elimination => _eliminationMusic,
                 RaceMode.TimeAttack => _timeAttackMusic,
                 _ => _sprintMusic,
             };
-            _activeMusic?.Play();
+            PlayLoop(target);
         }
         catch (Exception)
         {
             _available = false;
         }
+    }
+
+    /// <summary>Toca o tema de menu — chamada idempotente (não reinicia o loop se ele já estiver
+    /// tocando), então é seguro chamar em todo quadro enquanto o jogo estiver num estado de menu.</summary>
+    public void PlayMenuTheme()
+    {
+        if (!_available)
+        {
+            return;
+        }
+
+        try
+        {
+            PlayLoop(_menuMusic);
+        }
+        catch (Exception)
+        {
+            _available = false;
+        }
+    }
+
+    private void PlayLoop(SoundEffectInstance instance)
+    {
+        if (instance is null)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(_activeMusic, instance) && instance.State == SoundState.Playing)
+        {
+            return;
+        }
+
+        _activeMusic?.Stop();
+        _activeMusic = instance;
+        _activeMusic.Play();
     }
 
     public void StopMusic()
@@ -165,7 +224,7 @@ public sealed class AudioManager
 
         try
         {
-            _checkpointSfx.Play(0.6f, 0f, 0f);
+            _checkpointSfx.Play(0.6f, NextPitchJitter(), 0f);
         }
         catch (Exception)
         {
@@ -182,7 +241,7 @@ public sealed class AudioManager
 
         try
         {
-            _collisionSfx.Play(0.7f, 0f, 0f);
+            _collisionSfx.Play(0.7f, NextPitchJitter(), 0f);
         }
         catch (Exception)
         {
@@ -190,13 +249,98 @@ public sealed class AudioManager
         }
     }
 
+    public void PlayResultJingle(RaceOutcome outcome)
+    {
+        if (!_available)
+        {
+            return;
+        }
+
+        try
+        {
+            SoundEffect jingle = outcome switch
+            {
+                RaceOutcome.Victory => _victoryJingle,
+                RaceOutcome.Defeat => _defeatJingle,
+                _ => _neutralJingle,
+            };
+            jingle?.Play(0.65f, 0f, 0f);
+        }
+        catch (Exception)
+        {
+            _available = false;
+        }
+    }
+
+    public void PlayMenuMove()
+    {
+        if (!_available)
+        {
+            return;
+        }
+
+        try
+        {
+            _menuMoveBlip?.Play(0.4f, 0f, 0f);
+        }
+        catch (Exception)
+        {
+            _available = false;
+        }
+    }
+
+    public void PlayMenuConfirm()
+    {
+        if (!_available)
+        {
+            return;
+        }
+
+        try
+        {
+            _menuConfirmBlip?.Play(0.5f, 0f, 0f);
+        }
+        catch (Exception)
+        {
+            _available = false;
+        }
+    }
+
+    public void PlayCountdownTick()
+    {
+        if (!_available)
+        {
+            return;
+        }
+
+        try
+        {
+            _countdownTick?.Play(0.5f, 0f, 0f);
+        }
+        catch (Exception)
+        {
+            _available = false;
+        }
+    }
+
+    /// <summary>Pequena variação aleatória de tom nos efeitos que repetem bastante (checkpoint, colisão)
+    /// pra não soarem exatamente iguais toda vez.</summary>
+    private float NextPitchJitter() => (((float)_random.NextDouble() * 2f) - 1f) * SfxPitchJitter;
+
     public void Dispose()
     {
         _sprintMusic?.Dispose();
         _eliminationMusic?.Dispose();
         _timeAttackMusic?.Dispose();
+        _menuMusic?.Dispose();
         _engine?.Dispose();
         _checkpointSfx?.Dispose();
         _collisionSfx?.Dispose();
+        _victoryJingle?.Dispose();
+        _defeatJingle?.Dispose();
+        _neutralJingle?.Dispose();
+        _menuMoveBlip?.Dispose();
+        _menuConfirmBlip?.Dispose();
+        _countdownTick?.Dispose();
     }
 }

@@ -195,6 +195,105 @@ public static class Soundtrack
         return ToSoundEffect(buffer);
     }
 
+    /// <summary>Tema de menu: bem mais calmo e esparso que os temas de corrida (sem bateria pesada), pra
+    /// tocar na tela inicial e na seleção de modo sem cansar — 100 BPM, triângulo/seno suaves.</summary>
+    public static SoundEffect BuildMenuTheme()
+    {
+        const float bpm = 100f;
+        const float melodyRoot = 440f;
+        const float bassRoot = 110f;
+
+        Note[] melody =
+        [
+            new(0, 1f), new(4, 1f), new(7, 2f),
+            new(9, 1f), new(7, 1f), new(4, 2f),
+            new(2, 1f), new(4, 1f), new(7, 1f), new(9, 1f),
+            new(7, 2f), new(4, 2f),
+        ];
+
+        Note[] bass =
+        [
+            new(0, 2f), new(0, 2f), new(7, 2f), new(7, 2f),
+            new(0, 2f), new(0, 2f), new(9, 2f), new(7, 2f),
+        ];
+
+        Note[] shaker = MakeRepeatedHits(8, 2f);
+
+        float[] melodyBuf = Synth.RenderVoice(melody, bpm, Waveform.Triangle, 0.2f, melodyRoot, sustain: 0.7f);
+        float[] bassBuf = Synth.RenderVoice(bass, bpm, Waveform.Sine, 0.18f, bassRoot, sustain: 0.85f);
+        float[] shakerBuf = Synth.RenderVoice(shaker, bpm, Waveform.Noise, 0.025f, 1f, sustain: 0.08f);
+
+        return ToSoundEffect(Synth.Mix(melodyBuf, bassBuf, shakerBuf));
+    }
+
+    /// <summary>Arpejo curto e brilhante, ascendente — toca quando o jogador vence (1º lugar, campeão da
+    /// Eliminação, ou novo recorde no Contrarrelógio).</summary>
+    public static SoundEffect BuildVictoryJingle()
+    {
+        const float root = 440f;
+        (int Semitone, float Duration)[] notes = [(0, 0.11f), (4, 0.11f), (7, 0.11f), (12, 0.11f), (16, 0.11f), (19, 0.4f)];
+        return ToSoundEffect(RenderJingle(root, notes, Waveform.Square, 0.32f));
+    }
+
+    /// <summary>Notas curtas e descendentes em menor — toca quando o jogador é eliminado ou termina em
+    /// último lugar.</summary>
+    public static SoundEffect BuildDefeatJingle()
+    {
+        const float root = 440f;
+        (int Semitone, float Duration)[] notes = [(0, 0.18f), (-2, 0.18f), (-4, 0.18f), (-7, 0.5f)];
+        return ToSoundEffect(RenderJingle(root, notes, Waveform.Triangle, 0.3f));
+    }
+
+    /// <summary>Cadência simples de duas notas — toca num resultado "normal" (nem vitória nem derrota
+    /// clara), tipo terminar no meio do pelotão ou o Contrarrelógio acabar sem bater recorde.</summary>
+    public static SoundEffect BuildNeutralEndJingle()
+    {
+        const float root = 440f;
+        (int Semitone, float Duration)[] notes = [(7, 0.14f), (4, 0.14f), (0, 0.32f)];
+        return ToSoundEffect(RenderJingle(root, notes, Waveform.Square, 0.28f));
+    }
+
+    /// <summary>Bip curto de navegação — toca ao trocar o modo selecionado na tela de seleção.</summary>
+    public static SoundEffect BuildMenuMoveBlip() =>
+        ToSoundEffect(Synth.GenerateTone(660f, 0.05f, Waveform.Square, 0.25f, attack: 0.002f, release: 0.02f));
+
+    /// <summary>Dois bips curtos subindo — toca ao confirmar o modo escolhido.</summary>
+    public static SoundEffect BuildMenuConfirmBlip()
+    {
+        const float root = 660f;
+        (int Semitone, float Duration)[] notes = [(0, 0.06f), (7, 0.1f)];
+        return ToSoundEffect(RenderJingle(root, notes, Waveform.Square, 0.3f));
+    }
+
+    /// <summary>Bip agudo e seco — toca a cada segundo nos últimos instantes do Contrarrelógio.</summary>
+    public static SoundEffect BuildCountdownTick() =>
+        ToSoundEffect(Synth.GenerateTone(1200f, 0.05f, Waveform.Square, 0.3f, attack: 0.001f, release: 0.02f));
+
+    /// <summary>Concatena uma sequência curta de notas (com sua própria duração cada) num único buffer —
+    /// usado pelos jingles/bips, que não precisam do BPM/loop de <see cref="Synth.RenderVoice"/>.</summary>
+    private static float[] RenderJingle(float rootFrequency, (int Semitone, float Duration)[] notes, Waveform waveform, float volume)
+    {
+        var tones = new float[notes.Length][];
+        int total = 0;
+        for (int i = 0; i < notes.Length; i++)
+        {
+            bool isLast = i == notes.Length - 1;
+            float frequency = Synth.NoteFrequency(rootFrequency, notes[i].Semitone);
+            tones[i] = Synth.GenerateTone(frequency, notes[i].Duration, waveform, volume, attack: 0.003f, release: isLast ? 0.12f : 0.02f);
+            total += tones[i].Length;
+        }
+
+        var buffer = new float[total];
+        int cursor = 0;
+        foreach (float[] tone in tones)
+        {
+            Array.Copy(tone, 0, buffer, cursor, tone.Length);
+            cursor += tone.Length;
+        }
+
+        return buffer;
+    }
+
     private static Note[] MakeRepeatedHits(int count, float beatsEach)
     {
         var notes = new Note[count];
