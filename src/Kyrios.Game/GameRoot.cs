@@ -297,6 +297,12 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         switch (_state)
         {
             case State.Intro:
+                if (_input.WasJustPressed(Keys.Escape))
+                {
+                    Exit();
+                    return;
+                }
+
                 if (_input.AnyKeyJustPressed())
                 {
                     _state = State.ModeSelect;
@@ -307,8 +313,8 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             case State.ModeSelect:
                 if (_input.WasJustPressed(Keys.Escape))
                 {
-                    Exit();
-                    return;
+                    _state = State.Intro;
+                    break;
                 }
 
                 if (_input.WasJustPressed(Keys.Right) || _input.WasJustPressed(Keys.D)
@@ -333,8 +339,8 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             case State.Racing:
                 if (_input.WasJustPressed(Keys.Escape))
                 {
-                    Exit();
-                    return;
+                    _state = State.Intro;
+                    break;
                 }
 
                 float dt = Math.Min((float)gameTime.ElapsedGameTime.TotalSeconds, 0.1f);
@@ -350,8 +356,8 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             case State.Results:
                 if (_input.WasJustPressed(Keys.Escape))
                 {
-                    Exit();
-                    return;
+                    _state = State.Intro;
+                    break;
                 }
 
                 if (_input.WasJustPressed(Keys.R) || _input.WasJustPressed(Keys.Space) || _input.WasJustPressed(Keys.Enter))
@@ -783,7 +789,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         const float lineGap = 12f;
         const float panelPaddingV = 24f;
         const float panelPaddingH = 34f;
-        const string prompt = "ESPACO: JOGAR DE NOVO    M: MENU PRINCIPAL    ESC: SAIR";
+        const string prompt = "ESPACO: JOGAR DE NOVO    M: MENU PRINCIPAL    ESC: TELA INICIAL";
 
         // Painel largo o bastante pro texto mais comprido (título, linha de estatística ou o rodapé de
         // instruções), nunca cortando nada, mas sem passar de um teto proporcional à pista nem de um
