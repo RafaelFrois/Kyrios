@@ -24,6 +24,7 @@ public sealed class RaceSimulation
     private const float ScorePerLap = 100f;
     private const float WallCrashTimePenalty = 2f;
     private const float CarCrashTimePenalty = 1f;
+    private const float HazardCrashTimePenalty = 1.5f;
 
     public Track Track { get; }
     public IReadOnlyList<RaceEntrant> Entrants { get; }
@@ -35,14 +36,26 @@ public sealed class RaceSimulation
     /// <summary>Tempo restante no modo <see cref="RaceMode.TimeAttack"/>; null nos demais modos.</summary>
     public float? TimeRemaining { get; private set; }
 
+    /// <summary>Obstáculos móveis do modo <see cref="RaceMode.TimeAttack"/>; lista vazia nos demais modos.</summary>
+    public IReadOnlyList<Hazard> Hazards { get; }
+
     /// <summary>O participante "principal" (o jogador, ou o primeiro carro se não houver humano) — quem pontua no modo Contrarrelógio.</summary>
     public RaceEntrant ScoredEntrant => Entrants[0];
 
     private int _finishersCount;
     private bool _scoredWasWallCollidingLastTick;
     private bool _scoredWasCarCollidingLastTick;
+    private bool _scoredWasHazardCollidingLastTick;
 
-    public RaceSimulation(Track track, IReadOnlyList<RaceEntrant> entrants, int targetLaps, RaceMode mode = RaceMode.Sprint)
+    /// <param name="hazards">Obstáculos móveis a usar (tipicamente só no modo Contrarrelógio). Fica vazio se
+    /// omitido — quem decide se/quais obstáculos existem é quem monta a corrida (ver <see cref="RaceFactory"/>),
+    /// não a pista em si, pra não acoplar posições fixas de obstáculo a uma pista arbitrária.</param>
+    public RaceSimulation(
+        Track track,
+        IReadOnlyList<RaceEntrant> entrants,
+        int targetLaps,
+        RaceMode mode = RaceMode.Sprint,
+        IReadOnlyList<Hazard>? hazards = null)
     {
         if (entrants.Count == 0)
         {
@@ -53,6 +66,7 @@ public sealed class RaceSimulation
         Entrants = entrants;
         TargetLaps = targetLaps;
         Mode = mode;
+        Hazards = hazards ?? [];
 
         if (mode == RaceMode.TimeAttack)
         {
@@ -112,6 +126,16 @@ public sealed class RaceSimulation
         }
 
         ResolveCarCollisions();
+
+        if (Hazards.Count > 0)
+        {
+            foreach (Hazard hazard in Hazards)
+            {
+                hazard.Update(dt);
+            }
+
+            ResolveHazardCollisions();
+        }
 
         switch (Mode)
         {
@@ -180,6 +204,7 @@ public sealed class RaceSimulation
         // segundos raspando/empurrado contra outro carro sozinho já zeraria o cronômetro inteiro.
         bool wallCollidingNow = scored.Car.HadHeadOnCollisionThisTick;
         bool carCollidingNow = scored.Car.HadCarCollisionThisTick;
+        bool hazardCollidingNow = scored.Car.HadHazardCollisionThisTick;
 
         if (ElapsedTime > TimeAttackStartGraceSeconds)
         {
@@ -192,10 +217,16 @@ public sealed class RaceSimulation
             {
                 time -= CarCrashTimePenalty;
             }
+
+            if (hazardCollidingNow && !_scoredWasHazardCollidingLastTick)
+            {
+                time -= HazardCrashTimePenalty;
+            }
         }
 
         _scoredWasWallCollidingLastTick = wallCollidingNow;
         _scoredWasCarCollidingLastTick = carCollidingNow;
+        _scoredWasHazardCollidingLastTick = hazardCollidingNow;
 
         time -= dt;
 
@@ -323,6 +354,52 @@ public sealed class RaceSimulation
                 // ricocheteia — é assim que dá pra perder o controle mesmo encostado numa parede.
                 a.ResolveCarCollision(Vector2D.Zero, outwardA);
                 b.ResolveCarCollision(Vector2D.Zero, outwardB);
+            }
+        }
+    }
+
+    /// <summary>Colisão entre carros e obstáculos móveis do Contrarrelógio — mesmo ricochete rígido da
+    /// colisão carro-com-carro, mas o obstáculo em si nunca se move em resposta (ele segue sua oscilação).</summary>
+    private void ResolveHazardCollisions()
+    {
+        foreach (RaceEntrant entrant in Entrants)
+        {
+            if (entrant.Finished || entrant.Eliminated)
+            {
+                continue;
+            }
+
+            Car car = entrant.Car;
+
+            foreach (Hazard hazard in Hazards)
+            {
+                float minDistance = car.Settings.Radius + hazard.Radius;
+                Vector2D delta = car.Position - hazard.Position;
+                float distance = delta.Length();
+
+                if (distance >= minDistance)
+                {
+                    continue;
+                }
+
+                if (distance < 0.0001f)
+                {
+                    delta = new Vector2D(0.05f, 0f);
+                    distance = delta.Length();
+                }
+
+                float overlap = minDistance - distance;
+                Vector2D outward = delta * (1f / distance);
+                Vector2D push = outward * overlap;
+
+                if (!Track.CollidesWithWall(car.Position + push, car.Settings.Radius))
+                {
+                    car.ResolveHazardCollision(push, outward);
+                }
+                else
+                {
+                    car.ResolveHazardCollision(Vector2D.Zero, outward);
+                }
             }
         }
     }

@@ -25,6 +25,9 @@ public sealed class Car
     /// <summary>true se colidiu com outro carro neste passo (marcado externamente pela <see cref="RaceSimulation"/>).</summary>
     public bool HadCarCollisionThisTick { get; private set; }
 
+    /// <summary>true se colidiu com um obstáculo (<see cref="Hazard"/>) neste passo — só existe no modo Contrarrelógio.</summary>
+    public bool HadHazardCollisionThisTick { get; private set; }
+
     /// <summary>Próximo checkpoint (1-based) que o carro precisa cruzar antes da linha de chegada.</summary>
     public int NextCheckpointIndex { get; private set; } = 1;
 
@@ -56,6 +59,7 @@ public sealed class Car
         CheckpointCrossedThisTick = false;
         HadHeadOnCollisionThisTick = false;
         HadCarCollisionThisTick = false;
+        HadHazardCollisionThisTick = false;
 
         int startCellX = (int)MathF.Floor(Position.X);
         int startCellY = (int)MathF.Floor(Position.Y);
@@ -135,16 +139,32 @@ public sealed class Car
     /// velocidade ricocheteia, como se fosse o normal de uma parede na hora do impacto.</param>
     internal void ResolveCarCollision(Vector2D positionCorrection, Vector2D outwardNormal)
     {
+        ApplyRigidBounce(positionCorrection, outwardNormal);
+        HadCarCollisionThisTick = true;
+    }
+
+    /// <summary>Mesmo ricochete rígido de <see cref="ResolveCarCollision"/>, mas contra um obstáculo
+    /// (<see cref="Hazard"/>) do modo Contrarrelógio — mantido separado pra ter sua própria penalidade.</summary>
+    internal void ResolveHazardCollision(Vector2D positionCorrection, Vector2D outwardNormal)
+    {
+        ApplyRigidBounce(positionCorrection, outwardNormal);
+        HadHazardCollisionThisTick = true;
+    }
+
+    /// <summary>
+    /// Ricochete rígido compartilhado: reflete o vetor de velocidade (derivado de Angle+Speed) no eixo
+    /// informado, como se fosse o normal de uma parede na hora do impacto — o carro sai numa direção que
+    /// o motorista não escolheu (perda de controle), em vez de só perder velocidade mantendo o rumo.
+    /// </summary>
+    private void ApplyRigidBounce(Vector2D positionCorrection, Vector2D outwardNormal)
+    {
         Position += positionCorrection;
 
         Vector2D velocity = Vector2D.FromAngle(Angle) * Speed;
         float velocityAlongNormal = Vector2D.Dot(velocity, outwardNormal);
 
-        // Só ricocheteia se o carro estava mesmo avançando pra dentro do outro (não bate duas vezes
-        // num carro que já está se afastando). O ricochete rígido soma de volta o componente de
-        // velocidade que ia "pra dentro", na proporção da elasticidade configurada — isso realoca a
-        // velocidade numa direção que o motorista não escolheu, exatamente a perda de controle esperada
-        // de uma batida contra uma superfície dura, em vez de só frear na mesma direção de antes.
+        // Só ricocheteia se o carro estava mesmo avançando pra dentro do obstáculo (não bate duas vezes
+        // em algo que já está se afastando).
         if (velocityAlongNormal < 0f)
         {
             velocity -= outwardNormal * (velocityAlongNormal * (1f + Settings.CarCollisionRestitution));
@@ -162,8 +182,6 @@ public sealed class Car
         {
             Speed = 0f;
         }
-
-        HadCarCollisionThisTick = true;
     }
 
     private void ApplyThrottleAndFriction(float dt, CarInput input, bool onTrack)

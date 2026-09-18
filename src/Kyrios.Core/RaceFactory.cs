@@ -42,6 +42,7 @@ public static class RaceFactory
             entrants.Add(new RaceEntrant(aiCar, DriverKind.Ai, driver));
         }
 
-        return new RaceSimulation(track, entrants, targetLaps, mode);
+        IReadOnlyList<Hazard>? hazards = mode == RaceMode.TimeAttack ? TrackFactory.CreateTimeAttackHazards() : null;
+        return new RaceSimulation(track, entrants, targetLaps, mode, hazards);
     }
 }

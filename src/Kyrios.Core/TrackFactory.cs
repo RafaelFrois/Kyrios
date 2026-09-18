@@ -77,6 +77,18 @@ public static class TrackFactory
     }
 
     /// <summary>
+    /// Obstáculos móveis do modo Contrarrelógio: um em cada reta da pista em anel, oscilando de um lado
+    /// pro outro do corredor — força o piloto a cronometrar a passagem em vez de só desviar de algo parado.
+    /// </summary>
+    public static IReadOnlyList<Hazard> CreateTimeAttackHazards() =>
+    [
+        new Hazard(new Vector2D(38f, 18.5f), new Vector2D(0f, 1f), amplitude: 1.3f, period: 2.4f),
+        new Hazard(new Vector2D(48f, 6f), new Vector2D(1f, 0f), amplitude: 3.2f, period: 2.8f),
+        new Hazard(new Vector2D(15f, 2.5f), new Vector2D(0f, 1f), amplitude: 1.3f, period: 2.1f),
+        new Hazard(new Vector2D(5f, 14f), new Vector2D(1f, 0f), amplitude: 3.2f, period: 2.6f),
+    ];
+
+    /// <summary>
     /// Posições de largada em grade (2 colunas) atrás da linha de partida. A pista padrão parte
     /// com os carros voando na direção +X, então as filas ficam escalonadas para trás no eixo X
     /// e lado a lado no eixo Y.
