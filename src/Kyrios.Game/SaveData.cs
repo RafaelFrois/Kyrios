@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Kyrios.Game;
 
@@ -27,7 +28,7 @@ public sealed class SaveData
             if (File.Exists(FilePath))
             {
                 string json = File.ReadAllText(FilePath);
-                SaveData loaded = JsonSerializer.Deserialize<SaveData>(json);
+                SaveData loaded = JsonSerializer.Deserialize(json, SaveDataJsonContext.Default.SaveData);
                 if (loaded is not null)
                 {
                     return loaded;
@@ -48,11 +49,18 @@ public sealed class SaveData
     {
         try
         {
-            string json = JsonSerializer.Serialize(this);
+            string json = JsonSerializer.Serialize(this, SaveDataJsonContext.Default.SaveData);
             File.WriteAllText(FilePath, json);
         }
         catch (IOException)
         {
         }
     }
+}
+
+// Gera o (de)serializador em tempo de compilação, sem reflexão — necessário porque o executável
+// publicado usa trimming (PublishTrimmed) e IL trimming/AOT desabilitam o JsonSerializer por reflexão.
+[JsonSerializable(typeof(SaveData))]
+internal sealed partial class SaveDataJsonContext : JsonSerializerContext
+{
 }
