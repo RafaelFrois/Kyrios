@@ -20,6 +20,9 @@ public sealed class RaceEntrant
     /// <summary>true se foi eliminado (modo <see cref="RaceMode.Elimination"/>) antes de conseguir vencer.</summary>
     public bool Eliminated { get; internal set; }
 
+    /// <summary>Pontuação acumulada (modo <see cref="RaceMode.TimeAttack"/>).</summary>
+    public float Score { get; internal set; }
+
     public RaceEntrant(Car car, DriverKind kind, AIDriver? driver = null)
     {
         if (kind == DriverKind.Ai && driver is null)

@@ -64,6 +64,10 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         new Color(230, 90, 70),
         new Color(90, 120, 230),
         new Color(230, 160, 60),
+        new Color(190, 225, 60),
+        new Color(255, 110, 180),
+        new Color(60, 200, 170),
+        new Color(165, 110, 70),
     ];
 
     private readonly GraphicsDeviceManager _graphics;
@@ -82,6 +86,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private bool _recordsProcessed;
     private bool _newLapRecord;
     private bool _newRaceRecord;
+    private bool _newScoreRecord;
 
     private int _windowWidth;
     private int _windowHeight;
@@ -100,13 +105,35 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         SizeWindowForCurrentRace();
     }
 
+    private static readonly RaceMode[] AllModes = [RaceMode.Sprint, RaceMode.Elimination, RaceMode.TimeAttack];
+
+    private static RaceMode NextMode(RaceMode current)
+    {
+        int index = Array.IndexOf(AllModes, current);
+        return AllModes[(index + 1) % AllModes.Length];
+    }
+
+    private static RaceMode PreviousMode(RaceMode current)
+    {
+        int index = Array.IndexOf(AllModes, current);
+        return AllModes[(index - 1 + AllModes.Length) % AllModes.Length];
+    }
+
+    private static int AiOpponentsFor(RaceMode mode) => mode switch
+    {
+        RaceMode.Elimination => 9,
+        RaceMode.TimeAttack => 4,
+        _ => 3,
+    };
+
     private void StartNewRace(RaceMode mode)
     {
-        _race = RaceFactory.CreateDefaultRace(aiOpponents: 3, targetLaps: 3, mode: mode);
+        _race = RaceFactory.CreateDefaultRace(aiOpponents: AiOpponentsFor(mode), targetLaps: 3, mode: mode);
         _player = _race.Entrants.First(e => e.Kind == DriverKind.Human);
         _recordsProcessed = false;
         _newLapRecord = false;
         _newRaceRecord = false;
+        _newScoreRecord = false;
 
         _carColors.Clear();
         int aiIndex = 0;
@@ -116,6 +143,15 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 ? AccentColor
                 : AiPalette[aiIndex++ % AiPalette.Length];
         }
+    }
+
+    /// <summary>Chamado sempre que uma nova corrida começa depois que o jogo já está rodando (não no construtor):
+    /// redimensiona a janela pro novo modo/quantidade de carros e efetiva a mudança de verdade.</summary>
+    private void StartNewRaceAndResize(RaceMode mode)
+    {
+        StartNewRace(mode);
+        SizeWindowForCurrentRace();
+        _graphics.ApplyChanges();
     }
 
     /// <summary>Compara o resultado da corrida com os recordes salvos, atualiza e persiste se necessário.</summary>
@@ -128,29 +164,42 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
         _recordsProcessed = true;
 
-        if (_race.Mode == RaceMode.Sprint)
+        switch (_race.Mode)
         {
-            if (_player.Car.BestLapTime is { } lap
-                && (_saveData.BestLapTimeSprint is null || lap < _saveData.BestLapTimeSprint))
-            {
-                _saveData.BestLapTimeSprint = lap;
-                _newLapRecord = true;
-            }
+            case RaceMode.Sprint:
+                if (_player.Car.BestLapTime is { } lap
+                    && (_saveData.BestLapTimeSprint is null || lap < _saveData.BestLapTimeSprint))
+                {
+                    _saveData.BestLapTimeSprint = lap;
+                    _newLapRecord = true;
+                }
 
-            if (_player.Finished && _player.FinishTime is { } raceTime
-                && (_saveData.BestRaceTimeSprint is null || raceTime < _saveData.BestRaceTimeSprint))
-            {
-                _saveData.BestRaceTimeSprint = raceTime;
-                _newRaceRecord = true;
-            }
-        }
-        else
-        {
-            _saveData.EliminationRaces++;
-            if (_player.Finished)
-            {
-                _saveData.EliminationWins++;
-            }
+                if (_player.Finished && _player.FinishTime is { } raceTime
+                    && (_saveData.BestRaceTimeSprint is null || raceTime < _saveData.BestRaceTimeSprint))
+                {
+                    _saveData.BestRaceTimeSprint = raceTime;
+                    _newRaceRecord = true;
+                }
+
+                break;
+
+            case RaceMode.Elimination:
+                _saveData.EliminationRaces++;
+                if (_player.Finished)
+                {
+                    _saveData.EliminationWins++;
+                }
+
+                break;
+
+            case RaceMode.TimeAttack:
+                if (_saveData.BestScoreTimeAttack is null || _player.Score > _saveData.BestScoreTimeAttack)
+                {
+                    _saveData.BestScoreTimeAttack = _player.Score;
+                    _newScoreRecord = true;
+                }
+
+                break;
         }
 
         _saveData.Save();
@@ -161,7 +210,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         int trackPixelWidth = _race.Track.Width * CellSize;
         int trackPixelHeight = _race.Track.Height * CellSize;
 
-        int hudLines = 4 + _race.Entrants.Count;
+        int hudLines = _race.Mode == RaceMode.TimeAttack ? 5 : 4 + _race.Entrants.Count;
         int hudHeight = HudPaddingTop + HudPaddingBottom
             + (int)(hudLines * (PixelFont.LineHeight(HudTextSize) + HudLineGap));
 
@@ -217,17 +266,20 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                     return;
                 }
 
-                if (_input.WasJustPressed(Keys.Left) || _input.WasJustPressed(Keys.A)
-                    || _input.WasJustPressed(Keys.Right) || _input.WasJustPressed(Keys.D)
-                    || _input.WasJustPressed(Keys.Up) || _input.WasJustPressed(Keys.W)
+                if (_input.WasJustPressed(Keys.Right) || _input.WasJustPressed(Keys.D)
                     || _input.WasJustPressed(Keys.Down) || _input.WasJustPressed(Keys.S))
                 {
-                    _selectedMode = _selectedMode == RaceMode.Sprint ? RaceMode.Elimination : RaceMode.Sprint;
+                    _selectedMode = NextMode(_selectedMode);
+                }
+                else if (_input.WasJustPressed(Keys.Left) || _input.WasJustPressed(Keys.A)
+                    || _input.WasJustPressed(Keys.Up) || _input.WasJustPressed(Keys.W))
+                {
+                    _selectedMode = PreviousMode(_selectedMode);
                 }
 
                 if (_input.WasJustPressed(Keys.Space) || _input.WasJustPressed(Keys.Enter))
                 {
-                    StartNewRace(_selectedMode);
+                    StartNewRaceAndResize(_selectedMode);
                     _state = State.Racing;
                 }
 
@@ -259,7 +311,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
                 if (_input.WasJustPressed(Keys.R))
                 {
-                    StartNewRace(_race.Mode);
+                    StartNewRaceAndResize(_race.Mode);
                     _state = State.Racing;
                 }
                 else if (_input.WasJustPressed(Keys.M))
@@ -582,15 +634,26 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         }
 
         bool isElimination = _race.Mode == RaceMode.Elimination;
+        bool isTimeAttack = _race.Mode == RaceMode.TimeAttack;
 
         if (raceOver)
         {
-            string headline = isElimination
-                ? (_player.Finished ? "VOCE E O CAMPEAO!" : "VOCE FOI ELIMINADO")
-                : "CORRIDA FINALIZADA";
+            string headline = _race.Mode switch
+            {
+                RaceMode.Elimination => _player.Finished ? "VOCE E O CAMPEAO!" : "VOCE FOI ELIMINADO",
+                RaceMode.TimeAttack => "TEMPO ESGOTADO!",
+                _ => "CORRIDA FINALIZADA",
+            };
             Line(headline, AccentColor);
 
-            if (_newRaceRecord)
+            if (isTimeAttack)
+            {
+                if (_newScoreRecord)
+                {
+                    Line("NOVO RECORDE DE PONTUACAO!", RecordColor);
+                }
+            }
+            else if (_newRaceRecord)
             {
                 Line("NOVO RECORDE DE CORRIDA!", RecordColor);
             }
@@ -598,6 +661,12 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             {
                 Line("NOVO RECORDE DE VOLTA!", RecordColor);
             }
+        }
+        else if (isTimeAttack)
+        {
+            float time = _race.TimeRemaining ?? 0f;
+            Color timeColor = time <= 5f ? new Color(255, 100, 90) : TextColor;
+            Line($"TEMPO {time:0.0}s   PONTOS {_player.Score:0}", timeColor);
         }
         else if (isElimination)
         {
@@ -615,6 +684,19 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         if (!raceOver)
         {
             DrawBoostBar();
+        }
+
+        if (isTimeAttack)
+        {
+            string scoreRecordSuffix = _saveData.BestScoreTimeAttack is { } sr ? $"   RECORDE {sr:0}" : string.Empty;
+            Line($"PONTUACAO {_player.Score:0}{scoreRecordSuffix}   VEL {_player.Car.Speed:0}", TextColor);
+
+            Line(
+                raceOver
+                    ? "R: CORRER DE NOVO   M: TROCAR MODO   ESC: SAIR"
+                    : "SETAS/WASD DIRIGIR  ESPACO FREIO  SHIFT TURBO  ESC SAIR",
+                TextColor);
+            return;
         }
 
         string best = _player.Car.BestLapTime is { } b ? FormatTime(b) : "--:--.---";
@@ -768,30 +850,41 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
         float panelsTop = headerPos.Y + PixelFont.LineHeight(headerSize) + 36f;
         float panelHeight = 210f;
-        float panelWidth = (trackAreaWidth - 60f) / 2f;
+        float panelGap = 16f;
+        float panelWidth = (trackAreaWidth - 40f - (2f * panelGap)) / 3f;
 
         var sprintPanel = new Rectangle(20, (int)panelsTop, (int)panelWidth, (int)panelHeight);
-        var eliminationPanel = new Rectangle((int)(20f + panelWidth + 20f), (int)panelsTop, (int)panelWidth, (int)panelHeight);
+        var eliminationPanel = new Rectangle((int)(20f + panelWidth + panelGap), (int)panelsTop, (int)panelWidth, (int)panelHeight);
+        var timeAttackPanel = new Rectangle((int)(20f + (2f * (panelWidth + panelGap))), (int)panelsTop, (int)panelWidth, (int)panelHeight);
 
         DrawSelectablePanel(sprintPanel, _selectedMode == RaceMode.Sprint);
         DrawSelectablePanel(eliminationPanel, _selectedMode == RaceMode.Elimination);
+        DrawSelectablePanel(timeAttackPanel, _selectedMode == RaceMode.TimeAttack);
 
         List<string> sprintLines = ["CORRIDA CLASSICA:", "COMPLETE 3 VOLTAS", "NA FRENTE DE TODOS."];
         if (_saveData.BestLapTimeSprint is { } bestLap)
         {
             sprintLines.Add("");
-            sprintLines.Add($"RECORDE VOLTA: {FormatTime(bestLap)}");
+            sprintLines.Add($"RECORDE: {FormatTime(bestLap)}");
         }
 
-        List<string> eliminationLines = ["A CADA VOLTA, O", "ULTIMO LUGAR E", "ELIMINADO.", "SOBREVIVA!"];
+        List<string> eliminationLines = ["10 CARROS. A CADA", "VOLTA, O ULTIMO", "LUGAR E ELIMINADO.", "SOBREVIVA!"];
         if (_saveData.EliminationRaces > 0)
         {
             eliminationLines.Add("");
             eliminationLines.Add($"VITORIAS: {_saveData.EliminationWins}/{_saveData.EliminationRaces}");
         }
 
+        List<string> timeAttackLines = ["O RELOGIO SO DESCE.", "PONTUE EM VOLTAS E", "CHECKPOINTS PRA", "GANHAR MAIS TEMPO!"];
+        if (_saveData.BestScoreTimeAttack is { } bestScore)
+        {
+            timeAttackLines.Add("");
+            timeAttackLines.Add($"RECORDE: {bestScore:0} PTS");
+        }
+
         DrawPanelText(sprintPanel, "CORRIDA", [.. sprintLines]);
         DrawPanelText(eliminationPanel, "ELIMINACAO", [.. eliminationLines]);
+        DrawPanelText(timeAttackPanel, "CONTRARRELOGIO", [.. timeAttackLines]);
 
         const string prompt = "SETAS: TROCAR    ESPACO: CONFIRMAR";
         float promptWidth = PixelFont.Measure(prompt, 3f);

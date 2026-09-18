@@ -188,6 +188,10 @@ static void RunHeadlessSimulation(string[] args)
         {
             mode = RaceMode.Elimination;
         }
+        else if (args[i] == "--mode" && i + 1 < args.Length && args[i + 1].Equals("timeattack", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = RaceMode.TimeAttack;
+        }
     }
 
     Console.WriteLine($"Simulação sem interface: {aiOpponents} IA(s), {targetLaps} volta(s), modo={mode}, semente={(seed?.ToString() ?? "aleatória")}");
@@ -207,6 +211,14 @@ static void RunHeadlessSimulation(string[] args)
     Console.WriteLine(race.IsRaceOver
         ? $"Corrida concluída em {elapsed:0.0}s (tempo simulado)."
         : $"Tempo limite de simulação atingido ({maxSimSeconds:0}s) sem todos terminarem.");
+
+    if (mode == RaceMode.TimeAttack)
+    {
+        Console.WriteLine($"Pontuação final de {race.ScoredEntrant.Car.Name}: {race.ScoredEntrant.Score:0} pontos " +
+            $"(voltas: {race.ScoredEntrant.Car.LapsCompleted}, tempo restante: {race.TimeRemaining:0.00}s)");
+        return;
+    }
+
     Console.WriteLine();
     Console.WriteLine("Classificação final:");
 

@@ -16,6 +16,15 @@ public sealed class Car
     /// <summary>true se o turbo está ativo neste instante (consumindo combustível).</summary>
     public bool IsBoosting { get; private set; }
 
+    /// <summary>true se cruzou um checkpoint válido neste passo de simulação (reseta a cada <see cref="Update"/>).</summary>
+    public bool CheckpointCrossedThisTick { get; private set; }
+
+    /// <summary>true se bateu de frente numa parede (ricocheteou) neste passo — usado por modos que penalizam batidas.</summary>
+    public bool HadHeadOnCollisionThisTick { get; private set; }
+
+    /// <summary>true se colidiu com outro carro neste passo (marcado externamente pela <see cref="RaceSimulation"/>).</summary>
+    public bool HadCarCollisionThisTick { get; private set; }
+
     /// <summary>Próximo checkpoint (1-based) que o carro precisa cruzar antes da linha de chegada.</summary>
     public int NextCheckpointIndex { get; private set; } = 1;
 
@@ -25,6 +34,9 @@ public sealed class Car
     public float? BestLapTime { get; private set; }
     public List<float> LapTimes { get; } = [];
 
+    private float _stuckCheckTimer;
+    private Vector2D _stuckCheckPosition;
+
     public Car(string name, Vector2D startPosition, float startAngle, CarPhysicsSettings? settings = null)
     {
         Name = name;
@@ -32,6 +44,7 @@ public sealed class Car
         Angle = startAngle;
         Settings = settings ?? CarPhysicsSettings.Default;
         BoostFuel = Settings.BoostStartingFuel;
+        _stuckCheckPosition = startPosition;
     }
 
     public bool HasClearedAllCheckpoints(Track track) => NextCheckpointIndex > track.CheckpointCount;
@@ -40,6 +53,10 @@ public sealed class Car
     /// <returns>true se o carro cruzou a linha de chegada completando uma volta neste passo.</returns>
     public bool Update(float dt, CarInput input, Track track)
     {
+        CheckpointCrossedThisTick = false;
+        HadHeadOnCollisionThisTick = false;
+        HadCarCollisionThisTick = false;
+
         int startCellX = (int)MathF.Floor(Position.X);
         int startCellY = (int)MathF.Floor(Position.Y);
         bool onTrack = !track.IsOffTrack(startCellX, startCellY);
@@ -51,7 +68,61 @@ public sealed class Car
         CurrentLapTime += dt;
         TotalRaceTime += dt;
 
-        return ProcessCheckpoints(track);
+        bool completedLap = ProcessCheckpoints(track);
+        RecoverIfStuck(dt, track);
+
+        return completedLap;
+    }
+
+    /// <summary>
+    /// Rede de segurança: se o carro está claramente tentando andar (velocidade relevante) mas não sai
+    /// do lugar por um tempo — encravado num canto côncavo da pista, espremido contra outro carro, etc —
+    /// dá um pequeno "empurrão" pra alguma direção livre. Sem isso, um carro pode ficar preso pra sempre.
+    /// </summary>
+    private void RecoverIfStuck(float dt, Track track)
+    {
+        const float sampleInterval = 0.5f;
+        const float minMovementToResetTimer = 0.15f;
+        const float stuckSpeedThreshold = 0.4f;
+        const float escapeStepDistance = 0.6f;
+
+        _stuckCheckTimer += dt;
+        if (_stuckCheckTimer < sampleInterval)
+        {
+            return;
+        }
+
+        float movedSinceLastCheck = Position.DistanceTo(_stuckCheckPosition);
+        bool wantsToMove = MathF.Abs(Speed) > stuckSpeedThreshold;
+
+        if (wantsToMove && movedSinceLastCheck < minMovementToResetTimer)
+        {
+            Vector2D[] escapeDirections =
+            [
+                Vector2D.FromAngle(Angle) * -escapeStepDistance,
+                Vector2D.FromAngle(Angle + (MathF.PI / 2f)) * escapeStepDistance,
+                Vector2D.FromAngle(Angle - (MathF.PI / 2f)) * escapeStepDistance,
+                Vector2D.FromAngle(Angle) * escapeStepDistance,
+                new Vector2D(0f, -escapeStepDistance),
+                new Vector2D(0f, escapeStepDistance),
+                new Vector2D(-escapeStepDistance, 0f),
+                new Vector2D(escapeStepDistance, 0f),
+            ];
+
+            foreach (Vector2D offset in escapeDirections)
+            {
+                Vector2D candidate = Position + offset;
+                if (!track.CollidesWithWall(candidate, Settings.Radius))
+                {
+                    Position = candidate;
+                    Speed *= 0.3f;
+                    break;
+                }
+            }
+        }
+
+        _stuckCheckPosition = Position;
+        _stuckCheckTimer = 0f;
     }
 
     /// <summary>
@@ -63,6 +134,7 @@ public sealed class Car
     {
         Position += positionCorrection;
         Speed *= speedMultiplier;
+        HadCarCollisionThisTick = true;
     }
 
     private void ApplyThrottleAndFriction(float dt, CarInput input, bool onTrack)
@@ -121,8 +193,7 @@ public sealed class Car
         Vector2D target = Position + (forward * Speed * dt);
 
         Vector2D candidate = Position;
-        bool collidedX = false;
-        bool collidedY = false;
+        bool collided = false;
 
         Vector2D stepX = new(target.X, Position.Y);
         if (!track.CollidesWithWall(stepX, Settings.Radius))
@@ -131,7 +202,7 @@ public sealed class Car
         }
         else
         {
-            collidedX = true;
+            collided = true;
         }
 
         Vector2D stepY = new(candidate.X, target.Y);
@@ -141,18 +212,30 @@ public sealed class Car
         }
         else
         {
-            collidedY = true;
+            collided = true;
         }
 
-        if (collidedX && collidedY)
+        if (collided)
         {
-            // Bateu de frente (ou num canto): ricocheteia, perdendo boa parte da velocidade.
-            Speed *= -Settings.WallBounceSpeedFactor;
-        }
-        else if (collidedX || collidedY)
-        {
-            // Só raspou de lado enquanto contornava a parede: perde pouca velocidade e segue andando.
-            Speed *= Settings.WallScrapeSpeedFactor;
+            // Compara o quanto o carro conseguiu avançar de fato com o que pretendia: se a parede
+            // barrou quase todo o avanço (bateu de frente, ou ficou preso num canto), ricocheteia
+            // com força; se só cortou uma fatia pequena (raspou de lado contornando a curva), a perda
+            // de velocidade é bem mais leve. Isso funciona tanto pra batidas retas quanto de canto,
+            // ao contrário de simplesmente checar "os dois eixos bateram" (o que nunca acontece numa
+            // batida reta sem nenhum componente lateral de movimento).
+            float intendedDistance = (target - Position).Length();
+            float actualDistance = (candidate - Position).Length();
+            float progressFraction = intendedDistance > 0.0001f ? actualDistance / intendedDistance : 0f;
+
+            if (progressFraction < 0.4f)
+            {
+                Speed *= -Settings.WallBounceSpeedFactor;
+                HadHeadOnCollisionThisTick = true;
+            }
+            else
+            {
+                Speed *= Settings.WallScrapeSpeedFactor;
+            }
         }
 
         Position = candidate;
@@ -168,6 +251,7 @@ public sealed class Car
         {
             NextCheckpointIndex++;
             BoostFuel = Math.Min(Settings.BoostMaxFuel, BoostFuel + Settings.BoostFillPerCheckpoint);
+            CheckpointCrossedThisTick = true;
             return false;
         }
 

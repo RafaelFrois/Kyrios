@@ -3,7 +3,8 @@ namespace Kyrios.Core;
 /// <summary>Monta uma <see cref="RaceSimulation"/> pronta para jogar: pista padrão, 1 humano + N adversários de IA.</summary>
 public static class RaceFactory
 {
-    public static readonly string[] AiNames = ["Rex", "Nina", "Hugo", "Vale", "Zara", "Tico", "Dara", "Kai"];
+    public static readonly string[] AiNames =
+        ["Rex", "Nina", "Hugo", "Vale", "Zara", "Tico", "Dara", "Kai", "Duke", "Mia"];
 
     public static RaceSimulation CreateDefaultRace(
         int aiOpponents = 3,

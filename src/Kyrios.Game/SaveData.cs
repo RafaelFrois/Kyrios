@@ -10,6 +10,7 @@ public sealed class SaveData
     public float? BestRaceTimeSprint { get; set; }
     public int EliminationWins { get; set; }
     public int EliminationRaces { get; set; }
+    public float? BestScoreTimeAttack { get; set; }
 
     private static string FilePath
     {
