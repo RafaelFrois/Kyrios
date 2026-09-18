@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <AssemblyName>Kyrios</AssemblyName>
+    <AssemblyName>MegRace</AssemblyName>
     <RootNamespace>Kyrios.Game</RootNamespace>
   </PropertyGroup>
 

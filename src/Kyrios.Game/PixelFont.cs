@@ -95,4 +95,36 @@ public static class PixelFont
             cursorX += (GlyphWidth + 1) * pixelSize;
         }
     }
+
+    /// <summary>Como <see cref="Draw"/>, mas cada linha do glifo (de cima pra baixo) usa uma cor diferente — dá um efeito de gradiente vertical no texto, tipo os títulos de jogo retrô.</summary>
+    public static void DrawGradient(SpriteBatch spriteBatch, Texture2D pixel, string text, Vector2 position, float pixelSize, IReadOnlyList<Color> rowColors)
+    {
+        float cursorX = position.X;
+        foreach (char rawChar in text)
+        {
+            char c = char.ToUpperInvariant(rawChar);
+            if (Glyphs.TryGetValue(c, out string[] rows))
+            {
+                for (int row = 0; row < rows.Length; row++)
+                {
+                    string bits = rows[row];
+                    Color rowColor = rowColors[Math.Min(row, rowColors.Count - 1)];
+                    for (int col = 0; col < bits.Length; col++)
+                    {
+                        if (bits[col] == '1')
+                        {
+                            var rect = new Rectangle(
+                                (int)(cursorX + (col * pixelSize)),
+                                (int)(position.Y + (row * pixelSize)),
+                                (int)MathF.Ceiling(pixelSize),
+                                (int)MathF.Ceiling(pixelSize));
+                            spriteBatch.Draw(pixel, rect, rowColor);
+                        }
+                    }
+                }
+            }
+
+            cursorX += (GlyphWidth + 1) * pixelSize;
+        }
+    }
 }

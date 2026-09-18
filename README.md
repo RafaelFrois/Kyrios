@@ -1,12 +1,13 @@
 # Kyrios
 Repositório para arquivar as planilhas de controle de integrante do Kyrios
 
-## Jogo de corrida top-vision (C#)
+## MegRace — jogo de corrida top-vision (C#)
 
-Além das planilhas, este repositório também guarda um jogo de corrida em C#
-visto de cima ("top-vision"): uma versão **gráfica** (janela própria, feita
-com a engine [MonoGame](https://www.monogame.net/)) e uma versão de
-**terminal** (ASCII) que roda a mesma lógica.
+Além das planilhas, este repositório também guarda o **MegRace**, um jogo de
+corrida em C# visto de cima ("top-vision"): uma versão **gráfica** (janela
+própria, feita com a engine [MonoGame](https://www.monogame.net/), com pista,
+carros e telas em estilo pixel art) e uma versão de **terminal** (ASCII) que
+roda a mesma lógica.
 
 ### Estrutura
 
@@ -47,21 +48,24 @@ Para distribuir um arquivo único que roda sem precisar instalar o .NET SDK na
 máquina de destino, publique para o sistema operacional desejado:
 
 ```bash
+# flags comuns a todas as plataformas (deixam o executável bem menor)
+FLAGS="-p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:InvariantGlobalization=true -p:PublishTrimmed=true -p:DebugType=none"
+
 # Windows
-dotnet publish src/Kyrios.Game -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o dist/windows
+dotnet publish src/Kyrios.Game -c Release -r win-x64 --self-contained true $FLAGS -o dist/windows
 
 # macOS (Apple Silicon)
-dotnet publish src/Kyrios.Game -c Release -r osx-arm64 --self-contained true -p:PublishSingleFile=true -o dist/macos
+dotnet publish src/Kyrios.Game -c Release -r osx-arm64 --self-contained true $FLAGS -o dist/macos
 
 # macOS (Intel)
-dotnet publish src/Kyrios.Game -c Release -r osx-x64 --self-contained true -p:PublishSingleFile=true -o dist/macos
+dotnet publish src/Kyrios.Game -c Release -r osx-x64 --self-contained true $FLAGS -o dist/macos
 
 # Linux
-dotnet publish src/Kyrios.Game -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o dist/linux
+dotnet publish src/Kyrios.Game -c Release -r linux-x64 --self-contained true $FLAGS -o dist/linux
 ```
 
-O resultado fica em `dist/<sistema>/`: um executável (`Kyrios.exe` no Windows,
-`Kyrios` no macOS/Linux) junto de algumas bibliotecas nativas (SDL2, OpenAL) —
+O resultado fica em `dist/<sistema>/`: um executável (`MegRace.exe` no Windows,
+`MegRace` no macOS/Linux) junto de algumas bibliotecas nativas (SDL2, OpenAL) —
 copie a pasta inteira, não só o executável.
 
 ### Versão de terminal (ASCII)
