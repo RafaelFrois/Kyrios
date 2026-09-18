@@ -47,7 +47,8 @@ public sealed class GameInput
         }
 
         bool brake = IsDown(Keys.Space);
+        bool boost = IsDown(Keys.LeftShift) || IsDown(Keys.RightShift);
 
-        return new CarInput(throttle, steering, brake);
+        return new CarInput(throttle, steering, brake, boost);
     }
 }

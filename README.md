@@ -34,13 +34,30 @@ dotnet run --project src/Kyrios.Game
 Isso compila e abre a janela do jogo direto. Controles:
 
 - Setas ou `WASD` — acelerar, frear/ré e virar
+- `Shift` — turbo (consome o medidor no canto superior direito, que enche com
+  o tempo e mais rápido em cada checkpoint/volta)
 - `Espaço` — freio de mão
 - `Esc` — sair a qualquer momento
-- `R` — correr de novo (na tela de resultado)
+- `R` — correr de novo (mesmo modo) / `M` — trocar de modo (na tela de resultado)
 
-Complete 3 voltas na pista em anel, passando pelos 3 checkpoints (marcados em
-amarelo) na ordem certa antes de cruzar a linha de chegada quadriculada,
-competindo contra carros controlados por IA.
+Depois da tela inicial, escolha o modo:
+
+- **Corrida** — o clássico: complete 3 voltas na pista em anel, passando
+  pelos 3 checkpoints (marcados em amarelo) na ordem certa, na frente dos
+  adversários de IA.
+- **Eliminação** — a cada volta completada por qualquer carro, o último
+  colocado é eliminado, até sobrar um único campeão. Muda o ritmo do jogo
+  inteiro: cada volta é uma faca no pescoço.
+
+Seu melhor tempo de volta/corrida (modo Corrida) e seu retrospecto de vitórias
+(modo Eliminação) ficam salvos localmente entre sessões — o jogo avisa na tela
+de resultado quando você bate um recorde pessoal.
+
+Os carros também colidem de verdade entre si e reagem diferente a bater de
+frente numa parede (ricocheteia, perde velocidade) ou só raspar de lado
+(quase não perde nada) — e a IA "gruda" na disputa (rubber-banding): fica mais
+dura com quem está na frente e mais fácil com quem está atrás, pra manter a
+corrida disputada até o fim.
 
 ### Gerar um executável (sem precisar do .NET instalado)
 
@@ -79,6 +96,9 @@ Mesmos controles da versão gráfica. Também tem um modo sem interface
 
 ```bash
 dotnet run --project src/Kyrios.ConsoleGame -- --simulate --ai 4 --laps 3 --seed 42
+
+# ou modo eliminação
+dotnet run --project src/Kyrios.ConsoleGame -- --simulate --ai 5 --seed 42 --mode elimination
 ```
 
 ### Testes

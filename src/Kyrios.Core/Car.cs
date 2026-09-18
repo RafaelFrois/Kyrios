@@ -1,6 +1,6 @@
 namespace Kyrios.Core;
 
-/// <summary>Um carro na pista: física de movimento + progresso de volta (checkpoints/tempos).</summary>
+/// <summary>Um carro na pista: física de movimento + progresso de volta (checkpoints/tempos) + turbo.</summary>
 public sealed class Car
 {
     public string Name { get; }
@@ -9,6 +9,12 @@ public sealed class Car
     public Vector2D Position { get; private set; }
     public float Angle { get; private set; }
     public float Speed { get; private set; }
+
+    /// <summary>Combustível de turbo disponível, de 0 até <see cref="CarPhysicsSettings.BoostMaxFuel"/>.</summary>
+    public float BoostFuel { get; private set; }
+
+    /// <summary>true se o turbo está ativo neste instante (consumindo combustível).</summary>
+    public bool IsBoosting { get; private set; }
 
     /// <summary>Próximo checkpoint (1-based) que o carro precisa cruzar antes da linha de chegada.</summary>
     public int NextCheckpointIndex { get; private set; } = 1;
@@ -25,6 +31,7 @@ public sealed class Car
         Position = startPosition;
         Angle = startAngle;
         Settings = settings ?? CarPhysicsSettings.Default;
+        BoostFuel = Settings.BoostStartingFuel;
     }
 
     public bool HasClearedAllCheckpoints(Track track) => NextCheckpointIndex > track.CheckpointCount;
@@ -47,11 +54,28 @@ public sealed class Car
         return ProcessCheckpoints(track);
     }
 
+    /// <summary>
+    /// Usado pela <see cref="RaceSimulation"/> para separar carros que se sobrepuseram e aplicar uma
+    /// pequena penalidade de velocidade na batida — colisão carro-com-carro não é resolvida aqui dentro
+    /// porque um carro não conhece os outros, só a pista.
+    /// </summary>
+    internal void ResolveCarCollision(Vector2D positionCorrection, float speedMultiplier)
+    {
+        Position += positionCorrection;
+        Speed *= speedMultiplier;
+    }
+
     private void ApplyThrottleAndFriction(float dt, CarInput input, bool onTrack)
     {
+        bool wantsBoost = input.Boost && BoostFuel > 0f && input.Throttle > 0.01f;
+        IsBoosting = wantsBoost;
+
         float offTrackFactor = onTrack ? 1f : Settings.OffTrackMaxSpeedMultiplier;
         float extraFriction = onTrack ? 0f : Settings.OffTrackExtraFriction;
-        float maxForward = Settings.MaxForwardSpeed * offTrackFactor;
+        float boostSpeedFactor = wantsBoost ? Settings.BoostSpeedMultiplier : 1f;
+        float boostAccelFactor = wantsBoost ? Settings.BoostAccelerationMultiplier : 1f;
+
+        float maxForward = Settings.MaxForwardSpeed * offTrackFactor * boostSpeedFactor;
         float maxReverse = Settings.MaxReverseSpeed * offTrackFactor;
 
         bool braking = input.Brake
@@ -65,7 +89,7 @@ public sealed class Car
         else if (MathF.Abs(input.Throttle) > 0.01f)
         {
             float target = input.Throttle > 0f ? maxForward : -maxReverse;
-            Speed = MoveToward(Speed, target, Settings.Acceleration * dt);
+            Speed = MoveToward(Speed, target, Settings.Acceleration * boostAccelFactor * dt);
         }
         else
         {
@@ -73,6 +97,10 @@ public sealed class Car
         }
 
         Speed = Math.Clamp(Speed, -maxReverse, maxForward);
+
+        BoostFuel = wantsBoost
+            ? Math.Max(0f, BoostFuel - (Settings.BoostConsumptionPerSecond * dt))
+            : Math.Min(Settings.BoostMaxFuel, BoostFuel + (Settings.BoostPassiveFillPerSecond * dt));
     }
 
     private void ApplySteering(float dt, CarInput input)
@@ -93,7 +121,8 @@ public sealed class Car
         Vector2D target = Position + (forward * Speed * dt);
 
         Vector2D candidate = Position;
-        bool collided = false;
+        bool collidedX = false;
+        bool collidedY = false;
 
         Vector2D stepX = new(target.X, Position.Y);
         if (!track.CollidesWithWall(stepX, Settings.Radius))
@@ -102,7 +131,7 @@ public sealed class Car
         }
         else
         {
-            collided = true;
+            collidedX = true;
         }
 
         Vector2D stepY = new(candidate.X, target.Y);
@@ -112,12 +141,18 @@ public sealed class Car
         }
         else
         {
-            collided = true;
+            collidedY = true;
         }
 
-        if (collided)
+        if (collidedX && collidedY)
         {
+            // Bateu de frente (ou num canto): ricocheteia, perdendo boa parte da velocidade.
             Speed *= -Settings.WallBounceSpeedFactor;
+        }
+        else if (collidedX || collidedY)
+        {
+            // Só raspou de lado enquanto contornava a parede: perde pouca velocidade e segue andando.
+            Speed *= Settings.WallScrapeSpeedFactor;
         }
 
         Position = candidate;
@@ -132,6 +167,7 @@ public sealed class Car
         if (checkpoint != 0 && checkpoint == NextCheckpointIndex)
         {
             NextCheckpointIndex++;
+            BoostFuel = Math.Min(Settings.BoostMaxFuel, BoostFuel + Settings.BoostFillPerCheckpoint);
             return false;
         }
 
@@ -157,6 +193,7 @@ public sealed class Car
 
         CurrentLapTime = 0f;
         NextCheckpointIndex = 1;
+        BoostFuel = Math.Min(Settings.BoostMaxFuel, BoostFuel + Settings.BoostFillPerLap);
     }
 
     private static float MoveToward(float current, float target, float maxDelta)

@@ -19,6 +19,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private enum State
     {
         Intro,
+        ModeSelect,
         Racing,
         Results,
     }
@@ -50,6 +51,10 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     ];
 
     private static readonly Color TitleOutline = new(120, 24, 20);
+    private static readonly Color RecordColor = new(140, 255, 150);
+    private static readonly Color EliminatedTextColor = new(150, 150, 150);
+    private static readonly Color BoostFillColor = new(70, 200, 255);
+    private static readonly Color BoostActiveColor = new(255, 200, 60);
 
     private static readonly Color[] AiPalette =
     [
@@ -72,6 +77,11 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private RaceSimulation _race = null!;
     private RaceEntrant _player = null!;
     private State _state = State.Intro;
+    private RaceMode _selectedMode = RaceMode.Sprint;
+    private SaveData _saveData = null!;
+    private bool _recordsProcessed;
+    private bool _newLapRecord;
+    private bool _newRaceRecord;
 
     private int _windowWidth;
     private int _windowHeight;
@@ -84,14 +94,19 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         IsMouseVisible = true;
         Window.Title = "MegRace - Corrida Top-Vision";
 
-        StartNewRace();
+        _saveData = SaveData.Load();
+
+        StartNewRace(_selectedMode);
         SizeWindowForCurrentRace();
     }
 
-    private void StartNewRace()
+    private void StartNewRace(RaceMode mode)
     {
-        _race = RaceFactory.CreateDefaultRace(aiOpponents: 3, targetLaps: 3);
+        _race = RaceFactory.CreateDefaultRace(aiOpponents: 3, targetLaps: 3, mode: mode);
         _player = _race.Entrants.First(e => e.Kind == DriverKind.Human);
+        _recordsProcessed = false;
+        _newLapRecord = false;
+        _newRaceRecord = false;
 
         _carColors.Clear();
         int aiIndex = 0;
@@ -101,6 +116,44 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 ? AccentColor
                 : AiPalette[aiIndex++ % AiPalette.Length];
         }
+    }
+
+    /// <summary>Compara o resultado da corrida com os recordes salvos, atualiza e persiste se necessário.</summary>
+    private void ProcessRaceEndRecords()
+    {
+        if (_recordsProcessed)
+        {
+            return;
+        }
+
+        _recordsProcessed = true;
+
+        if (_race.Mode == RaceMode.Sprint)
+        {
+            if (_player.Car.BestLapTime is { } lap
+                && (_saveData.BestLapTimeSprint is null || lap < _saveData.BestLapTimeSprint))
+            {
+                _saveData.BestLapTimeSprint = lap;
+                _newLapRecord = true;
+            }
+
+            if (_player.Finished && _player.FinishTime is { } raceTime
+                && (_saveData.BestRaceTimeSprint is null || raceTime < _saveData.BestRaceTimeSprint))
+            {
+                _saveData.BestRaceTimeSprint = raceTime;
+                _newRaceRecord = true;
+            }
+        }
+        else
+        {
+            _saveData.EliminationRaces++;
+            if (_player.Finished)
+            {
+                _saveData.EliminationWins++;
+            }
+        }
+
+        _saveData.Save();
     }
 
     private void SizeWindowForCurrentRace()
@@ -152,6 +205,29 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             case State.Intro:
                 if (_input.AnyKeyJustPressed())
                 {
+                    _state = State.ModeSelect;
+                }
+
+                break;
+
+            case State.ModeSelect:
+                if (_input.WasJustPressed(Keys.Escape))
+                {
+                    Exit();
+                    return;
+                }
+
+                if (_input.WasJustPressed(Keys.Left) || _input.WasJustPressed(Keys.A)
+                    || _input.WasJustPressed(Keys.Right) || _input.WasJustPressed(Keys.D)
+                    || _input.WasJustPressed(Keys.Up) || _input.WasJustPressed(Keys.W)
+                    || _input.WasJustPressed(Keys.Down) || _input.WasJustPressed(Keys.S))
+                {
+                    _selectedMode = _selectedMode == RaceMode.Sprint ? RaceMode.Elimination : RaceMode.Sprint;
+                }
+
+                if (_input.WasJustPressed(Keys.Space) || _input.WasJustPressed(Keys.Enter))
+                {
+                    StartNewRace(_selectedMode);
                     _state = State.Racing;
                 }
 
@@ -168,6 +244,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 _race.Update(dt, _input.BuildCarInput());
                 if (_race.IsRaceOver)
                 {
+                    ProcessRaceEndRecords();
                     _state = State.Results;
                 }
 
@@ -182,8 +259,12 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
                 if (_input.WasJustPressed(Keys.R))
                 {
-                    StartNewRace();
+                    StartNewRace(_race.Mode);
                     _state = State.Racing;
+                }
+                else if (_input.WasJustPressed(Keys.M))
+                {
+                    _state = State.ModeSelect;
                 }
 
                 break;
@@ -202,6 +283,10 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         {
             case State.Intro:
                 DrawIntro();
+                break;
+
+            case State.ModeSelect:
+                DrawModeSelect();
                 break;
 
             case State.Racing:
@@ -423,13 +508,19 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         foreach (RaceEntrant entrant in _race.Entrants)
         {
             Car car = entrant.Car;
-            Color color = _carColors[entrant];
+            bool eliminated = entrant.Eliminated;
+            Color color = eliminated ? Darken(_carColors[entrant], 0.4f) : _carColors[entrant];
 
             var center = new Vector2(car.Position.X * CellSize, car.Position.Y * CellSize);
             float length = CellSize * 1.35f;
             float width = CellSize * 0.85f;
             float halfLength = length / 2f;
             float halfWidth = width / 2f;
+
+            if (!eliminated && car.IsBoosting)
+            {
+                DrawBoostFlame(center, car.Angle, halfLength);
+            }
 
             DrawCapsule(center + new Vector2(2f, 3f), length, width, car.Angle, ShadowColor);
 
@@ -452,14 +543,24 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             Vector2 roofCenter = center + Rotate(new Vector2(halfLength * 0.05f, 0f), car.Angle);
             DrawCapsule(roofCenter, length * 0.5f, width * 0.6f, car.Angle, roofColor);
 
-            Vector2 headlightL = center + Rotate(new Vector2(halfLength * 0.9f, halfWidth * 0.55f), car.Angle);
-            Vector2 headlightR = center + Rotate(new Vector2(halfLength * 0.9f, -halfWidth * 0.55f), car.Angle);
-            DrawCircle(headlightL, CellSize * 0.11f, new Color(255, 250, 210));
-            DrawCircle(headlightR, CellSize * 0.11f, new Color(255, 250, 210));
+            if (!eliminated)
+            {
+                Vector2 headlightL = center + Rotate(new Vector2(halfLength * 0.9f, halfWidth * 0.55f), car.Angle);
+                Vector2 headlightR = center + Rotate(new Vector2(halfLength * 0.9f, -halfWidth * 0.55f), car.Angle);
+                DrawCircle(headlightL, CellSize * 0.11f, new Color(255, 250, 210));
+                DrawCircle(headlightR, CellSize * 0.11f, new Color(255, 250, 210));
 
-            Vector2 tailLight = center + Rotate(new Vector2(-halfLength * 0.92f, 0f), car.Angle);
-            DrawCircle(tailLight, CellSize * 0.1f, new Color(200, 20, 20));
+                Vector2 tailLight = center + Rotate(new Vector2(-halfLength * 0.92f, 0f), car.Angle);
+                DrawCircle(tailLight, CellSize * 0.1f, new Color(200, 20, 20));
+            }
         }
+    }
+
+    private void DrawBoostFlame(Vector2 center, float angle, float halfLength)
+    {
+        Vector2 flamePos = center + Rotate(new Vector2(-halfLength * 1.05f, 0f), angle);
+        DrawCircle(flamePos, CellSize * 0.34f, new Color(255, 140, 30, 220));
+        DrawCircle(flamePos, CellSize * 0.2f, new Color(255, 230, 90, 230));
     }
 
     // ---------- HUD ----------
@@ -480,18 +581,45 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             y += lineHeight;
         }
 
+        bool isElimination = _race.Mode == RaceMode.Elimination;
+
         if (raceOver)
         {
-            Line("CORRIDA FINALIZADA", AccentColor);
+            string headline = isElimination
+                ? (_player.Finished ? "VOCE E O CAMPEAO!" : "VOCE FOI ELIMINADO")
+                : "CORRIDA FINALIZADA";
+            Line(headline, AccentColor);
+
+            if (_newRaceRecord)
+            {
+                Line("NOVO RECORDE DE CORRIDA!", RecordColor);
+            }
+            else if (_newLapRecord)
+            {
+                Line("NOVO RECORDE DE VOLTA!", RecordColor);
+            }
+        }
+        else if (isElimination)
+        {
+            int active = _race.Entrants.Count(e => !e.Eliminated);
+            bool playerIsLast = !_player.Eliminated && IsLastPlaceActive(_player);
+            string warning = playerIsLast ? "  CUIDADO, VOCE ESTA POR ULTIMO!" : string.Empty;
+            Line($"VOLTA {_player.Car.LapsCompleted + 1}   RESTAM {active}{warning}", playerIsLast ? new Color(255, 100, 90) : TextColor);
         }
         else
         {
             int lap = Math.Min(_player.Car.LapsCompleted + 1, _race.TargetLaps);
-            Line($"VOLTA {lap}/{_race.TargetLaps}   TEMPO {FormatTime(_player.Car.CurrentLapTime)}   VEL {_player.Car.Speed:0}", TextColor);
+            Line($"VOLTA {lap}/{_race.TargetLaps}   TEMPO {FormatTime(_player.Car.CurrentLapTime)}", TextColor);
+        }
+
+        if (!raceOver)
+        {
+            DrawBoostBar();
         }
 
         string best = _player.Car.BestLapTime is { } b ? FormatTime(b) : "--:--.---";
-        Line($"MELHOR VOLTA {best}   TEMPO TOTAL {FormatTime(_player.Car.TotalRaceTime)}", TextColor);
+        string recordSuffix = _saveData.BestLapTimeSprint is { } r ? $"   RECORDE {FormatTime(r)}" : string.Empty;
+        Line($"MELHOR VOLTA {best}{recordSuffix}   VEL {_player.Car.Speed:0}", TextColor);
 
         Line("CLASSIFICACAO", AccentColor);
 
@@ -500,16 +628,31 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         {
             bool isHuman = entrant.Kind == DriverKind.Human;
             string displayName = isHuman ? "VOCE" : entrant.Car.Name.ToUpperInvariant();
-            string status = entrant.Finished
-                ? $"CHEGOU {FormatTime(entrant.FinishTime ?? 0f)}"
-                : $"VOLTA {entrant.Car.LapsCompleted}/{_race.TargetLaps}";
-            Color rowColor = isHuman ? AccentColor : TextColor;
+
+            string status;
+            if (entrant.Finished)
+            {
+                status = isElimination ? "CAMPEAO" : $"CHEGOU {FormatTime(entrant.FinishTime ?? 0f)}";
+            }
+            else if (entrant.Eliminated)
+            {
+                status = "ELIMINADO";
+            }
+            else
+            {
+                status = isElimination
+                    ? $"VOLTA {entrant.Car.LapsCompleted}"
+                    : $"VOLTA {entrant.Car.LapsCompleted}/{_race.TargetLaps}";
+            }
+
+            Color rowColor = entrant.Eliminated ? EliminatedTextColor : (isHuman ? AccentColor : TextColor);
+            Color iconColor = entrant.Eliminated ? Darken(_carColors[entrant], 0.4f) : _carColors[entrant];
 
             string left = $"{position,2}";
             PixelFont.Draw(_spriteBatch, _pixel, left, new Vector2(x, y), HudTextSize, rowColor);
 
             float iconX = x + PixelFont.Measure(left, HudTextSize) + 10f;
-            DrawCapsule(new Vector2(iconX + 8f, y + (PixelFont.LineHeight(HudTextSize) / 2f)), 16f, 8f, 0f, _carColors[entrant]);
+            DrawCapsule(new Vector2(iconX + 8f, y + (PixelFont.LineHeight(HudTextSize) / 2f)), 16f, 8f, 0f, iconColor);
 
             string right = $"{displayName,-6} {status}";
             PixelFont.Draw(_spriteBatch, _pixel, right, new Vector2(iconX + 22f, y), HudTextSize, rowColor);
@@ -518,7 +661,37 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             position++;
         }
 
-        Line(raceOver ? "R: CORRER DE NOVO   ESC: SAIR" : "SETAS/WASD DIRIGIR   ESPACO FREIO   ESC SAIR", TextColor);
+        Line(
+            raceOver
+                ? "R: CORRER DE NOVO   M: TROCAR MODO   ESC: SAIR"
+                : "SETAS/WASD DIRIGIR  ESPACO FREIO  SHIFT TURBO  ESC SAIR",
+            TextColor);
+    }
+
+    private bool IsLastPlaceActive(RaceEntrant entrant)
+    {
+        List<RaceEntrant> active = [.. _race.GetStandings().Where(e => !e.Eliminated && !e.Finished)];
+        return active.Count > 0 && ReferenceEquals(active[^1], entrant);
+    }
+
+    private void DrawBoostBar()
+    {
+        const float width = 150f;
+        const float height = 14f;
+        float rightEdge = _windowWidth - TrackMargin;
+        float x = rightEdge - width - 16f;
+        float y = _hudTop + HudPaddingTop;
+
+        var backRect = new Rectangle((int)x - 2, (int)y - 2, (int)width + 4, (int)height + 4);
+        _spriteBatch.Draw(_pixel, backRect, new Color(10, 40, 20));
+
+        float fraction = Math.Clamp(_player.Car.BoostFuel / _player.Car.Settings.BoostMaxFuel, 0f, 1f);
+        var fillRect = new Rectangle((int)x, (int)y, (int)(width * fraction), (int)height);
+        Color fillColor = _player.Car.IsBoosting ? BoostActiveColor : BoostFillColor;
+        _spriteBatch.Draw(_pixel, fillRect, fillColor);
+
+        const string label = "TURBO (SHIFT)";
+        PixelFont.Draw(_spriteBatch, _pixel, label, new Vector2(x, y + height + 6f), 2f, TextColor);
     }
 
     // ---------- Tela inicial ----------
@@ -566,13 +739,71 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         DrawPanel(leftPanel);
         DrawPanel(rightPanel);
 
-        DrawPanelText(leftPanel, "CONTROLES", ["SETAS/WASD DIRIGIR", "ESPACO FREIO DE MAO", "ESC SAIR"]);
-        DrawPanelText(rightPanel, "REGRAS", ["COMPLETE 3 VOLTAS", "PASSANDO PELOS", "CHECKPOINTS NA ORDEM", "ANTES DA CHEGADA"]);
+        DrawPanelText(leftPanel, "CONTROLES", ["SETAS/WASD DIRIGIR", "SHIFT: TURBO", "ESPACO: FREIO DE MAO", "ESC: SAIR"]);
+        DrawPanelText(rightPanel, "DICAS", ["ENCHA O TURBO NOS", "CHECKPOINTS E RETAS", "CUIDADO AO BATER NOS", "RIVAIS E NAS PAREDES"]);
 
         const string prompt = "APERTE QUALQUER TECLA";
         float promptWidth = PixelFont.Measure(prompt, 3.5f);
         var promptPos = new Vector2((trackAreaWidth - promptWidth) / 2f, panelsTop + panelHeight + 20f);
         PixelFont.Draw(_spriteBatch, _pixel, prompt, promptPos, 3.5f, AccentColor);
+    }
+
+    // ---------- Tela de seleção de modo ----------
+
+    private void DrawModeSelect()
+    {
+        float trackAreaWidth = _windowWidth - (2f * TrackMargin);
+        float trackAreaHeight = _windowHeight - TrackMargin;
+
+        DrawTireStack(new Vector2(-24f, -24f), CellSize * 0.5f);
+        DrawTireStack(new Vector2(trackAreaWidth + 24f, -24f), CellSize * 0.5f);
+        DrawTireStack(new Vector2(-24f, trackAreaHeight - 24f), CellSize * 0.5f);
+        DrawTireStack(new Vector2(trackAreaWidth + 24f, trackAreaHeight - 24f), CellSize * 0.5f);
+
+        const float headerSize = 5.5f;
+        const string header = "ESCOLHA O MODO";
+        float headerWidth = PixelFont.Measure(header, headerSize);
+        var headerPos = new Vector2((trackAreaWidth - headerWidth) / 2f, 44f);
+        PixelFont.Draw(_spriteBatch, _pixel, header, headerPos, headerSize, AccentColor);
+
+        float panelsTop = headerPos.Y + PixelFont.LineHeight(headerSize) + 36f;
+        float panelHeight = 210f;
+        float panelWidth = (trackAreaWidth - 60f) / 2f;
+
+        var sprintPanel = new Rectangle(20, (int)panelsTop, (int)panelWidth, (int)panelHeight);
+        var eliminationPanel = new Rectangle((int)(20f + panelWidth + 20f), (int)panelsTop, (int)panelWidth, (int)panelHeight);
+
+        DrawSelectablePanel(sprintPanel, _selectedMode == RaceMode.Sprint);
+        DrawSelectablePanel(eliminationPanel, _selectedMode == RaceMode.Elimination);
+
+        List<string> sprintLines = ["CORRIDA CLASSICA:", "COMPLETE 3 VOLTAS", "NA FRENTE DE TODOS."];
+        if (_saveData.BestLapTimeSprint is { } bestLap)
+        {
+            sprintLines.Add("");
+            sprintLines.Add($"RECORDE VOLTA: {FormatTime(bestLap)}");
+        }
+
+        List<string> eliminationLines = ["A CADA VOLTA, O", "ULTIMO LUGAR E", "ELIMINADO.", "SOBREVIVA!"];
+        if (_saveData.EliminationRaces > 0)
+        {
+            eliminationLines.Add("");
+            eliminationLines.Add($"VITORIAS: {_saveData.EliminationWins}/{_saveData.EliminationRaces}");
+        }
+
+        DrawPanelText(sprintPanel, "CORRIDA", [.. sprintLines]);
+        DrawPanelText(eliminationPanel, "ELIMINACAO", [.. eliminationLines]);
+
+        const string prompt = "SETAS: TROCAR    ESPACO: CONFIRMAR";
+        float promptWidth = PixelFont.Measure(prompt, 3f);
+        var promptPos = new Vector2((trackAreaWidth - promptWidth) / 2f, panelsTop + panelHeight + 24f);
+        PixelFont.Draw(_spriteBatch, _pixel, prompt, promptPos, 3f, TextColor);
+    }
+
+    private void DrawSelectablePanel(Rectangle rect, bool selected)
+    {
+        _spriteBatch.Draw(_pixel, rect, selected ? AccentColor : PanelBorderColor);
+        var inner = new Rectangle(rect.X + 4, rect.Y + 4, rect.Width - 8, rect.Height - 8);
+        _spriteBatch.Draw(_pixel, inner, PanelFillColor);
     }
 
     private static readonly Vector2[] OutlineOffsets =

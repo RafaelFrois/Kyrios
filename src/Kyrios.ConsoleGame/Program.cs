@@ -168,6 +168,7 @@ static void RunHeadlessSimulation(string[] args)
     int aiOpponents = 3;
     int targetLaps = 3;
     int? seed = null;
+    RaceMode mode = RaceMode.Sprint;
 
     for (int i = 0; i < args.Length; i++)
     {
@@ -183,11 +184,15 @@ static void RunHeadlessSimulation(string[] args)
         {
             seed = s;
         }
+        else if (args[i] == "--mode" && i + 1 < args.Length && args[i + 1].Equals("elimination", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = RaceMode.Elimination;
+        }
     }
 
-    Console.WriteLine($"Simulação sem interface: {aiOpponents} IA(s), {targetLaps} volta(s), semente={(seed?.ToString() ?? "aleatória")}");
+    Console.WriteLine($"Simulação sem interface: {aiOpponents} IA(s), {targetLaps} volta(s), modo={mode}, semente={(seed?.ToString() ?? "aleatória")}");
 
-    RaceSimulation race = RaceFactory.CreateDefaultRace(aiOpponents: aiOpponents, targetLaps: targetLaps, includeHuman: false, randomSeed: seed);
+    RaceSimulation race = RaceFactory.CreateDefaultRace(aiOpponents: aiOpponents, targetLaps: targetLaps, includeHuman: false, randomSeed: seed, mode: mode);
 
     const float dt = 0.05f;
     const float maxSimSeconds = 180f;
@@ -210,7 +215,9 @@ static void RunHeadlessSimulation(string[] args)
     {
         string status = entrant.Finished
             ? $"chegou em {FormatTime(entrant.FinishTime ?? 0f)}"
-            : $"não terminou (volta {entrant.Car.LapsCompleted}/{race.TargetLaps})";
+            : entrant.Eliminated
+                ? "eliminado"
+                : $"não terminou (volta {entrant.Car.LapsCompleted}/{race.TargetLaps})";
         string best = entrant.Car.BestLapTime is { } b ? FormatTime(b) : "--:--.---";
         Console.WriteLine($"  {position,2}. {entrant.Car.Name,-8} {status}  | melhor volta: {best}");
         position++;

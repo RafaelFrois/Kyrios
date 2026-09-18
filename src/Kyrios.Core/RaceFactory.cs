@@ -5,7 +5,12 @@ public static class RaceFactory
 {
     public static readonly string[] AiNames = ["Rex", "Nina", "Hugo", "Vale", "Zara", "Tico", "Dara", "Kai"];
 
-    public static RaceSimulation CreateDefaultRace(int aiOpponents = 3, int targetLaps = 3, bool includeHuman = true, int? randomSeed = null)
+    public static RaceSimulation CreateDefaultRace(
+        int aiOpponents = 3,
+        int targetLaps = 3,
+        bool includeHuman = true,
+        int? randomSeed = null,
+        RaceMode mode = RaceMode.Sprint)
     {
         Track track = TrackFactory.CreateRingTrack();
         int totalCars = aiOpponents + (includeHuman ? 1 : 0);
@@ -31,10 +36,11 @@ public static class RaceFactory
                 MaxForwardSpeed = CarPhysicsSettings.Default.MaxForwardSpeed * (0.9f + (0.12f * (float)random.NextDouble())),
             };
             var aiCar = new Car(name, pos, track.StartFacingAngle, settings);
-            var driver = new AIDriver(track, skill: 0.82f + (0.18f * (float)random.NextDouble()));
+            int? driverSeed = randomSeed is null ? null : random.Next();
+            var driver = new AIDriver(track, skill: 0.82f + (0.18f * (float)random.NextDouble()), randomSeed: driverSeed);
             entrants.Add(new RaceEntrant(aiCar, DriverKind.Ai, driver));
         }
 
-        return new RaceSimulation(track, entrants, targetLaps);
+        return new RaceSimulation(track, entrants, targetLaps, mode);
     }
 }

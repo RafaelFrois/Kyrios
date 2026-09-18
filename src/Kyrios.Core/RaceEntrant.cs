@@ -17,6 +17,9 @@ public sealed class RaceEntrant
     public float? FinishTime { get; internal set; }
     public int? FinishPlace { get; internal set; }
 
+    /// <summary>true se foi eliminado (modo <see cref="RaceMode.Elimination"/>) antes de conseguir vencer.</summary>
+    public bool Eliminated { get; internal set; }
+
     public RaceEntrant(Car car, DriverKind kind, AIDriver? driver = null)
     {
         if (kind == DriverKind.Ai && driver is null)

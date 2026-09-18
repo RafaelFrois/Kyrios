@@ -15,6 +15,18 @@ public sealed class CarPhysicsSettings
     public float OffTrackMaxSpeedMultiplier { get; init; } = 0.45f;
     public float OffTrackExtraFriction { get; init; } = 7.0f;
     public float WallBounceSpeedFactor { get; init; } = 0.25f;
+    public float WallScrapeSpeedFactor { get; init; } = 0.92f;
+
+    public float CarCollisionSpeedFactor { get; init; } = 0.7f;
+
+    public float BoostMaxFuel { get; init; } = 100f;
+    public float BoostStartingFuel { get; init; } = 40f;
+    public float BoostPassiveFillPerSecond { get; init; } = 4f;
+    public float BoostFillPerCheckpoint { get; init; } = 25f;
+    public float BoostFillPerLap { get; init; } = 40f;
+    public float BoostConsumptionPerSecond { get; init; } = 45f;
+    public float BoostSpeedMultiplier { get; init; } = 1.45f;
+    public float BoostAccelerationMultiplier { get; init; } = 1.6f;
 
     public static CarPhysicsSettings Default { get; } = new();
 }

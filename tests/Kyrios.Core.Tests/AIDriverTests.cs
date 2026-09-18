@@ -23,12 +23,13 @@ public class AIDriverTests
     public void GetInput_TargetDirectlyAhead_SteersStraight()
     {
         Track track = MinimalTrackWithWaypoint(new Vector2D(10f, 0f));
-        var driver = new AIDriver(track);
+        var driver = new AIDriver(track, randomSeed: 1);
         var car = new Car("AI", new Vector2D(0f, 0f), 0f);
 
         CarInput input = driver.GetInput(car);
 
-        Assert.Equal(0f, input.Steering, precision: 2);
+        // Há uma leve variação orgânica (jitter) na direção, então não é exatamente zero.
+        Assert.InRange(input.Steering, -0.15f, 0.15f);
         Assert.True(input.Throttle > 0.5f);
     }
 
