@@ -11,7 +11,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private const int CellSize = 22;
     private const int TrackMargin = 40;
     private const int CircleTextureSize = 32;
-    private const float HudTextSize = 3f;
+    private const float HudTextSize = 2f;
 
     private enum State
     {
@@ -92,6 +92,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
     private int _windowWidth;
     private int _windowHeight;
+    private bool _isFullscreen;
 
     public GameRoot()
     {
@@ -99,6 +100,11 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
         Window.Title = "MegRace - Corrida Top-Vision";
+
+        // Tela cheia sem trocar o modo de vídeo (borderless) — mais confiável entre monitores/placas
+        // diferentes, e como a gente já escala/centraliza a cena sozinho (ver Draw), não precisa da
+        // troca de resolução de verdade.
+        _graphics.HardwareModeSwitch = false;
 
         _saveData = SaveData.Load();
 
@@ -152,6 +158,32 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     {
         StartNewRace(mode);
         SizeWindowForCurrentRace();
+
+        // Em tela cheia o back buffer já ocupa a tela toda (a cena escala/centraliza sozinha no Draw);
+        // só reaplica o tamanho de janela de verdade quando estiver mesmo em modo janela.
+        if (!_isFullscreen)
+        {
+            _graphics.ApplyChanges();
+        }
+    }
+
+    private void ToggleFullscreen()
+    {
+        _isFullscreen = !_isFullscreen;
+
+        if (_isFullscreen)
+        {
+            DisplayMode display = GraphicsDevice.Adapter.CurrentDisplayMode;
+            _graphics.PreferredBackBufferWidth = display.Width;
+            _graphics.PreferredBackBufferHeight = display.Height;
+        }
+        else
+        {
+            _graphics.PreferredBackBufferWidth = _windowWidth;
+            _graphics.PreferredBackBufferHeight = _windowHeight;
+        }
+
+        _graphics.IsFullScreen = _isFullscreen;
         _graphics.ApplyChanges();
     }
 
@@ -212,12 +244,17 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         int trackPixelHeight = _race.Track.Height * CellSize;
 
         // Sem rodapé de HUD pra acomodar, a janela agora só precisa caber a pista + a margem decorativa
-        // ao redor — não depende mais do modo escolhido nem de quantos carros estão correndo.
+        // ao redor — não depende mais do modo escolhido nem de quantos carros estão correndo. Isso é a
+        // resolução "lógica" usada em todo o layout; em tela cheia o back buffer de verdade é maior
+        // (tamanho do monitor) e a cena é escalada/centralizada até caber (ver Draw).
         _windowWidth = Math.Max(trackPixelWidth + (2 * TrackMargin), 640);
         _windowHeight = trackPixelHeight + (2 * TrackMargin);
 
-        _graphics.PreferredBackBufferWidth = _windowWidth;
-        _graphics.PreferredBackBufferHeight = _windowHeight;
+        if (!_isFullscreen)
+        {
+            _graphics.PreferredBackBufferWidth = _windowWidth;
+            _graphics.PreferredBackBufferHeight = _windowHeight;
+        }
     }
 
     protected override void LoadContent()
@@ -246,6 +283,16 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     protected override void Update(GameTime gameTime)
     {
         _input.Update();
+
+        bool altHeld = _input.IsDown(Keys.LeftAlt) || _input.IsDown(Keys.RightAlt);
+        if (_input.WasJustPressed(Keys.F11) || (altHeld && _input.WasJustPressed(Keys.Enter)))
+        {
+            // Trata a tecla de tela cheia à parte e sai cedo, senão o mesmo Enter também dispararia
+            // "confirmar" na seleção de modo ou "jogar de novo" nos resultados neste mesmo quadro.
+            ToggleFullscreen();
+            base.Update(gameTime);
+            return;
+        }
 
         switch (_state)
         {
@@ -328,7 +375,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         bool isMenuState = _state is State.Intro or State.ModeSelect;
         GraphicsDevice.Clear(isMenuState ? MenuBackground : BackgroundGrass);
 
-        _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: Matrix.CreateTranslation(TrackMargin, TrackMargin, 0f));
+        _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: BuildScreenTransform());
 
         switch (_state)
         {
@@ -357,6 +404,27 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
         _spriteBatch.End();
         base.Draw(gameTime);
+    }
+
+    /// <summary>
+    /// Todo o jogo é desenhado numa resolução "lógica" fixa (<see cref="_windowWidth"/> x
+    /// <see cref="_windowHeight"/>, do tamanho da pista atual). Esse método escala e centraliza essa cena
+    /// pra caber no back buffer de verdade — que em modo janela é do mesmo tamanho (escala 1, sem
+    /// diferença visual), mas em tela cheia é do tamanho do monitor. Preserva a proporção (letterbox/
+    /// pillarbox) em vez de esticar, então layout, pop-up e HUD ficam idênticos nos dois casos.
+    /// </summary>
+    private Matrix BuildScreenTransform()
+    {
+        int actualWidth = GraphicsDevice.PresentationParameters.BackBufferWidth;
+        int actualHeight = GraphicsDevice.PresentationParameters.BackBufferHeight;
+
+        float scale = MathF.Min((float)actualWidth / _windowWidth, (float)actualHeight / _windowHeight);
+        float offsetX = (actualWidth - (_windowWidth * scale)) / 2f;
+        float offsetY = (actualHeight - (_windowHeight * scale)) / 2f;
+
+        return Matrix.CreateTranslation(TrackMargin, TrackMargin, 0f)
+            * Matrix.CreateScale(scale, scale, 1f)
+            * Matrix.CreateTranslation(offsetX, offsetY, 0f);
     }
 
     // ---------- Primitivas de desenho ----------
@@ -668,7 +736,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
         _spriteBatch.Draw(_pixel, new Rectangle(0, 0, (int)barWidth, (int)barHeight), new Color(14, 16, 23, 175));
         _spriteBatch.Draw(_pixel, new Rectangle(0, (int)barHeight - 3, (int)barWidth, 3), AccentColor);
-        PixelFont.Draw(_spriteBatch, _pixel, primary, new Vector2(padding, padding), HudTextSize, primaryColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, primary, new Vector2(padding, padding), HudTextSize, primaryColor);
 
         DrawBoostBar(new Vector2(padding, barHeight + 10f));
     }
@@ -695,7 +763,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         _spriteBatch.Draw(_pixel, fillRect, fillColor);
 
         const string label = "TURBO (SHIFT)";
-        PixelFont.Draw(_spriteBatch, _pixel, label, new Vector2(x, y + height + 6f), 2f, TextColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, label, new Vector2(x, y + height + 6f), 1.5f, TextColor);
     }
 
     // ---------- Pop-up de resultado ----------
@@ -709,16 +777,31 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
         (string headline, List<string> lines) = BuildResultsContent();
 
-        const float panelWidth = 480f;
-        const float headerSize = 5f;
-        const float lineSize = 3f;
+        const float headerSize = 3.5f;
+        const float lineSize = 2f;
+        const float promptSize = 1.75f;
         const float lineGap = 12f;
-        const float panelPaddingV = 26f;
+        const float panelPaddingV = 24f;
+        const float panelPaddingH = 34f;
+        const string prompt = "ESPACO: JOGAR DE NOVO    M: MENU PRINCIPAL    ESC: SAIR";
 
-        float contentHeight = PixelFont.LineHeight(headerSize) + 20f
+        // Painel largo o bastante pro texto mais comprido (título, linha de estatística ou o rodapé de
+        // instruções), nunca cortando nada, mas sem passar de um teto proporcional à pista nem de um
+        // mínimo — assim funciona bem tanto pra um resultado com poucas linhas quanto pra um mais extenso.
+        float widestContent = PixelFont.Measure(headline, headerSize);
+        foreach (string line in lines)
+        {
+            widestContent = MathF.Max(widestContent, PixelFont.Measure(line, lineSize));
+        }
+
+        widestContent = MathF.Max(widestContent, PixelFont.Measure(prompt, promptSize));
+        float panelWidth = Math.Clamp(widestContent + (panelPaddingH * 2f), 340f, trackAreaWidth - 80f);
+
+        float dividerGap = 18f;
+        float contentHeight = PixelFont.LineHeight(headerSize) + 22f
             + (lines.Count * (PixelFont.LineHeight(lineSize) + lineGap))
-            + 22f
-            + PixelFont.LineHeight(lineSize);
+            + dividerGap
+            + PixelFont.LineHeight(promptSize);
 
         float panelHeight = contentHeight + (panelPaddingV * 2f);
 
@@ -733,21 +816,23 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
         float y = panelRect.Y + panelPaddingV;
         float headerWidth = PixelFont.Measure(headline, headerSize);
-        PixelFont.Draw(_spriteBatch, _pixel, headline, new Vector2(panelRect.X + ((panelRect.Width - headerWidth) / 2f), y), headerSize, AccentColor);
-        y += PixelFont.LineHeight(headerSize) + 20f;
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, headline, new Vector2(panelRect.X + ((panelRect.Width - headerWidth) / 2f), y), headerSize, AccentColor);
+        y += PixelFont.LineHeight(headerSize) + 22f;
 
         foreach (string line in lines)
         {
             Color lineColor = line.Contains("RECORDE", StringComparison.Ordinal) ? RecordColor : TextColor;
             float lineWidth = PixelFont.Measure(line, lineSize);
-            PixelFont.Draw(_spriteBatch, _pixel, line, new Vector2(panelRect.X + ((panelRect.Width - lineWidth) / 2f), y), lineSize, lineColor);
+            PixelFont.DrawShadowed(_spriteBatch, _pixel, line, new Vector2(panelRect.X + ((panelRect.Width - lineWidth) / 2f), y), lineSize, lineColor);
             y += PixelFont.LineHeight(lineSize) + lineGap;
         }
 
-        y += 10f;
-        const string prompt = "ESPACO: JOGAR DE NOVO    M: MENU PRINCIPAL    ESC: SAIR";
-        float promptWidth = PixelFont.Measure(prompt, lineSize);
-        PixelFont.Draw(_spriteBatch, _pixel, prompt, new Vector2(panelRect.X + ((panelRect.Width - promptWidth) / 2f), y), lineSize, AccentColor);
+        var dividerRect = new Rectangle(panelRect.X + (int)panelPaddingH, (int)y + 2, panelRect.Width - (int)(panelPaddingH * 2f), 2);
+        _spriteBatch.Draw(_pixel, dividerRect, PanelBorderColor);
+        y += dividerGap;
+
+        float promptWidth = PixelFont.Measure(prompt, promptSize);
+        PixelFont.Draw(_spriteBatch, _pixel, prompt, new Vector2(panelRect.X + ((panelRect.Width - promptWidth) / 2f), y), promptSize, AccentColor);
     }
 
     /// <summary>Monta o título e as linhas de estatísticas do pop-up de resultado, de acordo com o modo.</summary>
@@ -831,26 +916,26 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         DrawCircle(new Vector2(trackAreaWidth - 20f, 40f), CellSize * 1.1f, BushDark);
         DrawCircle(new Vector2(trackAreaWidth - 20f, 40f), CellSize * 0.8f, BushLight);
 
-        const float titleSize = 8f;
+        const float titleSize = 5.5f;
         string title = "MEGRACE";
         float titleWidth = PixelFont.Measure(title, titleSize);
         var titlePos = new Vector2((trackAreaWidth - titleWidth) / 2f, 36f);
 
         foreach (Vector2 offset in OutlineOffsets)
         {
-            PixelFont.Draw(_spriteBatch, _pixel, title, titlePos + (offset * 2f), titleSize, TitleOutline);
+            PixelFont.Draw(_spriteBatch, _pixel, title, titlePos + (offset * 1.5f), titleSize, TitleOutline);
         }
 
         PixelFont.DrawGradient(_spriteBatch, _pixel, title, titlePos, titleSize, TitleGradient);
 
-        const float subtitleSize = 4f;
+        const float subtitleSize = 2.75f;
         string subtitle = "CORRIDA TOP-VISION";
         float subtitleWidth = PixelFont.Measure(subtitle, subtitleSize);
         var subtitlePos = new Vector2((trackAreaWidth - subtitleWidth) / 2f, titlePos.Y + PixelFont.LineHeight(titleSize) + 16f);
-        PixelFont.Draw(_spriteBatch, _pixel, subtitle, subtitlePos, subtitleSize, Color.White);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, subtitle, subtitlePos, subtitleSize, Color.White);
 
         float panelsTop = subtitlePos.Y + PixelFont.LineHeight(subtitleSize) + 28f;
-        float panelHeight = 130f;
+        float panelHeight = 150f;
         float panelWidth = (trackAreaWidth - 60f) / 2f;
 
         var leftPanel = new Rectangle(20, (int)panelsTop, (int)panelWidth, (int)panelHeight);
@@ -859,13 +944,14 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         DrawPanel(leftPanel);
         DrawPanel(rightPanel);
 
-        DrawPanelText(leftPanel, "CONTROLES", ["SETAS/WASD DIRIGIR", "SHIFT: TURBO", "ESPACO: FREIO DE MAO", "ESC: SAIR"]);
+        DrawPanelText(leftPanel, "CONTROLES", ["SETAS/WASD DIRIGIR", "SHIFT: TURBO", "ESPACO: FREIO DE MAO", "F11: TELA CHEIA", "ESC: SAIR"]);
         DrawPanelText(rightPanel, "DICAS", ["ENCHA O TURBO NOS", "CHECKPOINTS E RETAS", "CUIDADO AO BATER NOS", "RIVAIS E NAS PAREDES"]);
 
         const string prompt = "APERTE QUALQUER TECLA";
-        float promptWidth = PixelFont.Measure(prompt, 3.5f);
+        const float promptSize = 2.5f;
+        float promptWidth = PixelFont.Measure(prompt, promptSize);
         var promptPos = new Vector2((trackAreaWidth - promptWidth) / 2f, panelsTop + panelHeight + 20f);
-        PixelFont.Draw(_spriteBatch, _pixel, prompt, promptPos, 3.5f, AccentColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, prompt, promptPos, promptSize, AccentColor);
     }
 
     // ---------- Tela de seleção de modo ----------
@@ -880,11 +966,11 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         DrawTireStack(new Vector2(-24f, trackAreaHeight - 24f), CellSize * 0.5f);
         DrawTireStack(new Vector2(trackAreaWidth + 24f, trackAreaHeight - 24f), CellSize * 0.5f);
 
-        const float headerSize = 5.5f;
+        const float headerSize = 3.75f;
         const string header = "ESCOLHA O MODO";
         float headerWidth = PixelFont.Measure(header, headerSize);
         var headerPos = new Vector2((trackAreaWidth - headerWidth) / 2f, 44f);
-        PixelFont.Draw(_spriteBatch, _pixel, header, headerPos, headerSize, AccentColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, header, headerPos, headerSize, AccentColor);
 
         float panelsTop = headerPos.Y + PixelFont.LineHeight(headerSize) + 36f;
         float panelHeight = 210f;
@@ -925,9 +1011,10 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         DrawPanelText(timeAttackPanel, "CONTRARRELOGIO", [.. timeAttackLines]);
 
         const string prompt = "SETAS: TROCAR    ESPACO: CONFIRMAR";
-        float promptWidth = PixelFont.Measure(prompt, 3f);
+        const float promptSize = 2f;
+        float promptWidth = PixelFont.Measure(prompt, promptSize);
         var promptPos = new Vector2((trackAreaWidth - promptWidth) / 2f, panelsTop + panelHeight + 24f);
-        PixelFont.Draw(_spriteBatch, _pixel, prompt, promptPos, 3f, TextColor);
+        PixelFont.Draw(_spriteBatch, _pixel, prompt, promptPos, promptSize, TextColor);
     }
 
     private void DrawSelectablePanel(Rectangle rect, bool selected)
@@ -953,16 +1040,18 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
     private void DrawPanelText(Rectangle panel, string header, string[] lines)
     {
+        const float headerSize = 2.5f;
+        const float lineSize = 1.75f;
+
         float y = panel.Y + 12f;
-        float headerSize = 3.5f;
         float headerWidth = PixelFont.Measure(header, headerSize);
-        PixelFont.Draw(_spriteBatch, _pixel, header, new Vector2(panel.X + ((panel.Width - headerWidth) / 2f), y), headerSize, AccentColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, header, new Vector2(panel.X + ((panel.Width - headerWidth) / 2f), y), headerSize, AccentColor);
         y += PixelFont.LineHeight(headerSize) + 12f;
 
         foreach (string line in lines)
         {
-            PixelFont.Draw(_spriteBatch, _pixel, line, new Vector2(panel.X + 10f, y), 2.5f, Color.White);
-            y += PixelFont.LineHeight(2.5f) + 8f;
+            PixelFont.Draw(_spriteBatch, _pixel, line, new Vector2(panel.X + 10f, y), lineSize, Color.White);
+            y += PixelFont.LineHeight(lineSize) + 8f;
         }
     }
 
