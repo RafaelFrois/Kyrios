@@ -21,6 +21,11 @@ public sealed class GameInput
 
     public bool AnyKeyJustPressed() => _current.GetPressedKeys().Any(k => !_previous.IsKeyDown(k));
 
+    /// <summary>Como <see cref="AnyKeyJustPressed"/>, mas ignorando as teclas passadas — usado na tela
+    /// inicial pra alternar tela cheia (F11) sem que isso também conte como "aperte qualquer tecla".</summary>
+    public bool AnyKeyJustPressedExcept(params Keys[] excludedKeys) =>
+        _current.GetPressedKeys().Any(k => !_previous.IsKeyDown(k) && !excludedKeys.Contains(k));
+
     public CarInput BuildCarInput()
     {
         float throttle = 0f;

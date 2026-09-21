@@ -436,7 +436,9 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                     return;
                 }
 
-                if (_input.AnyKeyJustPressed())
+                // F11 (alternar tela cheia) nunca deve contar como "aperte qualquer tecla" aqui — senão
+                // pedir tela cheia na tela inicial também avança pro menu.
+                if (_input.AnyKeyJustPressedExcept(Keys.F11))
                 {
                     _state = State.ModeSelect;
                 }
