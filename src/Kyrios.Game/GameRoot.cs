@@ -42,6 +42,11 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private static readonly Color OverlayDimColor = new(8, 9, 14, 195);
     private static readonly Color HazardColor = new(230, 122, 40);
     private static readonly Color HazardCapColor = new(35, 34, 38);
+    private static readonly Color HudFrameFill = new(16, 18, 27, 225);
+    private static readonly Color HudFrameDivider = new(255, 200, 40, 90);
+    private static readonly Color StatBadgeFill = new(15, 32, 24);
+    private static readonly Color StatBadgeLabelColor = new(150, 158, 175);
+    private static readonly Color StudioLogoColor = new(225, 228, 238, 205);
 
     private static readonly Color[] TitleGradient =
     [
@@ -1169,24 +1174,34 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         var subtitlePos = new Vector2((trackAreaWidth - subtitleWidth) / 2f, titlePos.Y + PixelFont.LineHeight(titleSize) + 16f);
         PixelFont.DrawShadowed(_spriteBatch, _pixel, subtitle, subtitlePos, subtitleSize, Color.White);
 
+        // Um único "console de HUD" com cantos marcados em vez de dois cards iguais aos da tela de
+        // seleção de modo — pra tela inicial não parecer mais uma tela de escolha.
         float panelsTop = subtitlePos.Y + PixelFont.LineHeight(subtitleSize) + 28f;
         float panelHeight = 150f;
-        float panelWidth = (trackAreaWidth - 60f) / 2f;
+        var infoFrame = new Rectangle(20, (int)panelsTop, (int)(trackAreaWidth - 40f), (int)panelHeight);
+        DrawHudFrame(infoFrame);
 
-        var leftPanel = new Rectangle(20, (int)panelsTop, (int)panelWidth, (int)panelHeight);
-        var rightPanel = new Rectangle((int)(20f + panelWidth + 20f), (int)panelsTop, (int)panelWidth, (int)panelHeight);
+        int columnWidth = infoFrame.Width / 2;
+        var leftColumn = new Rectangle(infoFrame.X, infoFrame.Y, columnWidth, infoFrame.Height);
+        var rightColumn = new Rectangle(infoFrame.X + columnWidth, infoFrame.Y, infoFrame.Width - columnWidth, infoFrame.Height);
 
-        DrawPanel(leftPanel);
-        DrawPanel(rightPanel);
+        _spriteBatch.Draw(_pixel, new Rectangle(infoFrame.X + columnWidth - 1, infoFrame.Y + 16, 2, infoFrame.Height - 32), HudFrameDivider);
 
-        DrawPanelText(leftPanel, "CONTROLES", ["SETAS/WASD DIRIGIR", "SHIFT: TURBO", "ESPACO: FREIO DE MAO", "F11: TELA CHEIA", "ESC: SAIR"]);
-        DrawPanelText(rightPanel, "DICAS", ["ENCHA O TURBO NOS", "CHECKPOINTS E RETAS", "CUIDADO AO BATER NOS", "RIVAIS E NAS PAREDES"]);
+        DrawIntroInfoColumn(leftColumn, "CONTROLES", ["SETAS/WASD DIRIGIR", "SHIFT: TURBO", "ESPACO: FREIO DE MAO", "F11: TELA CHEIA", "ESC: SAIR"]);
+        DrawIntroInfoColumn(rightColumn, "DICAS", ["ENCHA O TURBO NOS", "CHECKPOINTS E RETAS", "CUIDADO AO BATER NOS", "RIVAIS E NAS PAREDES"]);
 
+        // Pisca lentamente (aparece/desaparece) em vez de ficar num tom fixo — chama mais atenção sem
+        // ser irritante.
         const string prompt = "APERTE QUALQUER TECLA";
         const float promptSize = 2.5f;
+        float blink = (MathF.Sin(_visualTime * 1.6f) + 1f) / 2f;
+        var promptColor = new Color(AccentColor, blink);
+        var promptShadowColor = new Color(0, 0, 0, (int)(130 * blink));
         float promptWidth = PixelFont.Measure(prompt, promptSize);
         var promptPos = new Vector2((trackAreaWidth - promptWidth) / 2f, panelsTop + panelHeight + 20f);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, prompt, promptPos, promptSize, AccentColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, prompt, promptPos, promptSize, promptColor, promptShadowColor);
+
+        DrawStudioLogo(new Vector2(16f, trackAreaHeight - 16f));
     }
 
     // ---------- Tela de seleção de modo ----------
@@ -1220,30 +1235,30 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         DrawSelectablePanel(eliminationPanel, _selectedMode == RaceMode.Elimination);
         DrawSelectablePanel(timeAttackPanel, _selectedMode == RaceMode.TimeAttack);
 
-        List<string> sprintLines = ["CORRIDA CLASSICA:", "COMPLETE 3 VOLTAS", "NA FRENTE DE TODOS."];
+        string[] sprintLines = ["CORRIDA CLASSICA:", "COMPLETE 3 VOLTAS", "NA FRENTE DE TODOS."];
+        string[] eliminationLines = ["10 CARROS. A CADA", "VOLTA, O ULTIMO", "LUGAR E ELIMINADO.", "SOBREVIVA!"];
+        string[] timeAttackLines = ["O RELOGIO SO DESCE.", "DESVIE DOS OBSTACULOS", "E PONTUE PRA GANHAR", "MAIS TEMPO!"];
+
+        DrawPanelText(sprintPanel, "CORRIDA", sprintLines);
+        DrawPanelText(eliminationPanel, "ELIMINACAO", eliminationLines);
+        DrawPanelText(timeAttackPanel, "CONTRARRELOGIO", timeAttackLines);
+
+        // Recorde/vitórias ganham um "chip" próprio dentro do card, separado da descrição — em vez de
+        // mais uma linha de texto igual às outras, com pouco destaque.
         if (_saveData.BestLapTimeSprint is { } bestLap)
         {
-            sprintLines.Add("");
-            sprintLines.Add($"RECORDE: {FormatTime(bestLap)}");
+            DrawStatBadge(sprintPanel, "RECORDE", FormatTime(bestLap));
         }
 
-        List<string> eliminationLines = ["10 CARROS. A CADA", "VOLTA, O ULTIMO", "LUGAR E ELIMINADO.", "SOBREVIVA!"];
         if (_saveData.EliminationRaces > 0)
         {
-            eliminationLines.Add("");
-            eliminationLines.Add($"VITORIAS: {_saveData.EliminationWins}/{_saveData.EliminationRaces}");
+            DrawStatBadge(eliminationPanel, "VITORIAS", $"{_saveData.EliminationWins}/{_saveData.EliminationRaces}");
         }
 
-        List<string> timeAttackLines = ["O RELOGIO SO DESCE.", "DESVIE DOS OBSTACULOS", "E PONTUE PRA GANHAR", "MAIS TEMPO!"];
         if (_saveData.BestScoreTimeAttack is { } bestScore)
         {
-            timeAttackLines.Add("");
-            timeAttackLines.Add($"RECORDE: {bestScore:0} PTS");
+            DrawStatBadge(timeAttackPanel, "RECORDE", $"{bestScore:0} PTS");
         }
-
-        DrawPanelText(sprintPanel, "CORRIDA", [.. sprintLines]);
-        DrawPanelText(eliminationPanel, "ELIMINACAO", [.. eliminationLines]);
-        DrawPanelText(timeAttackPanel, "CONTRARRELOGIO", [.. timeAttackLines]);
 
         const string prompt = "SETAS: TROCAR    ESPACO: CONFIRMAR";
         const float promptSize = 2f;
@@ -1280,6 +1295,117 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         DrawRoundedRect(rect, PanelBorderColor, 10f);
         var inner = new Rectangle(rect.X + 4, rect.Y + 4, rect.Width - 8, rect.Height - 8);
         DrawRoundedRect(inner, PanelFillColor, 8f);
+    }
+
+    /// <summary>Estatística em destaque (recorde, vitórias) num chip próprio dentro do card do modo —
+    /// tarja colorida + rótulo discreto + valor grande, em vez de mais uma linha igual à descrição.</summary>
+    private void DrawStatBadge(Rectangle panel, string label, string value)
+    {
+        const float labelSize = 1.4f;
+        const float valueSize = 2f;
+        const float paddingH = 10f;
+        const float paddingV = 6f;
+        const float stripeWidth = 4f;
+
+        float badgeHeight = PixelFont.LineHeight(valueSize) + (paddingV * 2f);
+        var badgeRect = new Rectangle(
+            panel.X + 10,
+            panel.Bottom - (int)badgeHeight - 12,
+            panel.Width - 20,
+            (int)badgeHeight);
+
+        DrawRoundedRect(badgeRect, StatBadgeFill, 6f);
+        _spriteBatch.Draw(_pixel, new Rectangle(badgeRect.X, badgeRect.Y, (int)stripeWidth, badgeRect.Height), RecordColor);
+
+        float labelY = badgeRect.Y + ((badgeRect.Height - PixelFont.LineHeight(labelSize)) / 2f);
+        PixelFont.Draw(_spriteBatch, _pixel, label, new Vector2(badgeRect.X + paddingH + stripeWidth, labelY), labelSize, StatBadgeLabelColor);
+
+        float valueWidth = PixelFont.Measure(value, valueSize);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, value, new Vector2(badgeRect.Right - paddingH - valueWidth, badgeRect.Y + paddingV), valueSize, RecordColor);
+    }
+
+    /// <summary>Painel "console de HUD" da tela inicial: preenchimento translúcido com cantos marcados só
+    /// por tirinhas em L (em vez da borda arredondada uniforme dos cards de seleção de modo), pra não
+    /// parecer mais uma tela de escolha.</summary>
+    private void DrawHudFrame(Rectangle rect)
+    {
+        const int bracketLength = 20;
+        const int bracketThickness = 3;
+
+        _spriteBatch.Draw(_pixel, rect, HudFrameFill);
+
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Y, bracketLength, bracketThickness), AccentColor);
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Y, bracketThickness, bracketLength), AccentColor);
+
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.Right - bracketLength, rect.Y, bracketLength, bracketThickness), AccentColor);
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.Right - bracketThickness, rect.Y, bracketThickness, bracketLength), AccentColor);
+
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Bottom - bracketThickness, bracketLength, bracketThickness), AccentColor);
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Bottom - bracketLength, bracketThickness, bracketLength), AccentColor);
+
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.Right - bracketLength, rect.Bottom - bracketThickness, bracketLength, bracketThickness), AccentColor);
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.Right - bracketThickness, rect.Bottom - bracketLength, bracketThickness, bracketLength), AccentColor);
+    }
+
+    /// <summary>Uma coluna de texto dentro do console de HUD da tela inicial: título pequeno alinhado à
+    /// esquerda com um traço sublinhado, em vez do cabeçalho grande e centralizado dos cards de modo.</summary>
+    private void DrawIntroInfoColumn(Rectangle column, string header, string[] lines)
+    {
+        const float headerSize = 2.25f;
+        const float lineSize = 1.75f;
+        const float paddingX = 18f;
+
+        float x = column.X + paddingX;
+        float y = column.Y + 16f;
+
+        PixelFont.Draw(_spriteBatch, _pixel, header, new Vector2(x, y), headerSize, AccentColor);
+        float headerWidth = PixelFont.Measure(header, headerSize);
+        y += PixelFont.LineHeight(headerSize) + 4f;
+        _spriteBatch.Draw(_pixel, new Rectangle((int)x, (int)y, (int)headerWidth, 2), AccentColor);
+        y += 10f;
+
+        foreach (string line in lines)
+        {
+            PixelFont.Draw(_spriteBatch, _pixel, line, new Vector2(x, y), lineSize, Color.White);
+            y += PixelFont.LineHeight(lineSize) + 8f;
+        }
+    }
+
+    /// <summary>Logo pixel-art da Domus Arcis (espada + nome do estúdio) no canto inferior-esquerdo da tela
+    /// inicial — só um discreto selo de estúdio, nunca competindo com o título do jogo.</summary>
+    private void DrawStudioLogo(Vector2 bottomLeft)
+    {
+        const float iconSize = 34f;
+        const float textSize = 1.1f;
+        const float textGap = 4f;
+        const float lineGap = 2f;
+
+        float textBlockHeight = (PixelFont.LineHeight(textSize) * 2f) + lineGap;
+        float totalHeight = iconSize + textGap + textBlockHeight;
+        Vector2 topLeft = bottomLeft - new Vector2(0f, totalHeight);
+
+        // Lâmina na diagonal com o cabo no alto e a ponta pro canto inferior — a mesma composição da
+        // logo de referência, só simplificada pro tamanho pixel-art bem pequeno.
+        float angle = MathF.PI * 0.7f;
+        Vector2 iconCenter = topLeft + new Vector2(iconSize * 0.55f, iconSize * 0.5f);
+        DrawFilledRectRotated(iconCenter, iconSize * 0.85f, 3.5f, angle, StudioLogoColor);
+
+        Vector2 guardCenter = iconCenter + Rotate(new Vector2(iconSize * 0.3f, 0f), angle);
+        DrawFilledRectRotated(guardCenter, 10f, 3f, angle + (MathF.PI / 2f), StudioLogoColor);
+
+        Vector2 pommelCenter = iconCenter + Rotate(new Vector2(iconSize * 0.42f, 0f), angle);
+        DrawCircle(pommelCenter, 3f, StudioLogoColor);
+
+        const string studioLine1 = "DOMUS";
+        const string studioLine2 = "ARCIS";
+        float centerX = topLeft.X + (iconSize / 2f);
+        float textY = topLeft.Y + iconSize + textGap;
+
+        float line1Width = PixelFont.Measure(studioLine1, textSize);
+        PixelFont.Draw(_spriteBatch, _pixel, studioLine1, new Vector2(centerX - (line1Width / 2f), textY), textSize, StudioLogoColor);
+
+        float line2Width = PixelFont.Measure(studioLine2, textSize);
+        PixelFont.Draw(_spriteBatch, _pixel, studioLine2, new Vector2(centerX - (line2Width / 2f), textY + PixelFont.LineHeight(textSize) + lineGap), textSize, StudioLogoColor);
     }
 
     private void DrawPanelText(Rectangle panel, string header, string[] lines)
