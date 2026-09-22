@@ -31,6 +31,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     // Paleta: os menus usam um slate/navy escuro (nada de verde ali), e a grama do circuito ganha duas
     // tonalidades alternadas (tipo grama cortada) em vez de um verde chapado só.
     private static readonly Color MenuBackground = new(21, 24, 34);
+    private static readonly Color MenuBackgroundDim = new(21, 24, 34, 205);
     private static readonly Color BackgroundGrass = new(41, 112, 68);
     private static readonly Color GrassCellColorA = new(41, 112, 68);
     private static readonly Color GrassCellColorB = new(47, 124, 76);
@@ -195,6 +196,21 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         if (!_isFullscreen)
         {
             _graphics.ApplyChanges();
+        }
+    }
+
+    /// <summary>Mantém a "corrida" que serve de fundo animado dos menus sempre andando: atualiza a
+    /// simulação sem nenhum input do jogador (as IAs dirigem por conta própria) e reinicia
+    /// silenciosamente quando ela termina, sem passar pelas telas de resultado — é só decoração visual,
+    /// nunca dispara som de colisão/motor nem afeta recordes salvos.</summary>
+    private void UpdateMenuBackgroundRace(float frameSeconds)
+    {
+        float dt = Math.Min(frameSeconds, 0.1f);
+        _race.Update(dt, CarInput.None);
+
+        if (_race.IsRaceOver)
+        {
+            StartNewRace(_race.Mode);
         }
     }
 
@@ -440,6 +456,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             // seguro chamar em todo quadro sem reiniciar a música toda vez. Continua tocando com o pop-up
             // de configurações aberto por cima, pra dar pra ouvir o volume mudando na hora.
             _audio.PlayMenuTheme();
+            UpdateMenuBackgroundRace(frameSeconds);
         }
 
         switch (_state)
@@ -1443,6 +1460,21 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         PixelFont.Draw(_spriteBatch, _pixel, valueText, new Vector2(valueX, barRect.Y), valueSize, valueColor);
     }
 
+    /// <summary>Fundo animado dos menus (tela inicial e seleção de modo): a própria pista atual com os
+    /// carros de IA circulando por baixo, escurecida por um véu translúcido pra não competir com o texto
+    /// por cima. É a mesma corrida que já existe em <see cref="_race"/> — atualizada continuamente em vez
+    /// de parada, e reiniciada sozinha quando "termina" (ver <see cref="UpdateMenuBackgroundRace"/>).</summary>
+    private void DrawMenuBackground()
+    {
+        DrawTrack();
+        DrawHazards();
+        DrawCars();
+
+        float areaWidth = _windowWidth - (2f * TrackMargin);
+        float areaHeight = _windowHeight - (2f * TrackMargin);
+        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, (int)areaWidth, (int)areaHeight), MenuBackgroundDim);
+    }
+
     // ---------- Tela inicial ----------
 
     private void DrawIntro()
@@ -1450,15 +1482,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         float trackAreaWidth = _windowWidth - (2f * TrackMargin);
         float trackAreaHeight = _windowHeight - (2f * TrackMargin);
 
-        DrawTireStack(new Vector2(-24f, -24f), CellSize * 0.5f);
-        DrawTireStack(new Vector2(trackAreaWidth + 24f, -24f), CellSize * 0.5f);
-        DrawTireStack(new Vector2(-24f, trackAreaHeight - 24f), CellSize * 0.5f);
-        DrawTireStack(new Vector2(trackAreaWidth + 24f, trackAreaHeight - 24f), CellSize * 0.5f);
-
-        DrawCircle(new Vector2(20f, 40f), CellSize * 1.1f, BushDark);
-        DrawCircle(new Vector2(20f, 40f), CellSize * 0.8f, BushLight);
-        DrawCircle(new Vector2(trackAreaWidth - 20f, 40f), CellSize * 1.1f, BushDark);
-        DrawCircle(new Vector2(trackAreaWidth - 20f, 40f), CellSize * 0.8f, BushLight);
+        DrawMenuBackground();
 
         const float titleSize = 5.5f;
         string title = "MEGRACE";
@@ -1472,15 +1496,9 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
         PixelFont.DrawGradient(_spriteBatch, _pixel, title, titlePos, titleSize, TitleGradient);
 
-        const float subtitleSize = 2.75f;
-        string subtitle = "CORRIDA TOP-VISION";
-        float subtitleWidth = PixelFont.Measure(subtitle, subtitleSize);
-        var subtitlePos = new Vector2((trackAreaWidth - subtitleWidth) / 2f, titlePos.Y + PixelFont.LineHeight(titleSize) + 16f);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, subtitle, subtitlePos, subtitleSize, Color.White);
-
         // Um único "console de HUD" com cantos marcados em vez de dois cards iguais aos da tela de
         // seleção de modo — pra tela inicial não parecer mais uma tela de escolha.
-        float panelsTop = subtitlePos.Y + PixelFont.LineHeight(subtitleSize) + 28f;
+        float panelsTop = titlePos.Y + PixelFont.LineHeight(titleSize) + 32f;
         float panelHeight = 175f;
         var infoFrame = new Rectangle(20, (int)panelsTop, (int)(trackAreaWidth - 40f), (int)panelHeight);
         DrawHudFrame(infoFrame);
@@ -1515,10 +1533,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         float trackAreaWidth = _windowWidth - (2f * TrackMargin);
         float trackAreaHeight = _windowHeight - (2f * TrackMargin);
 
-        DrawTireStack(new Vector2(-24f, -24f), CellSize * 0.5f);
-        DrawTireStack(new Vector2(trackAreaWidth + 24f, -24f), CellSize * 0.5f);
-        DrawTireStack(new Vector2(-24f, trackAreaHeight - 24f), CellSize * 0.5f);
-        DrawTireStack(new Vector2(trackAreaWidth + 24f, trackAreaHeight - 24f), CellSize * 0.5f);
+        DrawMenuBackground();
 
         const float headerSize = 3.75f;
         const string header = "ESCOLHA O MODO";
