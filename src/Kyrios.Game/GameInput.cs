@@ -1,4 +1,5 @@
 using Kyrios.Core;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 
 namespace Kyrios.Game;
@@ -8,12 +9,20 @@ public sealed class GameInput
 {
     private KeyboardState _current;
     private KeyboardState _previous;
+    private MouseState _currentMouse;
 
     public void Update()
     {
         _previous = _current;
         _current = Keyboard.GetState();
+        _currentMouse = Mouse.GetState();
     }
+
+    /// <summary>Posição do mouse em pixels de tela (relativa à janela do jogo) — quem usa precisa converter
+    /// pro espaço de coordenadas "lógico" do jogo, já que a cena é escalada/centralizada (ver BuildScreenTransform).</summary>
+    public Point MousePosition => _currentMouse.Position;
+
+    public bool IsMouseLeftDown => _currentMouse.LeftButton == ButtonState.Pressed;
 
     public bool IsDown(Keys key) => _current.IsKeyDown(key);
 

@@ -114,6 +114,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private int _lastCountdownTickSecond = int.MaxValue;
     private State _settingsReturnState = State.Intro;
     private SettingsRow _settingsSelection = SettingsRow.Music;
+    private SettingsRow? _draggingSettingsRow;
 
     private int _windowWidth;
     private int _windowHeight;
@@ -450,15 +451,15 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                     return;
                 }
 
-                if (_input.WasJustPressed(Keys.O))
+                if (_input.WasJustPressed(Keys.Q))
                 {
                     OpenSettings(State.Intro);
                     break;
                 }
 
-                // F11 (alternar tela cheia) e O (opções) nunca devem contar como "aperte qualquer tecla"
+                // F11 (alternar tela cheia) e Q (opções) nunca devem contar como "aperte qualquer tecla"
                 // aqui — senão pedir tela cheia ou abrir configurações na tela inicial também avança pro menu.
-                if (_input.AnyKeyJustPressedExcept(Keys.F11, Keys.O))
+                if (_input.AnyKeyJustPressedExcept(Keys.F11, Keys.Q))
                 {
                     _state = State.ModeSelect;
                 }
@@ -472,7 +473,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                     break;
                 }
 
-                if (_input.WasJustPressed(Keys.O))
+                if (_input.WasJustPressed(Keys.Q))
                 {
                     OpenSettings(State.ModeSelect);
                     break;
@@ -581,8 +582,11 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 {
                     _audio.PlayMenuConfirm();
                     _state = _settingsReturnState;
+                    _draggingSettingsRow = null;
                     break;
                 }
+
+                UpdateSettingsMouseDrag();
 
                 if (_input.WasJustPressed(Keys.Up) || _input.WasJustPressed(Keys.W)
                     || _input.WasJustPressed(Keys.Down) || _input.WasJustPressed(Keys.S))
@@ -652,6 +656,76 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         _saveData.Save();
         _audio.PlayMenuConfirm();
     }
+
+    /// <summary>Clicar ou arrastar com o mouse numa das barras de volume do pop-up de configurações faz a
+    /// mesma coisa que as setas/WASD, só que direto pra posição apontada em vez de incremento — e destrava
+    /// o mudo automaticamente, do mesmo jeito que um controle de volume de sistema.</summary>
+    private void UpdateSettingsMouseDrag()
+    {
+        (Rectangle _, Rectangle musicBar, Rectangle sfxBar) = ComputeSettingsLayout();
+        Vector2 mouseLogical = ScreenToLogicalPosition(_input.MousePosition);
+        var mousePoint = new Point((int)mouseLogical.X, (int)mouseLogical.Y);
+
+        if (_input.IsMouseLeftDown && _draggingSettingsRow is null)
+        {
+            if (InflateRect(musicBar, 6f, 8f).Contains(mousePoint))
+            {
+                _draggingSettingsRow = SettingsRow.Music;
+                _settingsSelection = SettingsRow.Music;
+            }
+            else if (InflateRect(sfxBar, 6f, 8f).Contains(mousePoint))
+            {
+                _draggingSettingsRow = SettingsRow.Sfx;
+                _settingsSelection = SettingsRow.Sfx;
+            }
+        }
+
+        if (_draggingSettingsRow is not { } draggingRow)
+        {
+            return;
+        }
+
+        if (!_input.IsMouseLeftDown)
+        {
+            _draggingSettingsRow = null;
+            _saveData.Save();
+            return;
+        }
+
+        Rectangle bar = draggingRow == SettingsRow.Music ? musicBar : sfxBar;
+        float fraction = bar.Width > 0 ? Math.Clamp((mouseLogical.X - bar.X) / bar.Width, 0f, 1f) : 0f;
+        SetSelectedVolumeAbsolute(draggingRow, fraction);
+    }
+
+    private void SetSelectedVolumeAbsolute(SettingsRow row, float fraction)
+    {
+        if (row == SettingsRow.Music)
+        {
+            _audio.SetMusicMuted(false);
+            _audio.SetMusicVolume(fraction);
+            _saveData.MusicMuted = false;
+            _saveData.MusicVolume = fraction;
+        }
+        else
+        {
+            _audio.SetSfxMuted(false);
+            _audio.SetSfxVolume(fraction);
+            _saveData.SfxMuted = false;
+            _saveData.SfxVolume = fraction;
+        }
+    }
+
+    /// <summary>Converte um ponto em pixels de tela (ex.: posição do mouse) pro espaço de coordenadas
+    /// "lógico" em que todo o resto do jogo é desenhado — a inversa exata da transformação usada no
+    /// SpriteBatch.Begin (ver BuildScreenTransform), incluindo escala e centralização da tela cheia.</summary>
+    private Vector2 ScreenToLogicalPosition(Point screenPoint)
+    {
+        Matrix inverse = Matrix.Invert(BuildScreenTransform());
+        return Vector2.Transform(new Vector2(screenPoint.X, screenPoint.Y), inverse);
+    }
+
+    private static Rectangle InflateRect(Rectangle rect, float x, float y) =>
+        new((int)(rect.X - x), (int)(rect.Y - y), (int)(rect.Width + (2 * x)), (int)(rect.Height + (2 * y)));
 
     protected override void Draw(GameTime gameTime)
     {
@@ -1255,84 +1329,118 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
     // ---------- Pop-up de configurações ----------
 
-    private void DrawSettingsPopup()
+    private const float SettingsPanelWidth = 480f;
+    private const float SettingsPanelPaddingV = 26f;
+    private const float SettingsHeaderSize = 3f;
+    private const float SettingsRowSpacing = 42f;
+    private const float SettingsHintSize = 1.5f;
+    private const float SettingsHintGap = 10f;
+    private const float SettingsBarWidth = 120f;
+    private const float SettingsBarHeight = 14f;
+    private const float SettingsPaddingH = 30f;
+    private const float SettingsBarValueGap = 10f;
+    private const float SettingsValueSlotWidth = 44f;
+
+    /// <summary>Calcula o retângulo do painel e das barras de volume do pop-up de configurações — usado
+    /// tanto pra desenhar quanto pra testar clique/arraste do mouse, então os dois lados sempre concordam
+    /// exatamente sobre onde cada barra está.</summary>
+    private (Rectangle Panel, Rectangle MusicBar, Rectangle SfxBar) ComputeSettingsLayout()
     {
         float areaWidth = _windowWidth - (2f * TrackMargin);
         float areaHeight = _windowHeight - (2f * TrackMargin);
 
+        float contentHeight = PixelFont.LineHeight(SettingsHeaderSize) + 30f
+            + SettingsRowSpacing
+            + 34f
+            + (PixelFont.LineHeight(SettingsHintSize) * 2f) + SettingsHintGap;
+        float panelHeight = contentHeight + (SettingsPanelPaddingV * 2f);
+
+        var panelRect = new Rectangle(
+            (int)((areaWidth - SettingsPanelWidth) / 2f),
+            (int)((areaHeight - panelHeight) / 2f),
+            (int)SettingsPanelWidth,
+            (int)panelHeight);
+
+        float rowY = panelRect.Y + SettingsPanelPaddingV + PixelFont.LineHeight(SettingsHeaderSize) + 30f;
+        Rectangle musicBar = ComputeVolumeBarRect(panelRect, rowY);
+        Rectangle sfxBar = ComputeVolumeBarRect(panelRect, rowY + SettingsRowSpacing);
+
+        return (panelRect, musicBar, sfxBar);
+    }
+
+    private static Rectangle ComputeVolumeBarRect(Rectangle panel, float y)
+    {
+        float blockRight = panel.Right - SettingsPaddingH;
+        float barRight = blockRight - SettingsValueSlotWidth - SettingsBarValueGap;
+        float barX = barRight - SettingsBarWidth;
+
+        return new Rectangle((int)barX, (int)y, (int)SettingsBarWidth, (int)SettingsBarHeight);
+    }
+
+    private void DrawSettingsPopup()
+    {
+        (Rectangle panelRect, Rectangle musicBar, Rectangle sfxBar) = ComputeSettingsLayout();
+
+        float areaWidth = _windowWidth - (2f * TrackMargin);
+        float areaHeight = _windowHeight - (2f * TrackMargin);
         _spriteBatch.Draw(_pixel, new Rectangle(0, 0, (int)areaWidth, (int)areaHeight), OverlayDimColor);
 
         const string header = "CONFIGURACOES";
-        const float headerSize = 3f;
-        const float panelWidth = 480f;
-        const float panelPaddingV = 26f;
-        const float rowSpacing = 42f;
-        const float hintSize = 1.5f;
-        const string hint = "SETAS: AJUSTAR    ENTER: MUDO    ESC: FECHAR";
-
-        float contentHeight = PixelFont.LineHeight(headerSize) + 30f
-            + rowSpacing
-            + 34f
-            + PixelFont.LineHeight(hintSize);
-        float panelHeight = contentHeight + (panelPaddingV * 2f);
-
-        var panelRect = new Rectangle(
-            (int)((areaWidth - panelWidth) / 2f),
-            (int)((areaHeight - panelHeight) / 2f),
-            (int)panelWidth,
-            (int)panelHeight);
+        const string hint1 = "SETAS/WASD OU MOUSE: AJUSTAR";
+        const string hint2 = "ENTER: MUDO    ESC: FECHAR";
 
         DrawPanel(panelRect);
         _spriteBatch.Draw(_pixel, new Rectangle(panelRect.X + 4, panelRect.Y + 4, panelRect.Width - 8, 4), AccentColor);
 
-        float headerWidth = PixelFont.Measure(header, headerSize);
-        float y = panelRect.Y + panelPaddingV;
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, header, new Vector2(panelRect.X + ((panelRect.Width - headerWidth) / 2f), y), headerSize, AccentColor);
-        y += PixelFont.LineHeight(headerSize) + 30f;
+        float headerWidth = PixelFont.Measure(header, SettingsHeaderSize);
+        float y = panelRect.Y + SettingsPanelPaddingV;
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, header, new Vector2(panelRect.X + ((panelRect.Width - headerWidth) / 2f), y), SettingsHeaderSize, AccentColor);
 
-        DrawSettingsRow(panelRect, y, "TRILHA SONORA", _audio.MusicVolume, _audio.MusicMuted, _settingsSelection == SettingsRow.Music);
-        y += rowSpacing;
-        DrawSettingsRow(panelRect, y, "EFEITOS SONOROS", _audio.SfxVolume, _audio.SfxMuted, _settingsSelection == SettingsRow.Sfx);
-        y += 34f;
+        DrawSettingsRow(panelRect, musicBar, "TRILHA SONORA", _audio.MusicVolume, _audio.MusicMuted, _settingsSelection == SettingsRow.Music);
+        DrawSettingsRow(panelRect, sfxBar, "EFEITOS SONOROS", _audio.SfxVolume, _audio.SfxMuted, _settingsSelection == SettingsRow.Sfx);
 
-        float hintWidth = PixelFont.Measure(hint, hintSize);
-        PixelFont.Draw(_spriteBatch, _pixel, hint, new Vector2(panelRect.X + ((panelRect.Width - hintWidth) / 2f), y), hintSize, TextColor);
+        float hintY = sfxBar.Y + 34f;
+        float hint1Width = PixelFont.Measure(hint1, SettingsHintSize);
+        PixelFont.Draw(_spriteBatch, _pixel, hint1, new Vector2(panelRect.X + ((panelRect.Width - hint1Width) / 2f), hintY), SettingsHintSize, TextColor);
+
+        float hint2Y = hintY + PixelFont.LineHeight(SettingsHintSize) + SettingsHintGap;
+        float hint2Width = PixelFont.Measure(hint2, SettingsHintSize);
+        PixelFont.Draw(_spriteBatch, _pixel, hint2, new Vector2(panelRect.X + ((panelRect.Width - hint2Width) / 2f), hint2Y), SettingsHintSize, TextColor);
     }
 
     /// <summary>Uma linha do pop-up de configurações: rótulo (destacado se selecionada) + barra de volume
-    /// + porcentagem — ou "MUDO" no lugar da porcentagem, com a barra apagada, quando estiver sem som.</summary>
-    private void DrawSettingsRow(Rectangle panel, float y, string label, float volume, bool muted, bool selected)
+    /// (com um "manípulo" na posição atual, pra deixar claro que dá pra arrastar) + porcentagem — ou
+    /// "MUDO" no lugar da porcentagem, com a barra apagada, quando estiver sem som.</summary>
+    private void DrawSettingsRow(Rectangle panel, Rectangle barRect, string label, float volume, bool muted, bool selected)
     {
         const float labelSize = 2f;
         const float valueSize = 1.75f;
-        const float barWidth = 120f;
-        const float barHeight = 14f;
-        const float paddingH = 30f;
-        const float barValueGap = 10f;
 
         Color labelColor = selected ? AccentColor : TextColor;
         // O glifo ">" não existe na fonte pixelizada (só letras/números/pontuação básica) — usa "*" como
         // marcador de linha selecionada, que é um caractere que a fonte realmente desenha.
         string fullLabel = (selected ? "* " : "  ") + label;
-        PixelFont.Draw(_spriteBatch, _pixel, fullLabel, new Vector2(panel.X + paddingH, y), labelSize, labelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, fullLabel, new Vector2(panel.X + SettingsPaddingH, barRect.Y), labelSize, labelColor);
 
-        string valueText = muted ? "MUDO" : $"{(int)MathF.Round(volume * 100f)}%";
-        float valueWidth = PixelFont.Measure(valueText, valueSize);
-
-        float blockRight = panel.Right - paddingH;
-        float valueX = blockRight - valueWidth;
-        float barX = valueX - barValueGap - barWidth;
-
-        var backRect = new Rectangle((int)barX - 2, (int)y - 2, (int)barWidth + 4, (int)barHeight + 4);
+        var backRect = new Rectangle(barRect.X - 2, barRect.Y - 2, barRect.Width + 4, barRect.Height + 4);
         _spriteBatch.Draw(_pixel, backRect, new Color(10, 12, 18));
 
         float fraction = muted ? 0f : Math.Clamp(volume, 0f, 1f);
-        var fillRect = new Rectangle((int)barX, (int)y, (int)(barWidth * fraction), (int)barHeight);
+        var fillRect = new Rectangle(barRect.X, barRect.Y, (int)(barRect.Width * fraction), barRect.Height);
         Color fillColor = muted ? new Color(90, 94, 104) : BoostFillColor;
         _spriteBatch.Draw(_pixel, fillRect, fillColor);
 
+        if (!muted)
+        {
+            float handleX = barRect.X + (barRect.Width * fraction);
+            DrawCircle(new Vector2(handleX, barRect.Y + (barRect.Height / 2f)), barRect.Height * 0.55f, Color.White);
+        }
+
+        string valueText = muted ? "MUDO" : $"{(int)MathF.Round(volume * 100f)}%";
+        float valueWidth = PixelFont.Measure(valueText, valueSize);
+        float valueX = (panel.Right - SettingsPaddingH) - valueWidth;
         Color valueColor = muted ? new Color(150, 155, 165) : TextColor;
-        PixelFont.Draw(_spriteBatch, _pixel, valueText, new Vector2(valueX, y), valueSize, valueColor);
+        PixelFont.Draw(_spriteBatch, _pixel, valueText, new Vector2(valueX, barRect.Y), valueSize, valueColor);
     }
 
     // ---------- Tela inicial ----------
@@ -1383,7 +1491,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
         _spriteBatch.Draw(_pixel, new Rectangle(infoFrame.X + columnWidth - 1, infoFrame.Y + 16, 2, infoFrame.Height - 32), HudFrameDivider);
 
-        DrawIntroInfoColumn(leftColumn, "CONTROLES", ["SETAS/WASD DIRIGIR", "SHIFT: TURBO", "ESPACO: FREIO DE MAO", "F11: TELA CHEIA", "O: OPCOES", "ESC: SAIR"]);
+        DrawIntroInfoColumn(leftColumn, "CONTROLES", ["SETAS/WASD DIRIGIR", "SHIFT: TURBO", "ESPACO: FREIO DE MAO", "F11: TELA CHEIA", "Q: OPCOES", "ESC: SAIR"], highlightedLine: "Q: OPCOES");
         DrawIntroInfoColumn(rightColumn, "DICAS", ["ENCHA O TURBO NOS", "CHECKPOINTS E RETAS", "CUIDADO AO BATER NOS", "RIVAIS E NAS PAREDES"]);
 
         // Pisca lentamente (aparece/desaparece) em vez de ficar num tom fixo — chama mais atenção sem
@@ -1456,11 +1564,15 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             DrawStatBadge(timeAttackPanel, "RECORDE", $"{bestScore:0} PTS");
         }
 
-        const string prompt = "SETAS: TROCAR    ESPACO: CONFIRMAR    O: OPCOES";
+        // "Q: OPCOES" sai destacado em relação ao resto do rodapé, pra chamar atenção pro atalho novo.
+        const string promptBase = "SETAS: TROCAR    ESPACO: CONFIRMAR    ";
+        const string promptHighlight = "Q: OPCOES";
         const float promptSize = 2f;
-        float promptWidth = PixelFont.Measure(prompt, promptSize);
-        var promptPos = new Vector2((trackAreaWidth - promptWidth) / 2f, panelsTop + panelHeight + 24f);
-        PixelFont.Draw(_spriteBatch, _pixel, prompt, promptPos, promptSize, TextColor);
+        float promptBaseWidth = PixelFont.Measure(promptBase, promptSize);
+        float promptHighlightWidth = PixelFont.Measure(promptHighlight, promptSize);
+        var promptPos = new Vector2((trackAreaWidth - promptBaseWidth - promptHighlightWidth) / 2f, panelsTop + panelHeight + 24f);
+        PixelFont.Draw(_spriteBatch, _pixel, promptBase, promptPos, promptSize, TextColor);
+        PixelFont.Draw(_spriteBatch, _pixel, promptHighlight, promptPos + new Vector2(promptBaseWidth, 0f), promptSize, AccentColor);
     }
 
     private void DrawSelectablePanel(Rectangle rect, bool selected)
@@ -1545,7 +1657,10 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
     /// <summary>Uma coluna de texto dentro do console de HUD da tela inicial: título pequeno alinhado à
     /// esquerda com um traço sublinhado, em vez do cabeçalho grande e centralizado dos cards de modo.</summary>
-    private void DrawIntroInfoColumn(Rectangle column, string header, string[] lines)
+    /// <summary>Desenha uma coluna de dicas da tela inicial. <paramref name="highlightedLine"/> (se
+    /// alguma linha bater com ela) sai destacada em <see cref="AccentColor"/> em vez do branco padrão —
+    /// usado pra chamar atenção pro atalho de configurações no meio das outras dicas.</summary>
+    private void DrawIntroInfoColumn(Rectangle column, string header, string[] lines, string highlightedLine = null)
     {
         const float headerSize = 2.25f;
         const float lineSize = 1.75f;
@@ -1562,7 +1677,8 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
         foreach (string line in lines)
         {
-            PixelFont.Draw(_spriteBatch, _pixel, line, new Vector2(x, y), lineSize, Color.White);
+            Color lineColor = line == highlightedLine ? AccentColor : Color.White;
+            PixelFont.Draw(_spriteBatch, _pixel, line, new Vector2(x, y), lineSize, lineColor);
             y += PixelFont.LineHeight(lineSize) + 8f;
         }
     }
