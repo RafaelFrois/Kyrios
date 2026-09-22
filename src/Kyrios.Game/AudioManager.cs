@@ -30,6 +30,11 @@ public sealed class AudioManager
     private bool _available = true;
     private readonly Random _random = new();
 
+    private float _musicVolume = 1f;
+    private float _sfxVolume = 1f;
+    private bool _musicMuted;
+    private bool _sfxMuted;
+
     private SoundEffectInstance _sprintMusic;
     private SoundEffectInstance _eliminationMusic;
     private SoundEffectInstance _timeAttackMusic;
@@ -68,6 +73,51 @@ public sealed class AudioManager
         {
             // Sem hardware/driver de áudio disponível (ou qualquer outra falha ao inicializar o back-end
             // de som) — o jogo continua funcionando normalmente, só que mudo.
+            _available = false;
+        }
+    }
+
+    public float MusicVolume => _musicVolume;
+
+    public float SfxVolume => _sfxVolume;
+
+    public bool MusicMuted => _musicMuted;
+
+    public bool SfxMuted => _sfxMuted;
+
+    private float EffectiveMusicVolume => _musicMuted ? 0f : _musicVolume;
+
+    private float EffectiveSfxVolume => _sfxMuted ? 0f : _sfxVolume;
+
+    public void SetMusicVolume(float volume)
+    {
+        _musicVolume = Math.Clamp(volume, 0f, 1f);
+        ApplyMusicVolumeToActiveTrack();
+    }
+
+    public void SetSfxVolume(float volume) => _sfxVolume = Math.Clamp(volume, 0f, 1f);
+
+    public void SetMusicMuted(bool muted)
+    {
+        _musicMuted = muted;
+        ApplyMusicVolumeToActiveTrack();
+    }
+
+    public void SetSfxMuted(bool muted) => _sfxMuted = muted;
+
+    private void ApplyMusicVolumeToActiveTrack()
+    {
+        if (!_available || _activeMusic is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _activeMusic.Volume = EffectiveMusicVolume;
+        }
+        catch (Exception)
+        {
             _available = false;
         }
     }
@@ -135,6 +185,7 @@ public sealed class AudioManager
 
         _activeMusic?.Stop();
         _activeMusic = instance;
+        _activeMusic.Volume = EffectiveMusicVolume;
         _activeMusic.Play();
     }
 
@@ -207,7 +258,7 @@ public sealed class AudioManager
             float speedFraction = Math.Clamp(MathF.Abs(speed) / maxSpeed, 0f, 1f);
             float pitch = MathHelper.Lerp(EngineMinPitch, EngineMaxPitch, speedFraction) + (isBoosting ? EngineBoostPitchBonus : 0f);
             _engine.Pitch = Math.Clamp(pitch, -1f, 1f);
-            _engine.Volume = MathHelper.Lerp(EngineMinVolume, EngineMaxVolume, speedFraction);
+            _engine.Volume = MathHelper.Lerp(EngineMinVolume, EngineMaxVolume, speedFraction) * EffectiveSfxVolume;
         }
         catch (Exception)
         {
@@ -224,7 +275,7 @@ public sealed class AudioManager
 
         try
         {
-            _checkpointSfx.Play(0.6f, NextPitchJitter(), 0f);
+            _checkpointSfx.Play(0.6f * EffectiveSfxVolume, NextPitchJitter(), 0f);
         }
         catch (Exception)
         {
@@ -241,7 +292,7 @@ public sealed class AudioManager
 
         try
         {
-            _collisionSfx.Play(0.7f, NextPitchJitter(), 0f);
+            _collisionSfx.Play(0.7f * EffectiveSfxVolume, NextPitchJitter(), 0f);
         }
         catch (Exception)
         {
@@ -264,7 +315,7 @@ public sealed class AudioManager
                 RaceOutcome.Defeat => _defeatJingle,
                 _ => _neutralJingle,
             };
-            jingle?.Play(0.65f, 0f, 0f);
+            jingle?.Play(0.65f * EffectiveSfxVolume, 0f, 0f);
         }
         catch (Exception)
         {
@@ -281,7 +332,7 @@ public sealed class AudioManager
 
         try
         {
-            _menuMoveBlip?.Play(0.4f, 0f, 0f);
+            _menuMoveBlip?.Play(0.4f * EffectiveSfxVolume, 0f, 0f);
         }
         catch (Exception)
         {
@@ -298,7 +349,7 @@ public sealed class AudioManager
 
         try
         {
-            _menuConfirmBlip?.Play(0.5f, 0f, 0f);
+            _menuConfirmBlip?.Play(0.5f * EffectiveSfxVolume, 0f, 0f);
         }
         catch (Exception)
         {
@@ -315,7 +366,7 @@ public sealed class AudioManager
 
         try
         {
-            _countdownTick?.Play(0.5f, 0f, 0f);
+            _countdownTick?.Play(0.5f * EffectiveSfxVolume, 0f, 0f);
         }
         catch (Exception)
         {

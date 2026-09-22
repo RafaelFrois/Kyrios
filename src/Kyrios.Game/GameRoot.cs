@@ -19,6 +19,13 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         ModeSelect,
         Racing,
         Results,
+        Settings,
+    }
+
+    private enum SettingsRow
+    {
+        Music,
+        Sfx,
     }
 
     // Paleta: os menus usam um slate/navy escuro (nada de verde ali), e a grama do circuito ganha duas
@@ -105,6 +112,8 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private bool _newScoreRecord;
     private bool _playerWasCollidingLastTick;
     private int _lastCountdownTickSecond = int.MaxValue;
+    private State _settingsReturnState = State.Intro;
+    private SettingsRow _settingsSelection = SettingsRow.Music;
 
     private int _windowWidth;
     private int _windowHeight;
@@ -394,6 +403,10 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
         _audio = new AudioManager();
         _audio.LoadContent();
+        _audio.SetMusicVolume(_saveData.MusicVolume);
+        _audio.SetSfxVolume(_saveData.SfxVolume);
+        _audio.SetMusicMuted(_saveData.MusicMuted);
+        _audio.SetSfxMuted(_saveData.SfxMuted);
     }
 
     protected override void UnloadContent()
@@ -420,10 +433,11 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             return;
         }
 
-        if (_state is State.Intro or State.ModeSelect)
+        if (_state is State.Intro or State.ModeSelect or State.Settings)
         {
             // Chamada idempotente: só entra em ação se o tema de menu ainda não estiver tocando, então é
-            // seguro chamar em todo quadro sem reiniciar a música toda vez.
+            // seguro chamar em todo quadro sem reiniciar a música toda vez. Continua tocando com o pop-up
+            // de configurações aberto por cima, pra dar pra ouvir o volume mudando na hora.
             _audio.PlayMenuTheme();
         }
 
@@ -436,9 +450,15 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                     return;
                 }
 
-                // F11 (alternar tela cheia) nunca deve contar como "aperte qualquer tecla" aqui — senão
-                // pedir tela cheia na tela inicial também avança pro menu.
-                if (_input.AnyKeyJustPressedExcept(Keys.F11))
+                if (_input.WasJustPressed(Keys.O))
+                {
+                    OpenSettings(State.Intro);
+                    break;
+                }
+
+                // F11 (alternar tela cheia) e O (opções) nunca devem contar como "aperte qualquer tecla"
+                // aqui — senão pedir tela cheia ou abrir configurações na tela inicial também avança pro menu.
+                if (_input.AnyKeyJustPressedExcept(Keys.F11, Keys.O))
                 {
                     _state = State.ModeSelect;
                 }
@@ -449,6 +469,12 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 if (_input.WasJustPressed(Keys.Escape))
                 {
                     _state = State.Intro;
+                    break;
+                }
+
+                if (_input.WasJustPressed(Keys.O))
+                {
+                    OpenSettings(State.ModeSelect);
                     break;
                 }
 
@@ -549,14 +575,87 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 }
 
                 break;
+
+            case State.Settings:
+                if (_input.WasJustPressed(Keys.Escape))
+                {
+                    _audio.PlayMenuConfirm();
+                    _state = _settingsReturnState;
+                    break;
+                }
+
+                if (_input.WasJustPressed(Keys.Up) || _input.WasJustPressed(Keys.W)
+                    || _input.WasJustPressed(Keys.Down) || _input.WasJustPressed(Keys.S))
+                {
+                    _settingsSelection = _settingsSelection == SettingsRow.Music ? SettingsRow.Sfx : SettingsRow.Music;
+                    _audio.PlayMenuMove();
+                }
+                else if (_input.WasJustPressed(Keys.Right) || _input.WasJustPressed(Keys.D))
+                {
+                    AdjustSelectedVolume(0.1f);
+                }
+                else if (_input.WasJustPressed(Keys.Left) || _input.WasJustPressed(Keys.A))
+                {
+                    AdjustSelectedVolume(-0.1f);
+                }
+
+                if (_input.WasJustPressed(Keys.Enter) || _input.WasJustPressed(Keys.Space))
+                {
+                    ToggleSelectedMute();
+                }
+
+                break;
         }
 
         base.Update(gameTime);
     }
 
+    /// <summary>Abre o pop-up de configurações lembrando de qual tela (inicial ou menu de modos) ele foi
+    /// aberto, pra voltar exatamente pra lá quando fechar.</summary>
+    private void OpenSettings(State returnState)
+    {
+        _settingsReturnState = returnState;
+        _state = State.Settings;
+        _audio.PlayMenuConfirm();
+    }
+
+    private void AdjustSelectedVolume(float delta)
+    {
+        if (_settingsSelection == SettingsRow.Music)
+        {
+            _audio.SetMusicVolume(_audio.MusicVolume + delta);
+            _saveData.MusicVolume = _audio.MusicVolume;
+        }
+        else
+        {
+            _audio.SetSfxVolume(_audio.SfxVolume + delta);
+            _saveData.SfxVolume = _audio.SfxVolume;
+        }
+
+        _saveData.Save();
+        _audio.PlayMenuMove();
+    }
+
+    private void ToggleSelectedMute()
+    {
+        if (_settingsSelection == SettingsRow.Music)
+        {
+            _audio.SetMusicMuted(!_audio.MusicMuted);
+            _saveData.MusicMuted = _audio.MusicMuted;
+        }
+        else
+        {
+            _audio.SetSfxMuted(!_audio.SfxMuted);
+            _saveData.SfxMuted = _audio.SfxMuted;
+        }
+
+        _saveData.Save();
+        _audio.PlayMenuConfirm();
+    }
+
     protected override void Draw(GameTime gameTime)
     {
-        bool isMenuState = _state is State.Intro or State.ModeSelect;
+        bool isMenuState = _state is State.Intro or State.ModeSelect or State.Settings;
         GraphicsDevice.Clear(isMenuState ? MenuBackground : BackgroundGrass);
 
         _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: BuildScreenTransform());
@@ -585,6 +684,19 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 DrawParticles();
                 DrawCars();
                 DrawResultsPopup();
+                break;
+
+            case State.Settings:
+                if (_settingsReturnState == State.ModeSelect)
+                {
+                    DrawModeSelect();
+                }
+                else
+                {
+                    DrawIntro();
+                }
+
+                DrawSettingsPopup();
                 break;
         }
 
@@ -1141,6 +1253,88 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         }
     }
 
+    // ---------- Pop-up de configurações ----------
+
+    private void DrawSettingsPopup()
+    {
+        float areaWidth = _windowWidth - (2f * TrackMargin);
+        float areaHeight = _windowHeight - (2f * TrackMargin);
+
+        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, (int)areaWidth, (int)areaHeight), OverlayDimColor);
+
+        const string header = "CONFIGURACOES";
+        const float headerSize = 3f;
+        const float panelWidth = 480f;
+        const float panelPaddingV = 26f;
+        const float rowSpacing = 42f;
+        const float hintSize = 1.5f;
+        const string hint = "SETAS: AJUSTAR    ENTER: MUDO    ESC: FECHAR";
+
+        float contentHeight = PixelFont.LineHeight(headerSize) + 30f
+            + rowSpacing
+            + 34f
+            + PixelFont.LineHeight(hintSize);
+        float panelHeight = contentHeight + (panelPaddingV * 2f);
+
+        var panelRect = new Rectangle(
+            (int)((areaWidth - panelWidth) / 2f),
+            (int)((areaHeight - panelHeight) / 2f),
+            (int)panelWidth,
+            (int)panelHeight);
+
+        DrawPanel(panelRect);
+        _spriteBatch.Draw(_pixel, new Rectangle(panelRect.X + 4, panelRect.Y + 4, panelRect.Width - 8, 4), AccentColor);
+
+        float headerWidth = PixelFont.Measure(header, headerSize);
+        float y = panelRect.Y + panelPaddingV;
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, header, new Vector2(panelRect.X + ((panelRect.Width - headerWidth) / 2f), y), headerSize, AccentColor);
+        y += PixelFont.LineHeight(headerSize) + 30f;
+
+        DrawSettingsRow(panelRect, y, "TRILHA SONORA", _audio.MusicVolume, _audio.MusicMuted, _settingsSelection == SettingsRow.Music);
+        y += rowSpacing;
+        DrawSettingsRow(panelRect, y, "EFEITOS SONOROS", _audio.SfxVolume, _audio.SfxMuted, _settingsSelection == SettingsRow.Sfx);
+        y += 34f;
+
+        float hintWidth = PixelFont.Measure(hint, hintSize);
+        PixelFont.Draw(_spriteBatch, _pixel, hint, new Vector2(panelRect.X + ((panelRect.Width - hintWidth) / 2f), y), hintSize, TextColor);
+    }
+
+    /// <summary>Uma linha do pop-up de configurações: rótulo (destacado se selecionada) + barra de volume
+    /// + porcentagem — ou "MUDO" no lugar da porcentagem, com a barra apagada, quando estiver sem som.</summary>
+    private void DrawSettingsRow(Rectangle panel, float y, string label, float volume, bool muted, bool selected)
+    {
+        const float labelSize = 2f;
+        const float valueSize = 1.75f;
+        const float barWidth = 120f;
+        const float barHeight = 14f;
+        const float paddingH = 30f;
+        const float barValueGap = 10f;
+
+        Color labelColor = selected ? AccentColor : TextColor;
+        // O glifo ">" não existe na fonte pixelizada (só letras/números/pontuação básica) — usa "*" como
+        // marcador de linha selecionada, que é um caractere que a fonte realmente desenha.
+        string fullLabel = (selected ? "* " : "  ") + label;
+        PixelFont.Draw(_spriteBatch, _pixel, fullLabel, new Vector2(panel.X + paddingH, y), labelSize, labelColor);
+
+        string valueText = muted ? "MUDO" : $"{(int)MathF.Round(volume * 100f)}%";
+        float valueWidth = PixelFont.Measure(valueText, valueSize);
+
+        float blockRight = panel.Right - paddingH;
+        float valueX = blockRight - valueWidth;
+        float barX = valueX - barValueGap - barWidth;
+
+        var backRect = new Rectangle((int)barX - 2, (int)y - 2, (int)barWidth + 4, (int)barHeight + 4);
+        _spriteBatch.Draw(_pixel, backRect, new Color(10, 12, 18));
+
+        float fraction = muted ? 0f : Math.Clamp(volume, 0f, 1f);
+        var fillRect = new Rectangle((int)barX, (int)y, (int)(barWidth * fraction), (int)barHeight);
+        Color fillColor = muted ? new Color(90, 94, 104) : BoostFillColor;
+        _spriteBatch.Draw(_pixel, fillRect, fillColor);
+
+        Color valueColor = muted ? new Color(150, 155, 165) : TextColor;
+        PixelFont.Draw(_spriteBatch, _pixel, valueText, new Vector2(valueX, y), valueSize, valueColor);
+    }
+
     // ---------- Tela inicial ----------
 
     private void DrawIntro()
@@ -1179,7 +1373,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         // Um único "console de HUD" com cantos marcados em vez de dois cards iguais aos da tela de
         // seleção de modo — pra tela inicial não parecer mais uma tela de escolha.
         float panelsTop = subtitlePos.Y + PixelFont.LineHeight(subtitleSize) + 28f;
-        float panelHeight = 150f;
+        float panelHeight = 175f;
         var infoFrame = new Rectangle(20, (int)panelsTop, (int)(trackAreaWidth - 40f), (int)panelHeight);
         DrawHudFrame(infoFrame);
 
@@ -1189,7 +1383,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
         _spriteBatch.Draw(_pixel, new Rectangle(infoFrame.X + columnWidth - 1, infoFrame.Y + 16, 2, infoFrame.Height - 32), HudFrameDivider);
 
-        DrawIntroInfoColumn(leftColumn, "CONTROLES", ["SETAS/WASD DIRIGIR", "SHIFT: TURBO", "ESPACO: FREIO DE MAO", "F11: TELA CHEIA", "ESC: SAIR"]);
+        DrawIntroInfoColumn(leftColumn, "CONTROLES", ["SETAS/WASD DIRIGIR", "SHIFT: TURBO", "ESPACO: FREIO DE MAO", "F11: TELA CHEIA", "O: OPCOES", "ESC: SAIR"]);
         DrawIntroInfoColumn(rightColumn, "DICAS", ["ENCHA O TURBO NOS", "CHECKPOINTS E RETAS", "CUIDADO AO BATER NOS", "RIVAIS E NAS PAREDES"]);
 
         // Pisca lentamente (aparece/desaparece) em vez de ficar num tom fixo — chama mais atenção sem
@@ -1262,7 +1456,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             DrawStatBadge(timeAttackPanel, "RECORDE", $"{bestScore:0} PTS");
         }
 
-        const string prompt = "SETAS: TROCAR    ESPACO: CONFIRMAR";
+        const string prompt = "SETAS: TROCAR    ESPACO: CONFIRMAR    O: OPCOES";
         const float promptSize = 2f;
         float promptWidth = PixelFont.Measure(prompt, promptSize);
         var promptPos = new Vector2((trackAreaWidth - promptWidth) / 2f, panelsTop + panelHeight + 24f);

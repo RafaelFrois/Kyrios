@@ -12,6 +12,11 @@ public sealed class SaveData
     public int EliminationRaces { get; set; }
     public float? BestScoreTimeAttack { get; set; }
 
+    public float MusicVolume { get; set; } = 1f;
+    public float SfxVolume { get; set; } = 1f;
+    public bool MusicMuted { get; set; }
+    public bool SfxMuted { get; set; }
+
     private static string FilePath
     {
         get
