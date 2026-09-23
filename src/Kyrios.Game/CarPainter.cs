@@ -21,6 +21,7 @@ public sealed class CarPainter
     private float _angle;
     private float _unit;
     private float _shade = 1f;
+    private bool _monochrome;
 
     public CarPainter(SpriteBatch spriteBatch, Texture2D pixel, Texture2D circle)
     {
@@ -39,12 +40,14 @@ public sealed class CarPainter
     public float Time { get; private set; }
 
     /// <param name="silhouette">Desenha quase preto (só um vulto) — usado pras skins ainda bloqueadas.</param>
-    public void Begin(Vector2 center, float angle, float unit, Color bodyColor, bool eliminated, float time, bool silhouette = false)
+    /// <param name="monochrome">Desenha em tons de cinza — usado nos ícones de conquistas ainda bloqueadas.</param>
+    public void Begin(Vector2 center, float angle, float unit, Color bodyColor, bool eliminated, float time, bool silhouette = false, bool monochrome = false)
     {
         _center = center;
         _angle = angle;
         _unit = unit;
         _shade = silhouette ? 0.18f : eliminated ? 0.4f : 1f;
+        _monochrome = monochrome;
         BodyColor = bodyColor;
         Eliminated = eliminated;
         Time = time;
@@ -118,5 +121,21 @@ public sealed class CarPainter
         return _center + new Vector2((localX * cos) - (localY * sin), (localX * sin) + (localY * cos));
     }
 
-    private Color Shade(Color color) => _shade >= 1f ? color : Darken(color, _shade);
+    private Color Shade(Color color)
+    {
+        if (_monochrome)
+        {
+            color = Grayscale(color);
+        }
+
+        return _shade >= 1f ? color : Darken(color, _shade);
+    }
+
+    /// <summary>Cinza apagado com a mesma luminosidade relativa da cor original (mantém o desenho legível).</summary>
+    public static Color Grayscale(Color color)
+    {
+        float luminance = (color.R * 0.3f) + (color.G * 0.59f) + (color.B * 0.11f);
+        var gray = (byte)(28f + (luminance * 0.42f));
+        return new Color(gray, gray, (byte)Math.Min(255, gray + 6), color.A);
+    }
 }

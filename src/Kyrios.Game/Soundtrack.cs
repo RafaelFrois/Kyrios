@@ -265,6 +265,22 @@ public static class Soundtrack
         return ToSoundEffect(RenderJingle(root, notes, Waveform.Square, 0.3f));
     }
 
+    /// <summary>Brilho curto e agudo (triângulo, subindo em oitavas) — toca ao aparecer "CONQUISTA DESBLOQUEADA!".</summary>
+    public static SoundEffect BuildAchievementChime()
+    {
+        const float root = 784f;
+        (int Semitone, float Duration)[] notes = [(0, 0.07f), (7, 0.07f), (12, 0.07f), (19, 0.07f), (24, 0.32f)];
+        return ToSoundEffect(RenderJingle(root, notes, Waveform.Triangle, 0.34f));
+    }
+
+    /// <summary>Mini-fanfarra (quadrada, com "repique" no final) — toca ao aparecer "NOVA SKIN DESBLOQUEADA!".</summary>
+    public static SoundEffect BuildSkinFanfare()
+    {
+        const float root = 523f;
+        (int Semitone, float Duration)[] notes = [(0, 0.09f), (4, 0.09f), (7, 0.09f), (12, 0.16f), (7, 0.08f), (12, 0.08f), (16, 0.38f)];
+        return ToSoundEffect(RenderJingle(root, notes, Waveform.Square, 0.28f));
+    }
+
     /// <summary>Bip agudo e seco — toca a cada segundo nos últimos instantes do Contrarrelógio.</summary>
     public static SoundEffect BuildCountdownTick() =>
         ToSoundEffect(Synth.GenerateTone(1200f, 0.05f, Waveform.Square, 0.3f, attack: 0.001f, release: 0.02f));

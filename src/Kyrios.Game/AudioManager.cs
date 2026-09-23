@@ -50,6 +50,8 @@ public sealed class AudioManager
     private SoundEffect _menuMoveBlip;
     private SoundEffect _menuConfirmBlip;
     private SoundEffect _countdownTick;
+    private SoundEffect _achievementChime;
+    private SoundEffect _skinFanfare;
 
     public void LoadContent()
     {
@@ -68,6 +70,8 @@ public sealed class AudioManager
             _menuMoveBlip = Soundtrack.BuildMenuMoveBlip();
             _menuConfirmBlip = Soundtrack.BuildMenuConfirmBlip();
             _countdownTick = Soundtrack.BuildCountdownTick();
+            _achievementChime = Soundtrack.BuildAchievementChime();
+            _skinFanfare = Soundtrack.BuildSkinFanfare();
         }
         catch (Exception)
         {
@@ -357,6 +361,24 @@ public sealed class AudioManager
         }
     }
 
+    /// <summary>Som de desbloqueio: fanfarra pra skin nova, brilho curto pra conquista.</summary>
+    public void PlayUnlock(bool isSkin)
+    {
+        if (!_available)
+        {
+            return;
+        }
+
+        try
+        {
+            (isSkin ? _skinFanfare : _achievementChime)?.Play(0.55f * EffectiveSfxVolume, 0f, 0f);
+        }
+        catch (Exception)
+        {
+            _available = false;
+        }
+    }
+
     public void PlayCountdownTick()
     {
         if (!_available)
@@ -393,5 +415,7 @@ public sealed class AudioManager
         _menuMoveBlip?.Dispose();
         _menuConfirmBlip?.Dispose();
         _countdownTick?.Dispose();
+        _achievementChime?.Dispose();
+        _skinFanfare?.Dispose();
     }
 }

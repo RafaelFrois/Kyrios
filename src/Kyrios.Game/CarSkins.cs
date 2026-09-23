@@ -6,15 +6,22 @@ namespace Kyrios.Game;
 /// for reordenada), <see cref="Name"/> é o que aparece no menu, <see cref="Paint"/> desenha o veículo virado
 /// pra frente (+x) no espaço local de um <see cref="CarPainter"/> e <see cref="Requirement"/> diz o que é
 /// preciso pra liberá-la (o estado bloqueado/desbloqueado em si fica no progresso salvo, ver
-/// <see cref="SkinUnlocks"/>). Só muda o visual — a física é a mesma.</summary>
-public sealed record CarSkin(string Id, string Name, Action<CarPainter> Paint, UnlockRequirement Requirement);
+/// <see cref="SkinUnlocks"/>). <see cref="Difficulty"/> é só informativa; uma skin <see cref="IsSecret"/>
+/// esconde nome, visual e requisito até ser liberada. Só muda o visual — a física é a mesma.</summary>
+public sealed record CarSkin(
+    string Id,
+    string Name,
+    Action<CarPainter> Paint,
+    UnlockRequirement Requirement,
+    Difficulty Difficulty = Difficulty.Easy,
+    bool IsSecret = false);
 
 /// <summary>
-/// Catálogo de skins. Pra adicionar uma nova: escreva um método <c>Paint*(CarPainter p)</c> desenhando o
-/// veículo mais ou menos dentro de x ∈ [-0.7, 0.7] e y ∈ [-0.45, 0.45] (o tamanho do carro clássico), e
-/// acrescente uma linha em <see cref="All"/> com o requisito dela. Nomes em maiúsculas e sem acento (a
-/// fonte pixelizada não tem). Referência pra calibrar metas nessa pista: o vencedor da Corrida Clássica
-/// (3 voltas) cruza em ~30 s, uma volta rápida leva ~9 s e a IA faz de 150 a 700 pts no Contra o Relógio.
+/// Catálogo de skins, na ordem do seletor (das mais fáceis às mais difíceis). Pra adicionar uma nova:
+/// escreva um método <c>Paint*(CarPainter p)</c> desenhando o veículo mais ou menos dentro de
+/// x ∈ [-0.7, 0.7] e y ∈ [-0.45, 0.45] (o tamanho do carro clássico), e acrescente uma linha em
+/// <see cref="All"/> com o requisito (ver os atalhos em <see cref="Unlock"/>) e a dificuldade. Nomes em
+/// maiúsculas e sem acento (a fonte pixelizada não tem).
 /// </summary>
 public static class CarSkins
 {
@@ -23,22 +30,32 @@ public static class CarSkins
     public static IReadOnlyList<CarSkin> All { get; } =
     [
         new("classico", "CARRO CLASSICO", PaintClassic, Unlock.FromStart),
-        new("galinha", "GALINHA", PaintChicken, Unlock.ClassicWins(3)),
-        new("jacare", "JACARE", PaintAlligator, Unlock.DeathRaceWins(5)),
-        new("pato", "PATO", PaintDuck, Unlock.ClassicWins(1)),
-        new("banana", "BANANA", PaintBanana, Unlock.TimeAttackScore(1000)),
-        new("tijolo", "TIJOLO", PaintBrick, Unlock.DeathRaceWins(1)),
-        new("peixe", "PEIXE", PaintFish, Unlock.TimeAttackScore(500)),
-        new("batata", "BATATA", PaintPotato, Unlock.ClassicWins(5)),
-        new("suco", "CAIXINHA DE SUCO", PaintJuiceBox, Unlock.ClassicLapUnder(9.5f)),
-        new("privada", "VASO SANITARIO", PaintToilet, Unlock.DeathRaceWins(10)),
-        new("tubarao", "TUBARAO", PaintShark, Unlock.ClassicRaceUnder(30f)),
-        new("pizza", "PIZZA", PaintPizza, Unlock.TimeAttackScore(1500)),
-        new("dino", "DINOSSAURO", PaintDinosaur, Unlock.DeathRaceWins(3)),
-        new("sapo", "SAPO", PaintFrog, Unlock.ClassicLapUnder(8.5f)),
-        new("carrinho", "CARRINHO DE MERCADO", PaintShoppingCart, Unlock.ClassicWins(10)),
-        new("ursinho", "URSINHO", PaintTeddyBear, Unlock.TimeAttackScore(2000)),
-        new("ovni", "OVNI", PaintUfo, Unlock.ClassicRaceUnder(27f)),
+
+        // ----- Fáceis -----
+        new("pato", "PATO", PaintDuck, Unlock.GamesPlayed(5)),
+        new("galinha", "GALINHA", PaintChicken, Unlock.Wins(3)),
+        new("banana", "BANANA", PaintBanana, Unlock.TimeAttackTotal(2000)),
+        new("tijolo", "TIJOLO", PaintBrick, Unlock.AchievementEarned(Achievements.WhereAreTheBrakesId)),
+
+        // ----- Médias -----
+        new("jacare", "JACARE", PaintAlligator, Unlock.DeathRaceWins(10), Difficulty.Medium),
+        new("peixe", "PEIXE", PaintFish, Unlock.TimeAttackTotal(7500), Difficulty.Medium),
+        new("batata", "BATATA", PaintPotato, Unlock.Wins(15), Difficulty.Medium),
+        new("tubarao", "TUBARAO", PaintShark, Unlock.ClassicRaceUnder(30f), Difficulty.Medium),
+        new("carrinho", "CARRINHO DE MERCADO", PaintShoppingCart, Unlock.GamesPlayed(50), Difficulty.Medium),
+        new("suco", "CAIXINHA DE SUCO", PaintJuiceBox, Unlock.AchievementsUnlocked(10), Difficulty.Medium),
+        new("pizza", "PIZZA", PaintPizza, Unlock.All("VENCA 5 CLASSICAS E 5 MORTAIS", Unlock.ClassicWins(5), Unlock.DeathRaceWins(5)), Difficulty.Medium),
+
+        // ----- Difíceis -----
+        new("dino", "DINOSSAURO", PaintDinosaur, Unlock.AchievementEarned(Achievements.PredatorId), Difficulty.Hard),
+        new("privada", "VASO SANITARIO", PaintToilet, Unlock.DeathRaceWinStreak(10), Difficulty.Hard),
+        new("ovni", "OVNI", PaintUfo, Unlock.All("10 SKINS E 15000 PTS NO RELOGIO", Unlock.SkinsUnlocked(10), Unlock.TimeAttackTotal(15000)), Difficulty.Hard),
+
+        // Raríssima: uma volta que só sai com a pilotagem praticamente perfeita (a IA mais rápida fica em ~9.3 s).
+        new("sapo", "SAPO", PaintFrog, Unlock.ClassicLapUnder(8.3f), Difficulty.Hard),
+
+        // Secreta: vem de uma conquista secreta — nome, visual e requisito ficam escondidos até lá.
+        new("ursinho", "URSINHO", PaintTeddyBear, Unlock.AchievementEarned(Achievements.WasThatSupposedToHappenId), Difficulty.Hard, IsSecret: true),
     ];
 
     /// <summary>O carro de corrida original — continua sendo o dos rivais e o padrão do jogador.</summary>
@@ -56,6 +73,8 @@ public static class CarSkins
 
         return 0;
     }
+
+    public static CarSkin Find(string id) => All.FirstOrDefault(skin => skin.Id == id);
 
     private static void PaintClassic(CarPainter p)
     {

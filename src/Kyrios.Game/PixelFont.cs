@@ -63,8 +63,13 @@ public static class PixelFont
         ['('] = ["00010", "00100", "01000", "01000", "01000", "00100", "00010"],
         [')'] = ["01000", "00100", "00010", "00010", "00010", "00100", "01000"],
         ['"'] = ["01010", "01010", "01010", "00000", "00000", "00000", "00000"],
-        ['º'] =["01110", "10001", "10001", "01110", "00000", "11111", "00000"],
+        ['º'] = ["01110", "10001", "10001", "01110", "00000", "11111", "00000"],
+        ['?'] = ["01110", "10001", "00001", "00010", "00100", "00000", "00100"],
+        ['+'] = ["00000", "00100", "00100", "11111", "00100", "00100", "00000"],
     };
+
+    /// <summary>Se a fonte tem desenho pra esse caractere (ela não tem acentos, por exemplo).</summary>
+    public static bool Supports(char c) => Glyphs.ContainsKey(char.ToUpperInvariant(c));
 
     public static float Measure(string text, float pixelSize) =>
         text.Length == 0 ? 0f : ((text.Length * (GlyphWidth + 1)) - 1) * pixelSize;

@@ -29,6 +29,9 @@ public sealed class GameInput
     public bool WasMouseLeftJustPressed =>
         _currentMouse.LeftButton == ButtonState.Pressed && _previousMouse.LeftButton == ButtonState.Released;
 
+    /// <summary>Quantos "dentes" a roda do mouse girou desde o quadro anterior (positivo = pra cima).</summary>
+    public int ScrollWheelSteps => (_currentMouse.ScrollWheelValue - _previousMouse.ScrollWheelValue) / 120;
+
     public bool IsDown(Keys key) => _current.IsKeyDown(key);
 
     public bool WasJustPressed(Keys key) => _current.IsKeyDown(key) && !_previous.IsKeyDown(key);
