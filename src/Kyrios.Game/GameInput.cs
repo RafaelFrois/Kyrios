@@ -10,11 +10,13 @@ public sealed class GameInput
     private KeyboardState _current;
     private KeyboardState _previous;
     private MouseState _currentMouse;
+    private MouseState _previousMouse;
 
     public void Update()
     {
         _previous = _current;
         _current = Keyboard.GetState();
+        _previousMouse = _currentMouse;
         _currentMouse = Mouse.GetState();
     }
 
@@ -23,6 +25,9 @@ public sealed class GameInput
     public Point MousePosition => _currentMouse.Position;
 
     public bool IsMouseLeftDown => _currentMouse.LeftButton == ButtonState.Pressed;
+
+    public bool WasMouseLeftJustPressed =>
+        _currentMouse.LeftButton == ButtonState.Pressed && _previousMouse.LeftButton == ButtonState.Released;
 
     public bool IsDown(Keys key) => _current.IsKeyDown(key);
 

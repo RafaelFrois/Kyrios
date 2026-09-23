@@ -17,6 +17,9 @@ public sealed class SaveData
     public bool MusicMuted { get; set; }
     public bool SfxMuted { get; set; }
 
+    /// <summary>Id da <see cref="CarSkin"/> escolhida pro carro do jogador (null = a padrão).</summary>
+    public string SelectedSkinId { get; set; }
+
     private static string FilePath
     {
         get

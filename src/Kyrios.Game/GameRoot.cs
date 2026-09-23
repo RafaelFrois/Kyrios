@@ -43,7 +43,6 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private static readonly Color CurbWhite = new(232, 230, 224);
     private static readonly Color BushDark = new(22, 86, 52);
     private static readonly Color BushLight = new(44, 130, 78);
-    private static readonly Color WheelColor = new(24, 24, 27);
     private static readonly Color ShadowColor = new(0, 0, 0, 90);
     private static readonly Color PanelBorderColor = new(54, 60, 80);
     private static readonly Color PanelFillColor = new(33, 38, 53);
@@ -117,6 +116,11 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private SettingsRow _settingsSelection = SettingsRow.Music;
     private SettingsRow? _draggingSettingsRow;
 
+    private CarPainter _carPainter = null!;
+    private int _selectedSkinIndex;
+    private float _skinArrowFlashLeft;
+    private float _skinArrowFlashRight;
+
     private int _windowWidth;
     private int _windowHeight;
     private bool _isFullscreen;
@@ -134,6 +138,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         _graphics.HardwareModeSwitch = false;
 
         _saveData = SaveData.Load();
+        _selectedSkinIndex = CarSkins.IndexOf(_saveData.SelectedSkinId);
 
         StartNewRace(_selectedMode);
         SizeWindowForCurrentRace();
@@ -417,6 +422,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         }
 
         _circle.SetData(circleData);
+        _carPainter = new CarPainter(_spriteBatch, _pixel, _circle);
 
         _audio = new AudioManager();
         _audio.LoadContent();
@@ -439,6 +445,8 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         float frameSeconds = (float)gameTime.ElapsedGameTime.TotalSeconds;
         _visualTime += frameSeconds;
         DecayScreenShake(frameSeconds);
+        _skinArrowFlashLeft = MathF.Max(0f, _skinArrowFlashLeft - frameSeconds);
+        _skinArrowFlashRight = MathF.Max(0f, _skinArrowFlashRight - frameSeconds);
 
         bool altHeld = _input.IsDown(Keys.LeftAlt) || _input.IsDown(Keys.RightAlt);
         if (_input.WasJustPressed(Keys.F11) || (altHeld && _input.WasJustPressed(Keys.Enter)))
@@ -474,9 +482,14 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                     break;
                 }
 
-                // F11 (alternar tela cheia) e Q (opções) nunca devem contar como "aperte qualquer tecla"
-                // aqui — senão pedir tela cheia ou abrir configurações na tela inicial também avança pro menu.
-                if (_input.AnyKeyJustPressedExcept(Keys.F11, Keys.Q))
+                if (TryChangeSkinFromInput())
+                {
+                    break;
+                }
+
+                // F11 (tela cheia), Q (opções) e as teclas de trocar skin nunca contam como "aperte
+                // qualquer tecla" aqui — senão usá-las na tela inicial também avançaria pro menu.
+                if (_input.AnyKeyJustPressedExcept(Keys.F11, Keys.Q, Keys.Left, Keys.Right, Keys.A, Keys.D))
                 {
                     _state = State.ModeSelect;
                 }
@@ -629,6 +642,67 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         }
 
         base.Update(gameTime);
+    }
+
+    private CarSkin SelectedSkin => CarSkins.All[_selectedSkinIndex];
+
+    /// <summary>Seletor de skin da tela inicial: setas/A-D do teclado ou clique nas setinhas desenhadas.
+    /// Retorna true se trocou (pra essa mesma tecla/clique não ser tratada como mais nada no quadro).</summary>
+    private bool TryChangeSkinFromInput()
+    {
+        if (_input.WasJustPressed(Keys.Left) || _input.WasJustPressed(Keys.A))
+        {
+            ChangeSkin(-1);
+            return true;
+        }
+
+        if (_input.WasJustPressed(Keys.Right) || _input.WasJustPressed(Keys.D))
+        {
+            ChangeSkin(1);
+            return true;
+        }
+
+        if (!_input.WasMouseLeftJustPressed)
+        {
+            return false;
+        }
+
+        IntroLayout layout = ComputeIntroLayout();
+        Vector2 mouse = ScreenToLogicalPosition(_input.MousePosition);
+        var mousePoint = new Point((int)mouse.X, (int)mouse.Y);
+
+        if (layout.LeftArrow.Contains(mousePoint))
+        {
+            ChangeSkin(-1);
+            return true;
+        }
+
+        if (layout.RightArrow.Contains(mousePoint))
+        {
+            ChangeSkin(1);
+            return true;
+        }
+
+        return false;
+    }
+
+    private void ChangeSkin(int direction)
+    {
+        int count = CarSkins.All.Count;
+        _selectedSkinIndex = (_selectedSkinIndex + direction + count) % count;
+
+        _saveData.SelectedSkinId = SelectedSkin.Id;
+        _saveData.Save();
+        _audio.PlayMenuMove();
+
+        if (direction < 0)
+        {
+            _skinArrowFlashLeft = 0.15f;
+        }
+        else
+        {
+            _skinArrowFlashRight = 0.15f;
+        }
     }
 
     /// <summary>Abre o pop-up de configurações lembrando de qual tela (inicial ou menu de modos) ele foi
@@ -836,20 +910,6 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         _spriteBatch.Draw(_pixel, center, null, color, angle, new Vector2(0.5f, 0.5f), new Vector2(length, width), SpriteEffects.None, 0f);
     }
 
-    /// <summary>Desenha uma "cápsula" (retângulo com as pontas arredondadas) — a silhueta base dos carros.</summary>
-    private void DrawCapsule(Vector2 center, float length, float width, float angle, Color color)
-    {
-        float radius = width / 2f;
-        float straight = MathF.Max(length - width, 0f);
-
-        DrawFilledRectRotated(center, straight, width, angle, color);
-
-        Vector2 frontCenter = center + Rotate(new Vector2(straight / 2f, 0f), angle);
-        Vector2 backCenter = center + Rotate(new Vector2(-straight / 2f, 0f), angle);
-        DrawCircle(frontCenter, radius, color);
-        DrawCircle(backCenter, radius, color);
-    }
-
     private static Vector2 Rotate(Vector2 local, float angle)
     {
         float cos = MathF.Cos(angle);
@@ -888,9 +948,6 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             DrawCircle(particle.Position, particle.Size * lifeFraction, color);
         }
     }
-
-    private static Color Darken(Color color, float factor) =>
-        new((byte)(color.R * factor), (byte)(color.G * factor), (byte)(color.B * factor), color.A);
 
     // ---------- Pista ----------
 
@@ -1082,66 +1139,18 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         {
             Car car = entrant.Car;
             bool eliminated = entrant.Eliminated;
-            Color color = eliminated ? Darken(_carColors[entrant], 0.4f) : _carColors[entrant];
-
             var center = new Vector2(car.Position.X * CellSize, car.Position.Y * CellSize);
-            float length = CellSize * 1.35f;
-            float width = CellSize * 0.85f;
-            float halfLength = length / 2f;
-            float halfWidth = width / 2f;
 
             if (!eliminated && car.IsBoosting)
             {
-                DrawBoostFlame(center, car.Angle, halfLength);
+                DrawBoostFlame(center, car.Angle, CellSize * 1.35f / 2f);
             }
 
-            DrawCapsule(center + new Vector2(2f, 3f), length, width, car.Angle, ShadowColor);
-
-            Color wheelColor = WheelColor;
-            float wheelLength = length * 0.4f;
-            float wheelWidth = width * 0.3f;
-            foreach (float sideX in new[] { -1f, 1f })
-            {
-                foreach (float sideY in new[] { -1f, 1f })
-                {
-                    Vector2 local = new(sideX * halfLength * 0.5f, sideY * (halfWidth + (wheelWidth * 0.55f)));
-                    Vector2 wheelPos = center + Rotate(local, car.Angle);
-                    DrawFilledRectRotated(wheelPos, wheelLength, wheelWidth, car.Angle, wheelColor);
-                }
-            }
-
-            // Aerofólio traseiro e retrovisores — dão silhueta mais reconhecível de "carro de corrida"
-            // em vez de só uma cápsula lisa.
-            Color trimColor = Darken(color, 0.55f);
-            Vector2 spoilerCenter = center + Rotate(new Vector2(-halfLength * 0.98f, 0f), car.Angle);
-            DrawFilledRectRotated(spoilerCenter, width * 0.16f, width * 1.05f, car.Angle, trimColor);
-
-            foreach (float mirrorSide in new[] { -1f, 1f })
-            {
-                Vector2 mirrorPos = center + Rotate(new Vector2(halfLength * 0.1f, mirrorSide * (halfWidth + (width * 0.1f))), car.Angle);
-                DrawFilledRectRotated(mirrorPos, width * 0.16f, width * 0.13f, car.Angle, trimColor);
-            }
-
-            DrawCapsule(center, length, width, car.Angle, color);
-
-            Color roofColor = Darken(color, 0.5f);
-            Vector2 roofCenter = center + Rotate(new Vector2(halfLength * 0.05f, 0f), car.Angle);
-            DrawCapsule(roofCenter, length * 0.5f, width * 0.6f, car.Angle, roofColor);
-
-            if (!eliminated)
-            {
-                // Brilho no para-brisa: um toque de reflexo pra não ficar um retângulo escuro liso.
-                Vector2 windshieldHighlight = center + Rotate(new Vector2(halfLength * 0.2f, -width * 0.14f), car.Angle);
-                DrawCircle(windshieldHighlight, width * 0.13f, new Color(255, 255, 255, 70));
-
-                Vector2 headlightL = center + Rotate(new Vector2(halfLength * 0.9f, halfWidth * 0.55f), car.Angle);
-                Vector2 headlightR = center + Rotate(new Vector2(halfLength * 0.9f, -halfWidth * 0.55f), car.Angle);
-                DrawCircle(headlightL, CellSize * 0.11f, new Color(255, 250, 210));
-                DrawCircle(headlightR, CellSize * 0.11f, new Color(255, 250, 210));
-
-                Vector2 tailLight = center + Rotate(new Vector2(-halfLength * 0.92f, 0f), car.Angle);
-                DrawCircle(tailLight, CellSize * 0.1f, new Color(200, 20, 20));
-            }
+            // Só o jogador usa a skin escolhida no menu; os rivais continuam com o carro clássico, cada um
+            // na sua cor. A skin é só visual — posição, ângulo e colisão vêm da mesma física de sempre.
+            CarSkin skin = entrant.Kind == DriverKind.Human ? SelectedSkin : CarSkins.Classic;
+            _carPainter.Begin(center, car.Angle, CellSize, _carColors[entrant], eliminated, _visualTime);
+            skin.Paint(_carPainter);
         }
     }
 
@@ -1477,6 +1486,37 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
     // ---------- Tela inicial ----------
 
+    private const float IntroTitleTop = 36f;
+    private const float IntroTitleSize = 5.5f;
+    private const float IntroPanelHeight = 175f;
+    private const float SkinPreviewUnit = 58f;
+
+    /// <summary>Retângulos da tela inicial que o desenho e o clique do mouse precisam concordar: o console
+    /// de controles/dicas, o painel do seletor de skin ao lado dele e as duas setinhas desse seletor.</summary>
+    private readonly record struct IntroLayout(Rectangle InfoFrame, Rectangle SkinPanel, Rectangle LeftArrow, Rectangle RightArrow, Vector2 PreviewCenter);
+
+    private IntroLayout ComputeIntroLayout()
+    {
+        float trackAreaWidth = _windowWidth - (2f * TrackMargin);
+        float panelsTop = IntroTitleTop + PixelFont.LineHeight(IntroTitleSize) + 32f;
+        const float gap = 16f;
+
+        float usableWidth = trackAreaWidth - 40f;
+        float skinWidth = MathF.Min(340f, usableWidth * 0.34f);
+
+        var infoFrame = new Rectangle(20, (int)panelsTop, (int)(usableWidth - skinWidth - gap), (int)IntroPanelHeight);
+        var skinPanel = new Rectangle(infoFrame.Right + (int)gap, (int)panelsTop, (int)skinWidth, (int)IntroPanelHeight);
+
+        var previewCenter = new Vector2(skinPanel.Center.X, skinPanel.Y + 86f);
+        const int arrowWidth = 34;
+        const int arrowHeight = 46;
+        int arrowY = (int)previewCenter.Y - (arrowHeight / 2);
+        var leftArrow = new Rectangle(skinPanel.X + 14, arrowY, arrowWidth, arrowHeight);
+        var rightArrow = new Rectangle(skinPanel.Right - 14 - arrowWidth, arrowY, arrowWidth, arrowHeight);
+
+        return new IntroLayout(infoFrame, skinPanel, leftArrow, rightArrow, previewCenter);
+    }
+
     private void DrawIntro()
     {
         float trackAreaWidth = _windowWidth - (2f * TrackMargin);
@@ -1484,23 +1524,22 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
 
         DrawMenuBackground();
 
-        const float titleSize = 5.5f;
         string title = "MEGRACE";
-        float titleWidth = PixelFont.Measure(title, titleSize);
-        var titlePos = new Vector2((trackAreaWidth - titleWidth) / 2f, 36f);
+        float titleWidth = PixelFont.Measure(title, IntroTitleSize);
+        var titlePos = new Vector2((trackAreaWidth - titleWidth) / 2f, IntroTitleTop);
 
         foreach (Vector2 offset in OutlineOffsets)
         {
-            PixelFont.Draw(_spriteBatch, _pixel, title, titlePos + (offset * 1.5f), titleSize, TitleOutline);
+            PixelFont.Draw(_spriteBatch, _pixel, title, titlePos + (offset * 1.5f), IntroTitleSize, TitleOutline);
         }
 
-        PixelFont.DrawGradient(_spriteBatch, _pixel, title, titlePos, titleSize, TitleGradient);
+        PixelFont.DrawGradient(_spriteBatch, _pixel, title, titlePos, IntroTitleSize, TitleGradient);
 
         // Um único "console de HUD" com cantos marcados em vez de dois cards iguais aos da tela de
-        // seleção de modo — pra tela inicial não parecer mais uma tela de escolha.
-        float panelsTop = titlePos.Y + PixelFont.LineHeight(titleSize) + 32f;
-        float panelHeight = 175f;
-        var infoFrame = new Rectangle(20, (int)panelsTop, (int)(trackAreaWidth - 40f), (int)panelHeight);
+        // seleção de modo — pra tela inicial não parecer mais uma tela de escolha. Ao lado dele fica o
+        // seletor de skin do carro do jogador.
+        IntroLayout layout = ComputeIntroLayout();
+        Rectangle infoFrame = layout.InfoFrame;
         DrawHudFrame(infoFrame);
 
         int columnWidth = infoFrame.Width / 2;
@@ -1512,18 +1551,82 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         DrawIntroInfoColumn(leftColumn, "CONTROLES", ["SETAS/WASD DIRIGIR", "SHIFT: TURBO", "ESPACO: FREIO DE MAO", "F11: TELA CHEIA", "Q: OPCOES", "ESC: SAIR"], highlightedLine: "Q: OPCOES");
         DrawIntroInfoColumn(rightColumn, "DICAS", ["ENCHA O TURBO NOS", "CHECKPOINTS E RETAS", "CUIDADO AO BATER NOS", "RIVAIS E NAS PAREDES"]);
 
+        DrawSkinSelector(layout);
+
         // Pisca lentamente (aparece/desaparece) em vez de ficar num tom fixo — chama mais atenção sem
         // ser irritante.
         const string prompt = "APERTE QUALQUER TECLA";
         const float promptSize = 2.5f;
         float blink = (MathF.Sin(_visualTime * 1.6f) + 1f) / 2f;
-        var promptColor = new Color(AccentColor, blink);
-        var promptShadowColor = new Color(0, 0, 0, (int)(130 * blink));
+        // Alfa pré-multiplicado (padrão do SpriteBatch): pra sumir de verdade, a cor inteira é escalada.
+        Color promptColor = AccentColor * blink;
+        Color promptShadowColor = Color.Black * (0.5f * blink);
         float promptWidth = PixelFont.Measure(prompt, promptSize);
-        var promptPos = new Vector2((trackAreaWidth - promptWidth) / 2f, panelsTop + panelHeight + 20f);
+        var promptPos = new Vector2((trackAreaWidth - promptWidth) / 2f, infoFrame.Bottom + 20f);
         PixelFont.DrawShadowed(_spriteBatch, _pixel, prompt, promptPos, promptSize, promptColor, promptShadowColor);
 
         DrawStudioLogo(new Vector2(16f, trackAreaHeight - 16f));
+    }
+
+    /// <summary>Painel "[ ← ] skin [ → ]": a skin escolhida desenhada grande no centro (a mesma pintura
+    /// usada na corrida, só que ampliada), o nome embaixo e a posição na lista.</summary>
+    private void DrawSkinSelector(IntroLayout layout)
+    {
+        Rectangle panel = layout.SkinPanel;
+        DrawHudFrame(panel);
+
+        const string header = "SEU CARRO";
+        const float headerSize = 2.25f;
+        float headerWidth = PixelFont.Measure(header, headerSize);
+        float headerX = panel.X + ((panel.Width - headerWidth) / 2f);
+        PixelFont.Draw(_spriteBatch, _pixel, header, new Vector2(headerX, panel.Y + 16f), headerSize, AccentColor);
+        _spriteBatch.Draw(_pixel, new Rectangle((int)headerX, (int)(panel.Y + 16f + PixelFont.LineHeight(headerSize) + 4f), (int)headerWidth, 2), AccentColor);
+
+        // Um "holofote" discreto por baixo, pra skin parecer em exposição numa vitrine. O SpriteBatch usa
+        // alfa pré-multiplicado, então a transparência tem que vir de "cor * fração" (não do canal A).
+        DrawCircle(layout.PreviewCenter + new Vector2(0f, 6f), 48f, AccentColor * 0.07f);
+        DrawCircle(layout.PreviewCenter, 38f, AccentColor * 0.06f);
+
+        float sway = MathF.Sin(_visualTime * 1.5f) * 0.12f;
+        _carPainter.Begin(layout.PreviewCenter, sway, SkinPreviewUnit, AccentColor, eliminated: false, _visualTime);
+        SelectedSkin.Paint(_carPainter);
+
+        Vector2 mouse = ScreenToLogicalPosition(_input.MousePosition);
+        var mousePoint = new Point((int)mouse.X, (int)mouse.Y);
+        DrawSkinArrow(layout.LeftArrow, pointRight: false, layout.LeftArrow.Contains(mousePoint), _skinArrowFlashLeft > 0f);
+        DrawSkinArrow(layout.RightArrow, pointRight: true, layout.RightArrow.Contains(mousePoint), _skinArrowFlashRight > 0f);
+
+        const float nameSize = 2.25f;
+        string name = SelectedSkin.Name;
+        float nameWidth = PixelFont.Measure(name, nameSize);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, name, new Vector2(panel.X + ((panel.Width - nameWidth) / 2f), panel.Y + 134f), nameSize, TextColor);
+
+        const float counterSize = 1.5f;
+        string counter = $"{_selectedSkinIndex + 1}/{CarSkins.All.Count}";
+        float counterWidth = PixelFont.Measure(counter, counterSize);
+        PixelFont.Draw(_spriteBatch, _pixel, counter, new Vector2(panel.X + ((panel.Width - counterWidth) / 2f), panel.Y + 157f), counterSize, StatBadgeLabelColor);
+    }
+
+    /// <summary>Botão de seta do seletor de skin: acende com o mouse em cima e dá um "flash" rápido quando
+    /// usado (clique ou teclado), pra ficar claro que a troca aconteceu.</summary>
+    private void DrawSkinArrow(Rectangle rect, bool pointRight, bool hovered, bool flashing)
+    {
+        Color border = flashing ? Color.White : hovered ? AccentColor : PanelBorderColor;
+        DrawRoundedRect(rect, border, 6f);
+        DrawRoundedRect(new Rectangle(rect.X + 3, rect.Y + 3, rect.Width - 6, rect.Height - 6), PanelFillColor, 5f);
+
+        // A fonte pixelizada não tem "<"/">" — o triângulo é desenhado em colunas de 2 px que vão
+        // encurtando até a ponta, no mesmo estilo pixelado do resto.
+        Color arrowColor = flashing || hovered ? AccentColor : TextColor;
+        const int triangleWidth = 12;
+        const float halfHeight = 11f;
+        Point center = rect.Center;
+        for (int i = 0; i < triangleWidth; i += 2)
+        {
+            float columnHalf = halfHeight * (1f - (i / (float)triangleWidth));
+            int x = pointRight ? center.X - (triangleWidth / 2) + i : center.X + (triangleWidth / 2) - i - 2;
+            _spriteBatch.Draw(_pixel, new Rectangle(x, (int)(center.Y - columnHalf), 2, (int)(columnHalf * 2f)), arrowColor);
+        }
     }
 
     // ---------- Tela de seleção de modo ----------
