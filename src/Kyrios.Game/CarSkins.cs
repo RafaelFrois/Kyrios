@@ -3,14 +3,18 @@ using Microsoft.Xna.Framework;
 namespace Kyrios.Game;
 
 /// <summary>Uma aparência pro carro do jogador. <see cref="Id"/> é o que fica salvo (estável mesmo se a lista
-/// for reordenada), <see cref="Name"/> é o que aparece no menu e <see cref="Paint"/> desenha o veículo virado
-/// pra frente (+x) no espaço local de um <see cref="CarPainter"/>. Só muda o visual — a física é a mesma.</summary>
-public sealed record CarSkin(string Id, string Name, Action<CarPainter> Paint);
+/// for reordenada), <see cref="Name"/> é o que aparece no menu, <see cref="Paint"/> desenha o veículo virado
+/// pra frente (+x) no espaço local de um <see cref="CarPainter"/> e <see cref="Requirement"/> diz o que é
+/// preciso pra liberá-la (o estado bloqueado/desbloqueado em si fica no progresso salvo, ver
+/// <see cref="SkinUnlocks"/>). Só muda o visual — a física é a mesma.</summary>
+public sealed record CarSkin(string Id, string Name, Action<CarPainter> Paint, UnlockRequirement Requirement);
 
 /// <summary>
 /// Catálogo de skins. Pra adicionar uma nova: escreva um método <c>Paint*(CarPainter p)</c> desenhando o
 /// veículo mais ou menos dentro de x ∈ [-0.7, 0.7] e y ∈ [-0.45, 0.45] (o tamanho do carro clássico), e
-/// acrescente uma linha em <see cref="All"/>. Nomes em maiúsculas e sem acento (a fonte pixelizada não tem).
+/// acrescente uma linha em <see cref="All"/> com o requisito dela. Nomes em maiúsculas e sem acento (a
+/// fonte pixelizada não tem). Referência pra calibrar metas nessa pista: o vencedor da Corrida Clássica
+/// (3 voltas) cruza em ~30 s, uma volta rápida leva ~9 s e a IA faz de 150 a 700 pts no Contra o Relógio.
 /// </summary>
 public static class CarSkins
 {
@@ -18,23 +22,23 @@ public static class CarSkins
 
     public static IReadOnlyList<CarSkin> All { get; } =
     [
-        new("classico", "CARRO CLASSICO", PaintClassic),
-        new("galinha", "GALINHA", PaintChicken),
-        new("jacare", "JACARE", PaintAlligator),
-        new("pato", "PATO", PaintDuck),
-        new("banana", "BANANA", PaintBanana),
-        new("tijolo", "TIJOLO", PaintBrick),
-        new("peixe", "PEIXE", PaintFish),
-        new("batata", "BATATA", PaintPotato),
-        new("suco", "CAIXINHA DE SUCO", PaintJuiceBox),
-        new("privada", "VASO SANITARIO", PaintToilet),
-        new("tubarao", "TUBARAO", PaintShark),
-        new("pizza", "PIZZA", PaintPizza),
-        new("dino", "DINOSSAURO", PaintDinosaur),
-        new("sapo", "SAPO", PaintFrog),
-        new("carrinho", "CARRINHO DE MERCADO", PaintShoppingCart),
-        new("ursinho", "URSINHO", PaintTeddyBear),
-        new("ovni", "OVNI", PaintUfo),
+        new("classico", "CARRO CLASSICO", PaintClassic, Unlock.FromStart),
+        new("galinha", "GALINHA", PaintChicken, Unlock.ClassicWins(3)),
+        new("jacare", "JACARE", PaintAlligator, Unlock.DeathRaceWins(5)),
+        new("pato", "PATO", PaintDuck, Unlock.ClassicWins(1)),
+        new("banana", "BANANA", PaintBanana, Unlock.TimeAttackScore(1000)),
+        new("tijolo", "TIJOLO", PaintBrick, Unlock.DeathRaceWins(1)),
+        new("peixe", "PEIXE", PaintFish, Unlock.TimeAttackScore(500)),
+        new("batata", "BATATA", PaintPotato, Unlock.ClassicWins(5)),
+        new("suco", "CAIXINHA DE SUCO", PaintJuiceBox, Unlock.ClassicLapUnder(9.5f)),
+        new("privada", "VASO SANITARIO", PaintToilet, Unlock.DeathRaceWins(10)),
+        new("tubarao", "TUBARAO", PaintShark, Unlock.ClassicRaceUnder(30f)),
+        new("pizza", "PIZZA", PaintPizza, Unlock.TimeAttackScore(1500)),
+        new("dino", "DINOSSAURO", PaintDinosaur, Unlock.DeathRaceWins(3)),
+        new("sapo", "SAPO", PaintFrog, Unlock.ClassicLapUnder(8.5f)),
+        new("carrinho", "CARRINHO DE MERCADO", PaintShoppingCart, Unlock.ClassicWins(10)),
+        new("ursinho", "URSINHO", PaintTeddyBear, Unlock.TimeAttackScore(2000)),
+        new("ovni", "OVNI", PaintUfo, Unlock.ClassicRaceUnder(27f)),
     ];
 
     /// <summary>O carro de corrida original — continua sendo o dos rivais e o padrão do jogador.</summary>

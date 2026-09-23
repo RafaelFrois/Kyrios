@@ -117,9 +117,19 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
     private SettingsRow? _draggingSettingsRow;
 
     private CarPainter _carPainter = null!;
+
+    // A skin equipada (a que vai pra corrida) e a que está sendo olhada no seletor são coisas separadas:
+    // dá pra navegar até uma skin bloqueada pra ver o requisito sem que ela vire a do carro.
     private int _selectedSkinIndex;
+    private int _previewSkinIndex;
     private float _skinArrowFlashLeft;
     private float _skinArrowFlashRight;
+
+    private const float UnlockToastDuration = 4.5f;
+    private const float UnlockToastSlideSeconds = 0.3f;
+    private readonly Queue<CarSkin> _pendingUnlockToasts = new();
+    private CarSkin _activeUnlockToast;
+    private float _unlockToastTimer;
 
     private int _windowWidth;
     private int _windowHeight;
@@ -138,7 +148,18 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         _graphics.HardwareModeSwitch = false;
 
         _saveData = SaveData.Load();
+
+        // Progresso que já cumpre algum requisito (ex.: um save de antes do sistema de desbloqueio) libera
+        // as skins logo ao abrir, com a mesma notificação de sempre. Depois disso, se a skin salva não
+        // estiver liberada (ou for o primeiro acesso), o jogador começa com a clássica.
+        CheckSkinUnlocks();
         _selectedSkinIndex = CarSkins.IndexOf(_saveData.SelectedSkinId);
+        if (!SkinUnlocks.IsUnlocked(SelectedSkin, _saveData))
+        {
+            _selectedSkinIndex = 0;
+        }
+
+        _previewSkinIndex = _selectedSkinIndex;
 
         StartNewRace(_selectedMode);
         SizeWindowForCurrentRace();
@@ -266,6 +287,11 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                     _newRaceRecord = true;
                 }
 
+                if (_player.FinishPlace == 1)
+                {
+                    _saveData.SprintWins++;
+                }
+
                 break;
 
             case RaceMode.Elimination:
@@ -287,7 +313,50 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 break;
         }
 
+        // Fim de partida: estatísticas atualizadas → salva → confere requisitos das skins → libera as
+        // conquistadas (salvando de novo) → enfileira a notificação.
         _saveData.Save();
+        CheckSkinUnlocks();
+    }
+
+    /// <summary>Libera as skins cujo requisito o progresso atual já cumpre, salva e enfileira um aviso pra
+    /// cada uma. Não sabe nada de modos de jogo — só compara o progresso salvo com os requisitos.</summary>
+    private void CheckSkinUnlocks()
+    {
+        List<CarSkin> earned = SkinUnlocks.UnlockNewlyEarned(_saveData);
+        if (earned.Count == 0)
+        {
+            return;
+        }
+
+        _saveData.Save();
+        foreach (CarSkin skin in earned)
+        {
+            _pendingUnlockToasts.Enqueue(skin);
+        }
+    }
+
+    /// <summary>Mostra os avisos de skin nova um de cada vez, em qualquer tela (normalmente por cima do
+    /// pop-up de resultado, ou da tela inicial quando o desbloqueio vem de um save antigo).</summary>
+    private void UpdateUnlockToast(float frameSeconds)
+    {
+        if (_activeUnlockToast is null && _pendingUnlockToasts.Count > 0)
+        {
+            _activeUnlockToast = _pendingUnlockToasts.Dequeue();
+            _unlockToastTimer = UnlockToastDuration;
+            _audio?.PlayMenuConfirm();
+        }
+
+        if (_activeUnlockToast is null)
+        {
+            return;
+        }
+
+        _unlockToastTimer -= frameSeconds;
+        if (_unlockToastTimer <= 0f)
+        {
+            _activeUnlockToast = null;
+        }
     }
 
     /// <summary>Decide qual dos três jingles de resultado combina com o desfecho da corrida pro jogador.</summary>
@@ -447,6 +516,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         DecayScreenShake(frameSeconds);
         _skinArrowFlashLeft = MathF.Max(0f, _skinArrowFlashLeft - frameSeconds);
         _skinArrowFlashRight = MathF.Max(0f, _skinArrowFlashRight - frameSeconds);
+        UpdateUnlockToast(frameSeconds);
 
         bool altHeld = _input.IsDown(Keys.LeftAlt) || _input.IsDown(Keys.RightAlt);
         if (_input.WasJustPressed(Keys.F11) || (altHeld && _input.WasJustPressed(Keys.Enter)))
@@ -491,6 +561,8 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 // qualquer tecla" aqui — senão usá-las na tela inicial também avançaria pro menu.
                 if (_input.AnyKeyJustPressedExcept(Keys.F11, Keys.Q, Keys.Left, Keys.Right, Keys.A, Keys.D))
                 {
+                    // Se o jogador estava só espiando uma skin bloqueada, na volta o seletor mostra a equipada.
+                    _previewSkinIndex = _selectedSkinIndex;
                     _state = State.ModeSelect;
                 }
 
@@ -686,13 +758,20 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         return false;
     }
 
+    /// <summary>Navega pelo catálogo inteiro (as bloqueadas aparecem, pra mostrar o requisito), mas só
+    /// equipa — e salva — quando a skin mostrada está liberada.</summary>
     private void ChangeSkin(int direction)
     {
         int count = CarSkins.All.Count;
-        _selectedSkinIndex = (_selectedSkinIndex + direction + count) % count;
+        _previewSkinIndex = (_previewSkinIndex + direction + count) % count;
 
-        _saveData.SelectedSkinId = SelectedSkin.Id;
-        _saveData.Save();
+        if (SkinUnlocks.IsUnlocked(CarSkins.All[_previewSkinIndex], _saveData))
+        {
+            _selectedSkinIndex = _previewSkinIndex;
+            _saveData.SelectedSkinId = SelectedSkin.Id;
+            _saveData.Save();
+        }
+
         _audio.PlayMenuMove();
 
         if (direction < 0)
@@ -864,6 +943,8 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 DrawSettingsPopup();
                 break;
         }
+
+        DrawUnlockToast();
 
         _spriteBatch.End();
         base.Draw(gameTime);
@@ -1181,7 +1262,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         {
             RaceMode.TimeAttack => $"TEMPO {(_race.TimeRemaining ?? 0f):0.0}s   PONTOS {_player.Score:0}",
             RaceMode.Elimination => $"VOLTA {_player.Car.LapsCompleted + 1}   RESTAM {_race.Entrants.Count(e => !e.Eliminated)}",
-            _ => $"VOLTA {Math.Min(_player.Car.LapsCompleted + 1, _race.TargetLaps)}/{_race.TargetLaps}   {FormatTime(_player.Car.CurrentLapTime)}",
+            _ => $"VOLTA {Math.Min(_player.Car.LapsCompleted + 1, _race.TargetLaps)}/{_race.TargetLaps}   {TimeFormat.Precise(_player.Car.CurrentLapTime)}",
         };
 
         float textWidth = PixelFont.Measure(primary, HudTextSize);
@@ -1328,10 +1409,10 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 var lines = new List<string>
                 {
                     $"POSICAO FINAL: {_player.FinishPlace ?? _race.Entrants.Count}º DE {_race.Entrants.Count}",
-                    $"TEMPO TOTAL: {FormatTime(_player.FinishTime ?? _player.Car.TotalRaceTime)}",
+                    $"TEMPO TOTAL: {TimeFormat.Precise(_player.FinishTime ?? _player.Car.TotalRaceTime)}",
                 };
 
-                string best = _player.Car.BestLapTime is { } b ? FormatTime(b) : "--:--.---";
+                string best = _player.Car.BestLapTime is { } b ? TimeFormat.Precise(b) : "--:--.---";
                 lines.Add($"MELHOR VOLTA: {best}");
 
                 if (_newRaceRecord)
@@ -1340,7 +1421,7 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
                 }
                 else if (_saveData.BestRaceTimeSprint is { } bestRace)
                 {
-                    lines.Add($"RECORDE DE CORRIDA: {FormatTime(bestRace)}");
+                    lines.Add($"RECORDE DE CORRIDA: {TimeFormat.Precise(bestRace)}");
                 }
 
                 if (_newLapRecord)
@@ -1568,12 +1649,16 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         DrawStudioLogo(new Vector2(16f, trackAreaHeight - 16f));
     }
 
-    /// <summary>Painel "[ ← ] skin [ → ]": a skin escolhida desenhada grande no centro (a mesma pintura
-    /// usada na corrida, só que ampliada), o nome embaixo e a posição na lista.</summary>
+    /// <summary>Painel "[ ← ] skin [ → ]": a skin mostrada desenhada grande no centro (a mesma pintura usada
+    /// na corrida, só que ampliada). Liberada: nome + "EQUIPADO". Bloqueada: vulto escuro com cadeado,
+    /// nome apagado, o requisito entre aspas e quanto falta.</summary>
     private void DrawSkinSelector(IntroLayout layout)
     {
         Rectangle panel = layout.SkinPanel;
         DrawHudFrame(panel);
+
+        CarSkin skin = CarSkins.All[_previewSkinIndex];
+        bool unlocked = SkinUnlocks.IsUnlocked(skin, _saveData);
 
         const string header = "SEU CARRO";
         const float headerSize = 2.25f;
@@ -1582,14 +1667,25 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         PixelFont.Draw(_spriteBatch, _pixel, header, new Vector2(headerX, panel.Y + 16f), headerSize, AccentColor);
         _spriteBatch.Draw(_pixel, new Rectangle((int)headerX, (int)(panel.Y + 16f + PixelFont.LineHeight(headerSize) + 4f), (int)headerWidth, 2), AccentColor);
 
+        const float counterSize = 1.5f;
+        string counter = $"{_previewSkinIndex + 1}/{CarSkins.All.Count}";
+        float counterWidth = PixelFont.Measure(counter, counterSize);
+        PixelFont.Draw(_spriteBatch, _pixel, counter, new Vector2(panel.Right - 16f - counterWidth, panel.Y + 20f), counterSize, StatBadgeLabelColor);
+
         // Um "holofote" discreto por baixo, pra skin parecer em exposição numa vitrine. O SpriteBatch usa
         // alfa pré-multiplicado, então a transparência tem que vir de "cor * fração" (não do canal A).
-        DrawCircle(layout.PreviewCenter + new Vector2(0f, 6f), 48f, AccentColor * 0.07f);
-        DrawCircle(layout.PreviewCenter, 38f, AccentColor * 0.06f);
+        Color glow = unlocked ? AccentColor : StatBadgeLabelColor;
+        DrawCircle(layout.PreviewCenter + new Vector2(0f, 6f), 48f, glow * 0.07f);
+        DrawCircle(layout.PreviewCenter, 38f, glow * 0.06f);
 
         float sway = MathF.Sin(_visualTime * 1.5f) * 0.12f;
-        _carPainter.Begin(layout.PreviewCenter, sway, SkinPreviewUnit, AccentColor, eliminated: false, _visualTime);
-        SelectedSkin.Paint(_carPainter);
+        _carPainter.Begin(layout.PreviewCenter, sway, SkinPreviewUnit, AccentColor, eliminated: false, _visualTime, silhouette: !unlocked);
+        skin.Paint(_carPainter);
+
+        if (!unlocked)
+        {
+            DrawLock(layout.PreviewCenter + new Vector2(0f, 2f), 1.7f, AccentColor);
+        }
 
         Vector2 mouse = ScreenToLogicalPosition(_input.MousePosition);
         var mousePoint = new Point((int)mouse.X, (int)mouse.Y);
@@ -1597,14 +1693,83 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         DrawSkinArrow(layout.RightArrow, pointRight: true, layout.RightArrow.Contains(mousePoint), _skinArrowFlashRight > 0f);
 
         const float nameSize = 2.25f;
-        string name = SelectedSkin.Name;
-        float nameWidth = PixelFont.Measure(name, nameSize);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, name, new Vector2(panel.X + ((panel.Width - nameWidth) / 2f), panel.Y + 134f), nameSize, TextColor);
+        float nameWidth = PixelFont.Measure(skin.Name, nameSize);
 
-        const float counterSize = 1.5f;
-        string counter = $"{_selectedSkinIndex + 1}/{CarSkins.All.Count}";
-        float counterWidth = PixelFont.Measure(counter, counterSize);
-        PixelFont.Draw(_spriteBatch, _pixel, counter, new Vector2(panel.X + ((panel.Width - counterWidth) / 2f), panel.Y + 157f), counterSize, StatBadgeLabelColor);
+        if (unlocked)
+        {
+            PixelFont.DrawShadowed(_spriteBatch, _pixel, skin.Name, new Vector2(panel.X + ((panel.Width - nameWidth) / 2f), panel.Y + 134f), nameSize, TextColor);
+            DrawCenteredText(panel, "EQUIPADO", panel.Y + 157f, 1.5f, RecordColor);
+            return;
+        }
+
+        // Cadeado pequeno + nome apagado, centralizados juntos.
+        const float lockGap = 8f;
+        const float smallLockScale = 0.6f;
+        float lockWidth = 18f * smallLockScale;
+        float nameX = panel.X + ((panel.Width - (lockWidth + lockGap + nameWidth)) / 2f) + lockWidth + lockGap;
+        float nameY = panel.Y + 125f;
+        DrawLock(new Vector2(nameX - lockGap - (lockWidth / 2f), nameY + 7f), smallLockScale, StatBadgeLabelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, skin.Name, new Vector2(nameX, nameY), nameSize, StatBadgeLabelColor);
+
+        DrawCenteredText(panel, $"\"{skin.Requirement.Description}\"", panel.Y + 146f, 1.4f, AccentColor);
+        if (skin.Requirement.ProgressText(_saveData) is { } progress)
+        {
+            DrawCenteredText(panel, progress, panel.Y + 160f, 1.3f, StatBadgeLabelColor);
+        }
+    }
+
+    private void DrawCenteredText(Rectangle area, string text, float y, float size, Color color)
+    {
+        float width = PixelFont.Measure(text, size);
+        PixelFont.Draw(_spriteBatch, _pixel, text, new Vector2(area.X + ((area.Width - width) / 2f), y), size, color);
+    }
+
+    /// <summary>Cadeado pixelizado (alça em "∩" + corpo com buraco da chave), centrado em
+    /// <paramref name="center"/> — no tamanho 1 ocupa uns 18x23 px.</summary>
+    private void DrawLock(Vector2 center, float scale, Color color)
+    {
+        int Px(float value) => Math.Max(1, (int)MathF.Round(value * scale));
+        int x = (int)center.X;
+        int y = (int)center.Y;
+
+        _spriteBatch.Draw(_pixel, new Rectangle(x - Px(7), y - Px(12), Px(3), Px(10)), color);
+        _spriteBatch.Draw(_pixel, new Rectangle(x + Px(4), y - Px(12), Px(3), Px(10)), color);
+        _spriteBatch.Draw(_pixel, new Rectangle(x - Px(7), y - Px(13), Px(14), Px(3)), color);
+
+        _spriteBatch.Draw(_pixel, new Rectangle(x - Px(9), y - Px(3), Px(18), Px(13)), color);
+        _spriteBatch.Draw(_pixel, new Rectangle(x - Px(1), y + Px(1), Px(2), Px(5)), new Color(40, 30, 10));
+    }
+
+    /// <summary>Aviso "NOVA SKIN DESBLOQUEADA!" que desce do topo da tela, fica alguns segundos e sobe de
+    /// volta — mesmo estilo de painel dos outros pop-ups do jogo.</summary>
+    private void DrawUnlockToast()
+    {
+        if (_activeUnlockToast is null)
+        {
+            return;
+        }
+
+        const float width = 430f;
+        const float height = 96f;
+        float elapsed = UnlockToastDuration - _unlockToastTimer;
+        float slide = MathF.Min(1f, MathF.Min(elapsed, _unlockToastTimer) / UnlockToastSlideSeconds);
+        float eased = 1f - ((1f - slide) * (1f - slide));
+
+        float areaWidth = _windowWidth - (2f * TrackMargin);
+        var rect = new Rectangle((int)((areaWidth - width) / 2f), (int)(-height + ((height + 10f) * eased)), (int)width, (int)height);
+
+        DrawPanel(rect);
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.X + 4, rect.Y + 4, rect.Width - 8, 4), AccentColor);
+
+        var previewCenter = new Vector2(rect.X + 52f, rect.Center.Y + 3f);
+        DrawCircle(previewCenter, 32f, AccentColor * 0.08f);
+        _carPainter.Begin(previewCenter, MathF.Sin(_visualTime * 3f) * 0.15f, 32f, AccentColor, eliminated: false, _visualTime);
+        _activeUnlockToast.Paint(_carPainter);
+
+        float textX = rect.X + 100f;
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, "NOVA SKIN DESBLOQUEADA!", new Vector2(textX, rect.Y + 17f), 2f, AccentColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, _activeUnlockToast.Name, new Vector2(textX, rect.Y + 40f), 2.25f, TextColor);
+        PixelFont.Draw(_spriteBatch, _pixel, $"\"{_activeUnlockToast.Requirement.Description}\"", new Vector2(textX, rect.Y + 66f), 1.4f, StatBadgeLabelColor);
     }
 
     /// <summary>Botão de seta do seletor de skin: acende com o mouse em cima e dá um "flash" rápido quando
@@ -1657,19 +1822,19 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
         DrawSelectablePanel(eliminationPanel, _selectedMode == RaceMode.Elimination);
         DrawSelectablePanel(timeAttackPanel, _selectedMode == RaceMode.TimeAttack);
 
-        string[] sprintLines = ["CORRIDA CLASSICA:", "COMPLETE 3 VOLTAS", "NA FRENTE DE TODOS."];
+        string[] sprintLines = ["COMPLETE 3 VOLTAS", "NA FRENTE DE TODOS."];
         string[] eliminationLines = ["10 CARROS. A CADA", "VOLTA, O ULTIMO", "LUGAR E ELIMINADO.", "SOBREVIVA!"];
         string[] timeAttackLines = ["O RELOGIO SO DESCE.", "DESVIE DOS OBSTACULOS", "E PONTUE PRA GANHAR", "MAIS TEMPO!"];
 
-        DrawPanelText(sprintPanel, "CORRIDA", sprintLines);
-        DrawPanelText(eliminationPanel, "ELIMINACAO", eliminationLines);
-        DrawPanelText(timeAttackPanel, "CONTRARRELOGIO", timeAttackLines);
+        DrawPanelText(sprintPanel, "CORRIDA CLASSICA", sprintLines);
+        DrawPanelText(eliminationPanel, "CORRIDA MORTAL", eliminationLines);
+        DrawPanelText(timeAttackPanel, "CONTRA O RELOGIO", timeAttackLines);
 
         // Recorde/vitórias ganham um "chip" próprio dentro do card, separado da descrição — em vez de
         // mais uma linha de texto igual às outras, com pouco destaque.
-        if (_saveData.BestLapTimeSprint is { } bestLap)
+        if (_saveData.BestRaceTimeSprint is { } bestRace)
         {
-            DrawStatBadge(sprintPanel, "RECORDE", FormatTime(bestLap));
+            DrawStatBadge(sprintPanel, "MELHOR TEMPO", TimeFormat.Precise(bestRace));
         }
 
         if (_saveData.EliminationRaces > 0)
@@ -1853,16 +2018,5 @@ public sealed class GameRoot : Microsoft.Xna.Framework.Game
             PixelFont.Draw(_spriteBatch, _pixel, line, new Vector2(panel.X + 10f, y), lineSize, Color.White);
             y += PixelFont.LineHeight(lineSize) + 8f;
         }
-    }
-
-    private static string FormatTime(float seconds)
-    {
-        if (seconds < 0f)
-        {
-            seconds = 0f;
-        }
-
-        var span = TimeSpan.FromSeconds(seconds);
-        return $"{(int)span.TotalMinutes:00}:{span.Seconds:00}.{span.Milliseconds:000}";
     }
 }

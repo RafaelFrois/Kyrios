@@ -38,12 +38,13 @@ public sealed class CarPainter
     /// <summary>Relógio visual em segundos, pra pequenas animações (asas batendo, rabo balançando...).</summary>
     public float Time { get; private set; }
 
-    public void Begin(Vector2 center, float angle, float unit, Color bodyColor, bool eliminated, float time)
+    /// <param name="silhouette">Desenha quase preto (só um vulto) — usado pras skins ainda bloqueadas.</param>
+    public void Begin(Vector2 center, float angle, float unit, Color bodyColor, bool eliminated, float time, bool silhouette = false)
     {
         _center = center;
         _angle = angle;
         _unit = unit;
-        _shade = eliminated ? 0.4f : 1f;
+        _shade = silhouette ? 0.18f : eliminated ? 0.4f : 1f;
         BodyColor = bodyColor;
         Eliminated = eliminated;
         Time = time;
