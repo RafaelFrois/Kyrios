@@ -1,6 +1,7 @@
 namespace Kyrios.Core;
 
-/// <summary>Orquestra uma corrida: física de todos os carros (incluindo colisões entre eles), progresso de voltas, "rubber-banding" da IA e classificação.</summary>
+/// <summary>Orquestra uma partida (Corrida Mortal ou Contra o Relógio): física de todos os carros (incluindo
+/// colisões entre eles), progresso de voltas, "rubber-banding" da IA, eliminações, relógio e classificação.</summary>
 public sealed class RaceSimulation
 {
     private const float RubberBandStrength = 0.16f;
@@ -28,7 +29,6 @@ public sealed class RaceSimulation
 
     public Track Track { get; }
     public IReadOnlyList<RaceEntrant> Entrants { get; }
-    public int TargetLaps { get; }
     public RaceMode Mode { get; }
     public bool IsRaceOver { get; private set; }
     public float ElapsedTime { get; private set; }
@@ -42,7 +42,21 @@ public sealed class RaceSimulation
     /// <summary>O participante "principal" (o jogador, ou o primeiro carro se não houver humano) — quem pontua no modo Contrarrelógio.</summary>
     public RaceEntrant ScoredEntrant => Entrants[0];
 
-    private int _finishersCount;
+    /// <summary>Corrida Mortal: quem foi eliminado neste tick (null na maioria dos ticks) — pra tela avisar na hora.</summary>
+    public RaceEntrant? EliminatedThisTick { get; private set; }
+
+    /// <summary>Contra o Relógio: segundos ganhos (checkpoint/volta) neste tick, já com o decaimento aplicado.</summary>
+    public float TimeGainedThisTick { get; private set; }
+
+    /// <summary>Contra o Relógio: segundos perdidos por batida neste tick.</summary>
+    public float TimeLostThisTick { get; private set; }
+
+    /// <summary>Contra o Relógio: pontos ganhos neste tick.</summary>
+    public float PointsGainedThisTick { get; private set; }
+
+    /// <summary>Contra o Relógio: fração (0-1) do bônus de tempo que o próximo checkpoint vai dar — encolhe a
+    /// cada volta completada até um piso.</summary>
+    public float TimeBonusFactor => MathF.Max(MinTimeBonusFactor, MathF.Pow(TimeBonusDecayPerLap, ScoredEntrant.Car.LapsCompleted));
     private bool _scoredWasWallCollidingLastTick;
     private bool _scoredWasCarCollidingLastTick;
     private bool _scoredWasHazardCollidingLastTick;
@@ -53,8 +67,7 @@ public sealed class RaceSimulation
     public RaceSimulation(
         Track track,
         IReadOnlyList<RaceEntrant> entrants,
-        int targetLaps,
-        RaceMode mode = RaceMode.Sprint,
+        RaceMode mode,
         IReadOnlyList<Hazard>? hazards = null)
     {
         if (entrants.Count == 0)
@@ -64,7 +77,6 @@ public sealed class RaceSimulation
 
         Track = track;
         Entrants = entrants;
-        TargetLaps = targetLaps;
         Mode = mode;
         Hazards = hazards ?? [];
 
@@ -83,6 +95,10 @@ public sealed class RaceSimulation
         }
 
         ElapsedTime += dt;
+        EliminatedThisTick = null;
+        TimeGainedThisTick = 0f;
+        TimeLostThisTick = 0f;
+        PointsGainedThisTick = 0f;
         bool anyLapCompletedThisTick = false;
         RaceEntrant scored = ScoredEntrant;
         bool scoredCheckpointThisTick = false;
@@ -104,22 +120,7 @@ public sealed class RaceSimulation
                 scoredLapThisTick = completedLap;
             }
 
-            if (!completedLap)
-            {
-                continue;
-            }
-
-            if (Mode == RaceMode.Sprint)
-            {
-                if (entrant.Car.LapsCompleted >= TargetLaps)
-                {
-                    entrant.Finished = true;
-                    entrant.FinishTime = entrant.Car.TotalRaceTime;
-                    _finishersCount++;
-                    entrant.FinishPlace = _finishersCount;
-                }
-            }
-            else if (Mode == RaceMode.Elimination)
+            if (completedLap && Mode == RaceMode.Elimination)
             {
                 anyLapCompletedThisTick = true;
             }
@@ -139,14 +140,6 @@ public sealed class RaceSimulation
 
         switch (Mode)
         {
-            case RaceMode.Sprint:
-                if (_finishersCount >= Entrants.Count)
-                {
-                    IsRaceOver = true;
-                }
-
-                break;
-
             case RaceMode.Elimination:
                 if (anyLapCompletedThisTick)
                 {
@@ -188,14 +181,18 @@ public sealed class RaceSimulation
         if (checkpointCrossed)
         {
             scored.Score += ScorePerCheckpoint;
-            time += TimeBonusPerCheckpoint * bonusFactor;
+            PointsGainedThisTick += ScorePerCheckpoint;
+            TimeGainedThisTick += TimeBonusPerCheckpoint * bonusFactor;
         }
 
         if (lapCompleted)
         {
             scored.Score += ScorePerLap;
-            time += TimeBonusPerLap * bonusFactor;
+            PointsGainedThisTick += ScorePerLap;
+            TimeGainedThisTick += TimeBonusPerLap * bonusFactor;
         }
+
+        time += TimeGainedThisTick;
 
         // Sem penalidade de batida logo no início: a largada em grade fica naturalmente apertada
         // e o jogador não deveria perder o cronômetro inteiro antes de conseguir sair do lugar.
@@ -210,18 +207,20 @@ public sealed class RaceSimulation
         {
             if (wallCollidingNow && !_scoredWasWallCollidingLastTick)
             {
-                time -= WallCrashTimePenalty;
+                TimeLostThisTick += WallCrashTimePenalty;
             }
 
             if (carCollidingNow && !_scoredWasCarCollidingLastTick)
             {
-                time -= CarCrashTimePenalty;
+                TimeLostThisTick += CarCrashTimePenalty;
             }
 
             if (hazardCollidingNow && !_scoredWasHazardCollidingLastTick)
             {
-                time -= HazardCrashTimePenalty;
+                TimeLostThisTick += HazardCrashTimePenalty;
             }
+
+            time -= TimeLostThisTick;
         }
 
         _scoredWasWallCollidingLastTick = wallCollidingNow;
@@ -415,6 +414,7 @@ public sealed class RaceSimulation
         RaceEntrant last = active.OrderBy(RaceProgressValue).First();
         last.Eliminated = true;
         last.FinishPlace = active.Count;
+        EliminatedThisTick = last;
     }
 
     /// <summary>Quanto maior, mais adiantado na corrida — combina voltas, checkpoints e proximidade do próximo alvo.</summary>

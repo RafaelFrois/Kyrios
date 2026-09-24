@@ -35,7 +35,6 @@ public sealed class AudioManager
     private bool _musicMuted;
     private bool _sfxMuted;
 
-    private SoundEffectInstance _sprintMusic;
     private SoundEffectInstance _eliminationMusic;
     private SoundEffectInstance _timeAttackMusic;
     private SoundEffectInstance _menuMusic;
@@ -52,12 +51,13 @@ public sealed class AudioManager
     private SoundEffect _countdownTick;
     private SoundEffect _achievementChime;
     private SoundEffect _skinFanfare;
+    private SoundEffect _eliminationSting;
+    private SoundEffect _denyBuzz;
 
     public void LoadContent()
     {
         try
         {
-            _sprintMusic = CreateLoop(Soundtrack.BuildSprintTheme());
             _eliminationMusic = CreateLoop(Soundtrack.BuildEliminationTheme());
             _timeAttackMusic = CreateLoop(Soundtrack.BuildTimeAttackTheme());
             _menuMusic = CreateLoop(Soundtrack.BuildMenuTheme());
@@ -72,6 +72,8 @@ public sealed class AudioManager
             _countdownTick = Soundtrack.BuildCountdownTick();
             _achievementChime = Soundtrack.BuildAchievementChime();
             _skinFanfare = Soundtrack.BuildSkinFanfare();
+            _eliminationSting = Soundtrack.BuildEliminationSting();
+            _denyBuzz = Soundtrack.BuildDenyBuzz();
         }
         catch (Exception)
         {
@@ -142,12 +144,7 @@ public sealed class AudioManager
 
         try
         {
-            SoundEffectInstance target = mode switch
-            {
-                RaceMode.Elimination => _eliminationMusic,
-                RaceMode.TimeAttack => _timeAttackMusic,
-                _ => _sprintMusic,
-            };
+            SoundEffectInstance target = mode == RaceMode.TimeAttack ? _timeAttackMusic : _eliminationMusic;
             PlayLoop(target);
         }
         catch (Exception)
@@ -379,6 +376,54 @@ public sealed class AudioManager
         }
     }
 
+    public void PlayElimination() => PlayOneShot(_eliminationSting, 0.5f);
+
+    public void PlayDeny() => PlayOneShot(_denyBuzz, 0.45f);
+
+    /// <summary>Pausa (ou retoma) a música e o motor — usado pelo menu de pausa da corrida.</summary>
+    public void SetPaused(bool paused)
+    {
+        if (!_available)
+        {
+            return;
+        }
+
+        try
+        {
+            if (paused)
+            {
+                _activeMusic?.Pause();
+                _engine?.Pause();
+            }
+            else
+            {
+                _activeMusic?.Resume();
+                _engine?.Resume();
+            }
+        }
+        catch (Exception)
+        {
+            _available = false;
+        }
+    }
+
+    private void PlayOneShot(SoundEffect effect, float volume)
+    {
+        if (!_available)
+        {
+            return;
+        }
+
+        try
+        {
+            effect?.Play(volume * EffectiveSfxVolume, 0f, 0f);
+        }
+        catch (Exception)
+        {
+            _available = false;
+        }
+    }
+
     public void PlayCountdownTick()
     {
         if (!_available)
@@ -402,7 +447,6 @@ public sealed class AudioManager
 
     public void Dispose()
     {
-        _sprintMusic?.Dispose();
         _eliminationMusic?.Dispose();
         _timeAttackMusic?.Dispose();
         _menuMusic?.Dispose();
@@ -417,5 +461,7 @@ public sealed class AudioManager
         _countdownTick?.Dispose();
         _achievementChime?.Dispose();
         _skinFanfare?.Dispose();
+        _eliminationSting?.Dispose();
+        _denyBuzz?.Dispose();
     }
 }

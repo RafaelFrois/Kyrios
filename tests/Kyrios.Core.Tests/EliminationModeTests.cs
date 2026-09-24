@@ -21,8 +21,7 @@ public class EliminationModeTests
     [Fact]
     public void Elimination_EndsWithExactlyOneSurvivor()
     {
-        RaceSimulation race = RaceFactory.CreateDefaultRace(
-            aiOpponents: 5, includeHuman: false, randomSeed: 5, mode: RaceMode.Elimination);
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.Elimination, aiOpponents: 5, includeHuman: false, randomSeed: 5);
 
         RunToCompletion(race);
 
@@ -34,8 +33,7 @@ public class EliminationModeTests
     [Fact]
     public void Elimination_SurvivorIsMarkedFinishedWithPlaceOne()
     {
-        RaceSimulation race = RaceFactory.CreateDefaultRace(
-            aiOpponents: 4, includeHuman: false, randomSeed: 8, mode: RaceMode.Elimination);
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.Elimination, aiOpponents: 4, includeHuman: false, randomSeed: 8);
 
         RunToCompletion(race);
 
@@ -47,8 +45,7 @@ public class EliminationModeTests
     [Fact]
     public void Elimination_EliminatedEntrantsGetDecreasingDistinctPlaces()
     {
-        RaceSimulation race = RaceFactory.CreateDefaultRace(
-            aiOpponents: 5, includeHuman: false, randomSeed: 13, mode: RaceMode.Elimination);
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.Elimination, aiOpponents: 5, includeHuman: false, randomSeed: 13);
 
         RunToCompletion(race);
 
@@ -59,8 +56,7 @@ public class EliminationModeTests
     [Fact]
     public void Elimination_EliminatedCarStopsBeingUpdated()
     {
-        RaceSimulation race = RaceFactory.CreateDefaultRace(
-            aiOpponents: 3, includeHuman: false, randomSeed: 21, mode: RaceMode.Elimination);
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.Elimination, aiOpponents: 3, includeHuman: false, randomSeed: 21);
 
         const float dt = 0.05f;
         float elapsed = 0f;
@@ -86,10 +82,31 @@ public class EliminationModeTests
     }
 
     [Fact]
-    public void Sprint_DoesNotEliminateAnyone()
+    public void Elimination_ReportsWhoWasEliminatedOnThatTick()
     {
-        RaceSimulation race = RaceFactory.CreateDefaultRace(
-            aiOpponents: 3, targetLaps: 1, includeHuman: false, randomSeed: 3, mode: RaceMode.Sprint);
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.Elimination, aiOpponents: 4, includeHuman: false, randomSeed: 17);
+
+        var reported = new List<RaceEntrant>();
+        const float dt = 0.05f;
+        float elapsed = 0f;
+        while (!race.IsRaceOver && elapsed < 90f)
+        {
+            race.Update(dt, CarInput.None);
+            elapsed += dt;
+            if (race.EliminatedThisTick is { } eliminated)
+            {
+                reported.Add(eliminated);
+            }
+        }
+
+        Assert.Equal(3, reported.Count);
+        Assert.Equal(race.Entrants.Where(e => e.Eliminated).OrderByDescending(e => e.FinishPlace), reported);
+    }
+
+    [Fact]
+    public void TimeAttack_DoesNotEliminateAnyone()
+    {
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.TimeAttack, aiOpponents: 3, includeHuman: false, randomSeed: 3);
 
         RunToCompletion(race);
 

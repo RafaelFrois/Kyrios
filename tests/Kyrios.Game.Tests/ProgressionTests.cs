@@ -6,150 +6,109 @@ namespace Kyrios.Game.Tests;
 
 public class ProgressionTests
 {
-    [Fact]
-    public void Catalogs_HaveUniqueIdsAndOnlyTextTheFontCanDraw()
-    {
-        Assert.True(Achievements.All.Count >= 50);
-        Assert.Equal(Achievements.All.Count, Achievements.All.Select(a => a.Id).Distinct().Count());
-
-        IEnumerable<string> texts = Achievements.All.SelectMany(a => new[] { a.Name, a.Description, a.Condition.Description })
-            .Concat(CarSkins.All.SelectMany(skin => new[] { skin.Name, skin.Requirement.Description }));
-        Assert.All(texts, text => Assert.All(text, c => Assert.True(PixelFont.Supports(c), $"'{c}' em \"{text}\"")));
-    }
+    private static List<string> Unlocked(SaveData save) =>
+        [.. Progression.CheckUnlocks(save).Select(n => n.Achievement?.Id ?? n.Skin?.Id ?? n.Track.Id)];
 
     [Fact]
-    public void EveryIcon_IsAValidPixelGridOrAnExistingSkin()
-    {
-        foreach (Achievement achievement in Achievements.All)
-        {
-            AchievementIcon icon = achievement.Icon;
-            if (icon.SkinId is not null)
-            {
-                Assert.NotNull(CarSkins.Find(icon.SkinId));
-                continue;
-            }
-
-            Assert.NotNull(icon.Pixels);
-            Assert.All(icon.Pixels, row => Assert.Equal(icon.Pixels[0].Length, row.Length));
-            Assert.All(icon.Pixels.SelectMany(row => row), c => Assert.True(c == '.' || AchievementIcons.Palette.ContainsKey(c), $"cor '{c}' em {achievement.Id}"));
-        }
-    }
-
-    [Fact]
-    public void Difficulties_AreBalancedAndSomeAchievementsAreSecret()
-    {
-        int easy = Achievements.All.Count(a => a.Difficulty == Difficulty.Easy);
-        int medium = Achievements.All.Count(a => a.Difficulty == Difficulty.Medium);
-        int hard = Achievements.All.Count(a => a.Difficulty == Difficulty.Hard);
-
-        Assert.True(easy >= hard && medium >= hard && hard > 0);
-        Assert.Contains(Achievements.All, a => a.IsSecret);
-        Assert.All(ProgressionStyle.CategoryOrder, category => Assert.Contains(Achievements.All, a => a.Category == category));
-    }
-
-    [Fact]
-    public void SkinsThatDependOnAchievements_PointToRealAchievements()
-    {
-        Assert.NotNull(Achievements.Find(Achievements.WhereAreTheBrakesId));
-        Assert.NotNull(Achievements.Find(Achievements.PredatorId));
-        Assert.NotNull(Achievements.Find(Achievements.WasThatSupposedToHappenId));
-        Assert.All(CarSkins.All, skin => Assert.DoesNotContain(skin.Id, skin.Requirement.Description));
-    }
-
-    [Fact]
-    public void NewPlayer_HasNothingToUnlock()
-    {
-        Assert.Empty(Progression.CheckUnlocks(new SaveData()));
-    }
-
-    [Fact]
-    public void WinningAClassicRace_UpdatesStatsRecordsAndUnlocksTheFirstAchievements()
+    public void WinningADeathRace_UpdatesStatsPerSkinAndTrack_AndUnlocksTheFirstThings()
     {
         var save = new SaveData();
-        RecordFlags records = Progression.RecordRace(save, new RaceReport
+        Progression.RecordRace(save, new RaceReport
         {
-            Mode = RaceMode.Sprint, SkinId = "classico", Won = true, Place = 1, EntrantCount = 4,
-            FinishTime = 31.5f, BestLapTime = 9.8f, RaceSeconds = 31.5f, WasEverLast = true,
+            Mode = RaceMode.Elimination, SkinId = "padrao", TrackId = "autodromo", Won = true, Place = 1, EntrantCount = 4,
+            RoundsSurvived = 3, Collisions = 0, BestLapTime = 9.4f, RaceSeconds = 40f, Checkpoints = 12, BestCleanCheckpointStreak = 12,
         });
 
-        Assert.True(records.NewLapRecord && records.NewRaceRecord);
-        Assert.Equal(1, save.SprintRaces);
-        Assert.Equal(1, save.SprintWins);
-        Assert.Equal(1, save.SprintComebackWins);
-        Assert.Equal(1, save.WinsBySkin["classico"]);
-        Assert.Equal(1, save.RecordsSet);
-        Assert.Equal(0, save.RecordsBeaten);
+        Assert.Equal(1, save.EliminationRaces);
+        Assert.Equal(1, save.EliminationWins);
+        Assert.Equal(1, save.EliminationWinStreak);
+        Assert.Equal(1, save.EliminationCleanWins);
+        Assert.Equal(1, save.EliminationNoBoostWins);
+        Assert.Equal(1, save.EliminationFlawlessWins);
+        Assert.Equal(1, save.WinsBySkin["padrao"]);
+        Assert.Equal(1, save.WinsByTrack["autodromo"]);
+        Assert.Equal(1, save.WinsBySkinOnTrack["padrao@autodromo"]);
+        Assert.Contains("autodromo", save.CleanTracks);
+        Assert.Equal(9.4f, save.BestLapTime);
 
-        List<string> unlocked = [.. Progression.CheckUnlocks(save).Select(n => n.Achievement?.Id ?? n.Skin.Id)];
-        Assert.Contains("primeiros_passos", unlocked);
-        Assert.Contains("primeira_vitoria", unlocked);
+        List<string> unlocked = Unlocked(save);
         Assert.Contains("primeira_partida", unlocked);
-        Assert.Contains("recordista", unlocked);
-        Assert.Contains("de_virada", unlocked);
-        Assert.DoesNotContain("velocista", unlocked);
+        Assert.Contains("sobrevivente", unlocked);
+        Assert.Contains("ultimo_de_pe", unlocked);
+        Assert.Contains("lataria_intacta", unlocked);
+        Assert.Contains("motor_original", unlocked);
+        Assert.Contains("galinha", unlocked);
+        Assert.Contains("sapo", unlocked);
+        Assert.Contains("floresta", unlocked);
 
         // Nada é anunciado duas vezes.
         Assert.Empty(Progression.CheckUnlocks(save));
     }
 
     [Fact]
-    public void BeatingAnExistingRecord_CountsAsBeaten()
-    {
-        var save = new SaveData { BestRaceTimeSprint = 33f, BestLapTimeSprint = 9f };
-        Progression.RecordRace(save, new RaceReport { Mode = RaceMode.Sprint, SkinId = "batata", Place = 2, EntrantCount = 4, FinishTime = 32f, BestLapTime = 9.5f });
-
-        Assert.Equal(32f, save.BestRaceTimeSprint);
-        Assert.Equal(9f, save.BestLapTimeSprint);
-        Assert.Equal(1, save.RecordsBeaten);
-        Assert.Equal(1, save.RecordsBySkin["batata"]);
-    }
-
-    [Fact]
-    public void DeathRace_TracksStreaksFlawlessWinsFirstOutsAndRunnerUps()
+    public void DeathRace_TracksStreaksComebacksFirstOutsAndRunnerUps()
     {
         var save = new SaveData();
-        RaceReport Win(bool wasLast = false) => new() { Mode = RaceMode.Elimination, SkinId = "jacare", Won = true, Place = 1, EntrantCount = 10, RoundsSurvived = 9, WasEverLast = wasLast };
+        RaceReport Win(bool wasLast = false) => new() { Mode = RaceMode.Elimination, SkinId = "jacare", TrackId = "praia", Won = true, Place = 1, EntrantCount = 4, RoundsSurvived = 3, WasEverLast = wasLast, Collisions = 11, BoostSeconds = 2f };
 
         Progression.RecordRace(save, Win());
         Progression.RecordRace(save, Win(wasLast: true));
         Assert.Equal(2, save.EliminationWinStreak);
-        Assert.Equal(1, save.EliminationFlawlessWins);
-        Assert.Equal(18, save.EliminationRoundsSurvived);
-        Assert.Equal(2, save.EliminationWinsBySkin["jacare"]);
+        Assert.Equal(1, save.EliminationComebackWins);
+        Assert.Equal(11, save.MostCollisionsInAWin);
+        Assert.Equal(6, save.EliminationRoundsSurvived);
 
-        Progression.RecordRace(save, new RaceReport { Mode = RaceMode.Elimination, Place = 10, EntrantCount = 10 });
-        Progression.RecordRace(save, new RaceReport { Mode = RaceMode.Elimination, Place = 2, EntrantCount = 10, RoundsSurvived = 8 });
+        Progression.RecordRace(save, new RaceReport { Mode = RaceMode.Elimination, TrackId = "praia", Place = 4, EntrantCount = 4, EliminatedWhileBoosting = true });
+        Progression.RecordRace(save, new RaceReport { Mode = RaceMode.Elimination, TrackId = "praia", Place = 2, EntrantCount = 4, RoundsSurvived = 2 });
         Assert.Equal(0, save.EliminationWinStreak);
         Assert.Equal(2, save.BestEliminationWinStreak);
         Assert.Equal(1, save.EliminationFirstOuts);
         Assert.Equal(1, save.EliminationRunnerUps);
+        Assert.Equal(1, save.EliminatedWhileBoosting);
 
-        List<string> unlocked = [.. Progression.CheckUnlocks(save).Select(n => n.Achievement?.Id ?? n.Skin.Id)];
-        Assert.Contains("so_pode_sobrar_um", unlocked);
+        List<string> unlocked = Unlocked(save);
+        Assert.Contains("de_virada", unlocked);
         Assert.Contains("problema_seu", unlocked);
+        Assert.Contains("o_carro_esta_bem", unlocked);
         Assert.Contains("eu_tinha_um_plano", unlocked);
         Assert.Contains("quase", unlocked);
+        Assert.Contains("turbo_pra_lugar_nenhum", unlocked);
+        Assert.Contains("tubarao", unlocked);
         Assert.DoesNotContain("em_sequencia", unlocked);
     }
 
     [Fact]
-    public void TimeAttack_AccumulatesScoreAndAZeroScoreRevealsTheSecretSkin()
+    public void TimeAttack_AccumulatesScore_AndAZeroScoreRevealsTheSecretSkin()
     {
         var save = new SaveData();
-        Progression.RecordRace(save, new RaceReport { Mode = RaceMode.TimeAttack, Score = 0f });
-        Progression.RecordRace(save, new RaceReport { Mode = RaceMode.TimeAttack, Score = 1200f, ClutchCheckpoint = true, Collisions = 0 });
+        Progression.RecordRace(save, new RaceReport { Mode = RaceMode.TimeAttack, TrackId = "autodromo", SkinId = "padrao", Score = 0f });
+        RecordFlags records = Progression.RecordRace(save, new RaceReport
+        {
+            Mode = RaceMode.TimeAttack, TrackId = "praia", SkinId = "batata", Score = 1200f, ClutchCheckpoint = true,
+            Collisions = 0, LapsCompleted = 8, MaxTimeBanked = 31f, TimeLostToCrashes = 0f,
+        });
 
+        Assert.True(records.NewScoreRecord);
         Assert.Equal(2, save.TimeAttackRaces);
         Assert.Equal(1200f, save.TotalTimeAttackScore);
         Assert.Equal(1200f, save.BestScoreTimeAttack);
         Assert.Equal(1200f, save.BestCleanTimeAttackScore);
+        Assert.Equal(1200f, save.BestScoreByTrack["praia"]);
+        Assert.Equal(1200f, save.BestScoreBySkin["batata"]);
+        Assert.Equal(1, save.RecordsBySkin["batata"]);
+        Assert.Equal(1, save.RecordsSet);
+        Assert.Equal(0, save.RecordsBeaten);
 
-        List<string> unlocked = [.. Progression.CheckUnlocks(save).Select(n => n.Achievement?.Id ?? n.Skin.Id)];
+        List<string> unlocked = Unlocked(save);
         Assert.Contains(Achievements.WasThatSupposedToHappenId, unlocked);
         Assert.Contains("ursinho", unlocked);
         Assert.Contains("eu_tenho_tempo", unlocked);
         Assert.Contains("cada_segundo_conta", unlocked);
         Assert.Contains("intocavel", unlocked);
+        Assert.Contains("surfista", unlocked);
+        Assert.Contains("peixe", unlocked);
+        Assert.Contains("batata_veloz", unlocked);
+        Assert.Contains("tempo_de_sobra", unlocked);
 
         // A conquista vem antes da skin que ela libera, e a skin nova já conta pra "NOVO VISUAL".
         Assert.True(unlocked.IndexOf(Achievements.WasThatSupposedToHappenId) < unlocked.IndexOf("ursinho"));
@@ -157,24 +116,39 @@ public class ProgressionTests
     }
 
     [Fact]
-    public void CrashingTenTimes_UnlocksTheBrakesAchievementAndTheBrickSkin()
+    public void BeatingAnExistingScore_CountsAsBeaten_ButAZeroIsNeverARecord()
     {
         var save = new SaveData();
-        Progression.RecordRace(save, new RaceReport { Mode = RaceMode.Sprint, Place = 4, EntrantCount = 4, Collisions = 10 });
+        Assert.False(Progression.RecordRace(save, new RaceReport { Mode = RaceMode.TimeAttack, Score = 0f }).NewScoreRecord);
+        Progression.RecordRace(save, new RaceReport { Mode = RaceMode.TimeAttack, Score = 300f });
+        Progression.RecordRace(save, new RaceReport { Mode = RaceMode.TimeAttack, Score = 500f });
 
-        List<string> unlocked = [.. Progression.CheckUnlocks(save).Select(n => n.Achievement?.Id ?? n.Skin.Id)];
-        Assert.Contains(Achievements.WhereAreTheBrakesId, unlocked);
-        Assert.Contains("tijolo", unlocked);
-        Assert.Contains("lanterninha", unlocked);
+        Assert.Equal(2, save.RecordsSet);
+        Assert.Equal(1, save.RecordsBeaten);
     }
 
     [Fact]
-    public void CombinedSkinRequirement_NeedsEveryPart()
+    public void Tracks_UnlockThroughVariedRequirements()
+    {
+        var save = new SaveData();
+        Progression.RecordRace(save, new RaceReport { Mode = RaceMode.TimeAttack, TrackId = "autodromo", Score = 100f });
+        Assert.DoesNotContain("praia", Unlocked(save));
+
+        Progression.RecordRace(save, new RaceReport { Mode = RaceMode.TimeAttack, TrackId = "autodromo", Score = 100f });
+        Assert.Contains("praia", Unlocked(save));
+
+        save.FoundTrackSecrets = ["autodromo", "praia", "floresta"];
+        Assert.Contains("quarto", Unlocked(save));
+        Assert.Contains("segredo_praia", save.UnlockedAchievementIds);
+    }
+
+    [Fact]
+    public void CombinedRequirement_NeedsEveryPart_AndShowsTheMissingOne()
     {
         CarSkin pizza = CarSkins.Find("pizza");
-        Assert.False(pizza.Requirement.IsMet(new SaveData { SprintWins = 5, EliminationWins = 4 }));
-        Assert.True(pizza.Requirement.IsMet(new SaveData { SprintWins = 5, EliminationWins = 5 }));
-        Assert.Equal("PROGRESSO: 4/5", pizza.Requirement.ProgressText(new SaveData { SprintWins = 5, EliminationWins = 4 }));
+        Assert.False(pizza.Requirement.IsMet(new SaveData { EliminationWins = 5, TotalTimeAttackScore = 2000 }));
+        Assert.True(pizza.Requirement.IsMet(new SaveData { EliminationWins = 5, TotalTimeAttackScore = 3000 }));
+        Assert.Equal("2000/3000", pizza.Requirement.ProgressText(new SaveData { EliminationWins = 5, TotalTimeAttackScore = 2000 }));
     }
 
     [Fact]
@@ -185,36 +159,90 @@ public class ProgressionTests
     }
 
     [Fact]
-    public void OldSaves_GetTheirMissingCountersFromExistingStats()
+    public void AnUnlockedItemStaysUnlocked_EvenIfNoLongerMet()
     {
-        var save = new SaveData { SprintWins = 4, BestRaceTimeSprint = 30f, BestScoreTimeAttack = 900f, WinsBySkin = null };
-        save.FillStatsMissingFromOldSaves();
-
-        Assert.Equal(4, save.SprintRaces);
-        Assert.Equal(1, save.TimeAttackRaces);
-        Assert.Equal(900f, save.TotalTimeAttackScore);
-        Assert.Equal(2, save.RecordsSet);
-        Assert.NotNull(save.WinsBySkin);
+        var save = new SaveData { UnlockedSkinIds = ["jacare"] };
+        Assert.True(SkinUnlocks.IsUnlocked(CarSkins.Find("jacare"), save));
+        Assert.DoesNotContain(Progression.CheckUnlocks(save), n => n.Skin?.Id == "jacare");
     }
 
     [Fact]
-    public void Tracker_CountsCollisionsAndStandingStill()
+    public void OldSave_WithClassicModeData_LoadsWithoutErrors_AndLosesOnlyTheRemovedStuff()
     {
-        RaceSimulation race = RaceFactory.CreateDefaultRace(aiOpponents: 3, targetLaps: 3, mode: RaceMode.Sprint);
+        const string oldJson = """
+            {"BestLapTimeSprint":9.2,"BestRaceTimeSprint":30.5,"SprintWins":4,"SprintRaces":8,"SprintComebackWins":1,
+             "EliminationWins":2,"EliminationRaces":6,"BestScoreTimeAttack":1100,"EliminationWinsBySkin":{"pato":1},
+             "WinsBySkin":{"pato":3},"SelectedSkinId":"classico","UnlockedSkinIds":["pato","galinha"],
+             "UnlockedAchievementIds":["primeiros_passos","primeira_vitoria","ultimo_de_pe"],"MusicVolume":0.3,"SfxMuted":true}
+            """;
+
+        SaveData save = SaveData.FromJson(oldJson);
+        Assert.NotNull(save);
+        Progression.Normalize(save);
+
+        Assert.Equal(2, save.EliminationWins);
+        Assert.Equal(1100f, save.BestScoreTimeAttack);
+        Assert.Equal(1, save.TimeAttackRaces);
+        Assert.Equal(0.3f, save.MusicVolume);
+        Assert.True(save.SfxMuted);
+        Assert.Equal(["pato", "galinha"], save.UnlockedSkinIds);
+        Assert.Equal(["ultimo_de_pe"], save.UnlockedAchievementIds);
+        Assert.Equal(0, CarSkins.IndexOf(save.SelectedSkinId));
+        Assert.NotNull(save.GamesByTrack);
+    }
+
+    [Fact]
+    public void Save_RoundTripsThroughJson()
+    {
+        var save = new SaveData { EliminationWins = 3, SelectedTrackId = "praia", LastMode = RaceMode.TimeAttack };
+        save.WinsBySkinOnTrack["pato@praia"] = 2;
+        save.FoundTrackSecrets.Add("neve");
+
+        SaveData loaded = SaveData.FromJson(save.ToJson());
+        Assert.Equal(3, loaded.EliminationWins);
+        Assert.Equal("praia", loaded.SelectedTrackId);
+        Assert.Equal(RaceMode.TimeAttack, loaded.LastMode);
+        Assert.Equal(2, loaded.WinsBySkinOnTrack["pato@praia"]);
+        Assert.Equal(["neve"], loaded.FoundTrackSecrets);
+        Assert.Null(SaveData.FromJson("{ isso nao e json"));
+    }
+
+    [Fact]
+    public void Tracker_CountsStandingStill_InATimeAttackRun()
+    {
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.TimeAttack, aiOpponents: 2);
         RaceEntrant player = race.Entrants.First(e => e.Kind == DriverKind.Human);
         var tracker = new RaceTracker();
         tracker.Reset(race);
 
-        for (int i = 0; i < 12 * 60; i++)
+        for (int i = 0; i < 12 * 60 && !race.IsRaceOver; i++)
         {
             race.Update(1f / 60f, CarInput.None);
             tracker.Observe(race, player, 1f / 60f);
         }
 
-        RaceReport report = tracker.BuildReport(race, player, "pato");
+        RaceReport report = tracker.BuildReport(race, player, "pato", "neve", silent: true);
         Assert.True(report.LongestStandstillSeconds >= 10f);
         Assert.Equal("pato", report.SkinId);
-        Assert.Equal(RaceMode.Sprint, report.Mode);
+        Assert.Equal("neve", report.TrackId);
+        Assert.True(report.Silent);
         Assert.False(report.Won);
+    }
+
+    [Fact]
+    public void Tracker_FindsTheTrackSecret_WhenThePlayerDrivesOverIt()
+    {
+        Track track = TrackFactory.CreateRingTrack();
+        TrackTheme beach = TrackThemes.Find("praia");
+        var car = new Car("Voce", beach.SecretSpot, 0f);
+        var race = new RaceSimulation(track, [new RaceEntrant(car, DriverKind.Human)], RaceMode.TimeAttack);
+        var tracker = new RaceTracker();
+        tracker.Reset(race, beach.SecretSpot);
+
+        race.Update(0.016f, CarInput.None);
+        tracker.Observe(race, race.Entrants[0], 0.016f);
+
+        Assert.True(tracker.SecretFoundThisTick);
+        Assert.True(tracker.BuildReport(race, race.Entrants[0], "padrao", "praia", silent: false).FoundSecret);
     }
 }

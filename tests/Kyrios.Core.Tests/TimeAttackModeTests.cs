@@ -24,7 +24,7 @@ public class TimeAttackModeTests
     {
         var car = new Car("Você", new Vector2D(1f, track.Height / 2f), 0f);
         var entrant = new RaceEntrant(car, DriverKind.Human);
-        return new RaceSimulation(track, [entrant], targetLaps: 3, mode: RaceMode.TimeAttack);
+        return new RaceSimulation(track, [entrant], RaceMode.TimeAttack);
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public class TimeAttackModeTests
         var track = new Track(cells, [], new Vector2D(2f, 2f), 0f);
         var car = new Car("Você", new Vector2D(2f, 2f), 0f);
         var entrant = new RaceEntrant(car, DriverKind.Human);
-        var race = new RaceSimulation(track, [entrant], targetLaps: 3, mode: RaceMode.TimeAttack);
+        var race = new RaceSimulation(track, [entrant], RaceMode.TimeAttack);
 
         // Acelera até bater de frente na parede. Recaptura o tempo a cada volta do laço pra medir só
         // a queda causada exatamente pelo tick da batida, não o desgaste acumulado.
@@ -158,8 +158,7 @@ public class TimeAttackModeTests
     [Fact]
     public void TimeAttack_TimeBonusPerLap_DecreasesOnLaterLaps()
     {
-        RaceSimulation race = RaceFactory.CreateDefaultRace(
-            aiOpponents: 1, includeHuman: false, targetLaps: 5, randomSeed: 7, mode: RaceMode.TimeAttack);
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.TimeAttack, aiOpponents: 1, includeHuman: false, randomSeed: 7);
         RaceEntrant scored = race.ScoredEntrant;
 
         const float dt = 0.05f;
@@ -188,9 +187,34 @@ public class TimeAttackModeTests
     [Fact]
     public void CreateDefaultRace_TimeAttack_ScoredEntrantIsTheHuman()
     {
-        RaceSimulation race = RaceFactory.CreateDefaultRace(aiOpponents: 2, includeHuman: true, randomSeed: 1, mode: RaceMode.TimeAttack);
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.TimeAttack, aiOpponents: 2, includeHuman: true, randomSeed: 1);
 
         Assert.Equal(DriverKind.Human, race.ScoredEntrant.Kind);
         Assert.NotNull(race.TimeRemaining);
+    }
+
+    [Fact]
+    public void TimeAttack_ReportsTimeAndPointsGainedOnTheCheckpointTick()
+    {
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.TimeAttack, aiOpponents: 1, includeHuman: false, randomSeed: 7);
+
+        bool sawCheckpoint = false;
+        for (int i = 0; i < 2000 && !sawCheckpoint && !race.IsRaceOver; i++)
+        {
+            race.Update(0.05f, CarInput.None);
+            if (race.ScoredEntrant.Car.CheckpointCrossedThisTick)
+            {
+                sawCheckpoint = true;
+                Assert.True(race.TimeGainedThisTick > 0f);
+                Assert.True(race.PointsGainedThisTick > 0f);
+            }
+            else
+            {
+                Assert.Equal(0f, race.PointsGainedThisTick);
+            }
+        }
+
+        Assert.True(sawCheckpoint);
+        Assert.InRange(race.TimeBonusFactor, 0.35f, 1f);
     }
 }

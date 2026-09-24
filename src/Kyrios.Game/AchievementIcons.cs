@@ -3,7 +3,7 @@ using Microsoft.Xna.Framework;
 namespace Kyrios.Game;
 
 /// <summary>
-/// Desenhos pixel-art (12x12) dos ícones de conquista. Cada fileira é uma string; cada caractere é uma cor da
+/// Desenhos pixel-art (12x12) dos ícones de conquistas e pistas. Cada fileira é uma string; cada caractere é uma cor da
 /// <see cref="Palette"/> ('.' = transparente). Pra trocar o ícone de uma conquista basta apontar pra outro
 /// desenho (ou criar um novo aqui); <see cref="Recolor"/> gera variações de cor de um mesmo desenho.
 /// </summary>
@@ -519,5 +519,261 @@ public static class AchievementIcons
         "....LLLL....",
         "....LEEL....",
         ".....LL.....",
+    ];
+
+    public static readonly string[] PalmTree =
+    [
+        "..GG....GG..",
+        ".GGGG..GGGG.",
+        "GG..GGGG..GG",
+        "G.....NN...G",
+        "......N.....",
+        ".....NN.....",
+        ".....N......",
+        ".....N......",
+        "....NN......",
+        "....N.......",
+        "YYYYYYYYYYYY",
+        "BBBBBBBBBBBB",
+    ];
+
+    public static readonly string[] PineTree =
+    [
+        ".....gg.....",
+        "....gGGg....",
+        "...gGGGGg...",
+        "....gGGg....",
+        "...gGGGGg...",
+        "..gGGGGGGg..",
+        "...gGGGGg...",
+        "..gGGGGGGg..",
+        ".gGGGGGGGGg.",
+        ".....NN.....",
+        ".....NN.....",
+        "...gggggg...",
+    ];
+
+    public static readonly string[] CityNight =
+    [
+        "........WWW.",
+        ".......WW...",
+        ".EEE...WW...",
+        ".EYE....WWW.",
+        ".EEE.EEEE...",
+        ".EYE.EYYE...",
+        ".EEE.EEEE.EE",
+        ".EYE.EYYE.EY",
+        "EEEE.EEEE.EE",
+        "EYEE.EYEE.EY",
+        "EEEEEEEEEEEE",
+        "LLLLLLLLLLLL",
+    ];
+
+    public static readonly string[] Cactus =
+    [
+        ".....GG.....",
+        "....GGGG....",
+        "....GGGG..G.",
+        ".G..GGGG..G.",
+        ".G..GGGG.GG.",
+        ".GG.GGGGGG..",
+        "..GGGGGG....",
+        "....GGGG....",
+        "....GGGG....",
+        "....GGGG....",
+        "YYYYYYYYYYYY",
+        "DDDDDDDDDDDD",
+    ];
+
+    public static readonly string[] Snowflake =
+    [
+        ".....CC.....",
+        "...C.CC.C...",
+        "....CCCC....",
+        ".C...CC...C.",
+        "..C..CC..C..",
+        "CCCCCWWCCCCC",
+        "CCCCCWWCCCCC",
+        "..C..CC..C..",
+        ".C...CC...C.",
+        "....CCCC....",
+        "...C.CC.C...",
+        ".....CC.....",
+    ];
+
+    public static readonly string[] Cart =
+    [
+        "............",
+        "EE..........",
+        ".ELLLLLLLLLL",
+        "..LRLGLYLBL.",
+        "..LLLLLLLLL.",
+        "...LELELEL..",
+        "...LLLLLLL..",
+        "...E........",
+        "...EEEEEEE..",
+        "....K...K...",
+        "...KKK.KKK..",
+        "............",
+    ];
+
+    public static readonly string[] NeonCity =
+    [
+        "....P.......",
+        "...PPP..C...",
+        "...PKP.CCC..",
+        "...PKP.CKC..",
+        ".C.PKP.CKC.P",
+        "CCCPKP.CKCPP",
+        "CKCPKP.CKCPK",
+        "CKCPKPPCKCPK",
+        "CKCPKPKCKCPK",
+        "CKCPKPKCKCPK",
+        "CKCPKPKCKCPK",
+        "KKKKKKKKKKKK",
+    ];
+
+    public static readonly string[] Volcano =
+    [
+        "...R..O..R..",
+        ".....OR.....",
+        "....RRRO....",
+        "....ErrE....",
+        "...EEEEEE...",
+        "...EErEEE...",
+        "..EEEErEEE..",
+        "..EEEEErEE..",
+        ".EEEEEEErEE.",
+        ".EEEEEEEEEE.",
+        "EEEEEEEEEEEE",
+        "RRRRRRRRRRRR",
+    ];
+
+    public static readonly string[] Mug =
+    [
+        "...L..L.....",
+        "....L..L....",
+        "...L..L.....",
+        "............",
+        ".RRRRRRR....",
+        ".RWRRRRRRR..",
+        ".RWRRRRR.R..",
+        ".RRRRRRR.R..",
+        ".RRRRRRRRR..",
+        ".RRRRRRR....",
+        "..RRRRR.....",
+        "LLLLLLLLLL..",
+    ];
+
+    public static readonly string[] ToyBlocks =
+    [
+        "............",
+        "....BBBB....",
+        "....BWBB....",
+        "....BBWB....",
+        "....BBBB....",
+        "..RRRR.GGGG.",
+        "..RWRR.GWGG.",
+        "..RRWR.GGWG.",
+        "..RRRR.GGGG.",
+        "............",
+        "FFFFFFFFFFFF",
+        "............",
+    ];
+
+    public static readonly string[] Globe =
+    [
+        "....BBBB....",
+        "..BBGGBBBB..",
+        ".BGGGGBBGBB.",
+        ".BBGGBBGGGB.",
+        "BBBGBBBGGGBB",
+        "BBBBBBBBGBBB",
+        "BGGBBBBBBBBB",
+        "BGGGBBBBBGGB",
+        ".BGGBBBBGGB.",
+        ".BBBBBBBBBB.",
+        "..BBBBBBBB..",
+        "....BBBB....",
+    ];
+
+    public static readonly string[] Magnifier =
+    [
+        "...EEEE.....",
+        "..ECCCCE....",
+        ".ECWCCCCE...",
+        ".ECWCCCCE...",
+        ".ECCCCCCE...",
+        ".ECCCCCCE...",
+        "..ECCCCE....",
+        "...EEEENN...",
+        "........NN..",
+        ".........NN.",
+        "..........NN",
+        "............",
+    ];
+
+    public static readonly string[] Pause =
+    [
+        "............",
+        "..WWW..WWW..",
+        "..WWW..WWW..",
+        "..WWW..WWW..",
+        "..WWW..WWW..",
+        "..WWW..WWW..",
+        "..WWW..WWW..",
+        "..WWW..WWW..",
+        "..WWW..WWW..",
+        "..WWW..WWW..",
+        "..WWW..WWW..",
+        "............",
+    ];
+
+    public static readonly string[] Mute =
+    [
+        "............",
+        "....L.......",
+        "...LL.......",
+        "LLLLL.R...R.",
+        "LLLLL..R.R..",
+        "LLLLL...R...",
+        "LLLLL..R.R..",
+        "LLLLL.R...R.",
+        "...LL.......",
+        "....L.......",
+        "............",
+        "............",
+    ];
+
+    public static readonly string[] Oops =
+    [
+        "...YYYYYY...",
+        "..YYYYYYYY..",
+        ".YYYYYYYYYY.",
+        "YYKKYYYYKKYY",
+        "YYKKYYYYKKYY",
+        "YYYYYYYYYYYY",
+        "YYKKKKKKKKYY",
+        "YYKWKWKWKKYY",
+        "YYKKKKKKKKYY",
+        ".YYYYYYYYYY.",
+        "..YYYYYYYY..",
+        "...YYYYYY...",
+    ];
+
+    public static readonly string[] Sleep =
+    [
+        "......WWWW..",
+        "........W...",
+        ".......W....",
+        "......WWWW..",
+        "............",
+        "..WWWWW.....",
+        ".....W......",
+        "....W.......",
+        "...W........",
+        "..WWWWW.....",
+        "............",
+        "............",
     ];
 }

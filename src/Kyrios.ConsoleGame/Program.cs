@@ -57,8 +57,8 @@ static void ShowIntroScreen()
     Console.WriteLine("  Esc                -> sair a qualquer momento");
     Console.WriteLine("  R (no fim)         -> correr de novo");
     Console.WriteLine();
-    Console.WriteLine("Complete 3 voltas passando pelos checkpoints na");
-    Console.WriteLine("ordem certa antes de cruzar a linha de chegada.");
+    Console.WriteLine("CORRIDA MORTAL: 4 carros. A cada volta completada,");
+    Console.WriteLine("o último colocado é eliminado. Seja o último de pé!");
     Console.WriteLine();
     Console.WriteLine("Pressione qualquer tecla para começar...");
     Console.ReadKey(intercept: true);
@@ -66,7 +66,7 @@ static void ShowIntroScreen()
 
 static bool PlayOneRace()
 {
-    RaceSimulation race = RaceFactory.CreateDefaultRace(aiOpponents: 3, targetLaps: 3);
+    RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.Elimination, aiOpponents: 3);
     RaceEntrant player = race.Entrants.First(e => e.Kind == DriverKind.Human);
     var renderer = new ConsoleRenderer(race.Track);
     var input = new InputManager();
@@ -122,9 +122,9 @@ static List<string> BuildHudLines(RaceSimulation race, RaceEntrant player, bool 
     {
         string.Empty,
         raceOver
-            ? "=== CORRIDA FINALIZADA ==="
-            : $"Volta {Math.Min(player.Car.LapsCompleted + 1, race.TargetLaps)}/{race.TargetLaps}  " +
-              $"Tempo da volta: {FormatTime(player.Car.CurrentLapTime)}  " +
+            ? (player.Finished ? "=== VOCÊ É O CAMPEÃO! ===" : "=== VOCÊ FOI ELIMINADO ===")
+            : $"Volta {player.Car.LapsCompleted + 1}  " +
+              $"Restam {race.Entrants.Count(e => !e.Eliminated)} carros  " +
               $"Velocidade: {player.Car.Speed:0.0}",
         $"Melhor volta: {(player.Car.BestLapTime is { } best ? FormatTime(best) : "--:--.---")}   " +
         $"Tempo total: {FormatTime(player.Car.TotalRaceTime)}",
@@ -136,9 +136,9 @@ static List<string> BuildHudLines(RaceSimulation race, RaceEntrant player, bool 
     foreach (RaceEntrant entrant in race.GetStandings())
     {
         string marker = entrant.Kind == DriverKind.Human ? "* " : "  ";
-        string status = entrant.Finished
-            ? $"chegou em {FormatTime(entrant.FinishTime ?? 0f)}"
-            : $"volta {entrant.Car.LapsCompleted}/{race.TargetLaps}";
+        string status = entrant.Eliminated
+            ? "eliminado"
+            : entrant.Finished ? "campeão" : $"volta {entrant.Car.LapsCompleted + 1}";
         lines.Add($" {position,2}. {marker}{entrant.Car.Name,-8} {status}");
         position++;
     }
@@ -165,10 +165,9 @@ static string FormatTime(float seconds)
 
 static void RunHeadlessSimulation(string[] args)
 {
-    int aiOpponents = 3;
-    int targetLaps = 3;
+    int aiOpponents = 4;
     int? seed = null;
-    RaceMode mode = RaceMode.Sprint;
+    RaceMode mode = RaceMode.Elimination;
 
     for (int i = 0; i < args.Length; i++)
     {
@@ -176,17 +175,9 @@ static void RunHeadlessSimulation(string[] args)
         {
             aiOpponents = ai;
         }
-        else if (args[i] == "--laps" && i + 1 < args.Length && int.TryParse(args[i + 1], out int laps))
-        {
-            targetLaps = laps;
-        }
         else if (args[i] == "--seed" && i + 1 < args.Length && int.TryParse(args[i + 1], out int s))
         {
             seed = s;
-        }
-        else if (args[i] == "--mode" && i + 1 < args.Length && args[i + 1].Equals("elimination", StringComparison.OrdinalIgnoreCase))
-        {
-            mode = RaceMode.Elimination;
         }
         else if (args[i] == "--mode" && i + 1 < args.Length && args[i + 1].Equals("timeattack", StringComparison.OrdinalIgnoreCase))
         {
@@ -194,9 +185,9 @@ static void RunHeadlessSimulation(string[] args)
         }
     }
 
-    Console.WriteLine($"Simulação sem interface: {aiOpponents} IA(s), {targetLaps} volta(s), modo={mode}, semente={(seed?.ToString() ?? "aleatória")}");
+    Console.WriteLine($"Simulação sem interface: {aiOpponents} IA(s), modo={mode}, semente={(seed?.ToString() ?? "aleatória")}");
 
-    RaceSimulation race = RaceFactory.CreateDefaultRace(aiOpponents: aiOpponents, targetLaps: targetLaps, includeHuman: false, randomSeed: seed, mode: mode);
+    RaceSimulation race = RaceFactory.CreateDefaultRace(mode, aiOpponents: aiOpponents, includeHuman: false, randomSeed: seed);
 
     const float dt = 0.05f;
     const float maxSimSeconds = 180f;
@@ -226,10 +217,10 @@ static void RunHeadlessSimulation(string[] args)
     foreach (RaceEntrant entrant in race.GetStandings())
     {
         string status = entrant.Finished
-            ? $"chegou em {FormatTime(entrant.FinishTime ?? 0f)}"
+            ? $"campeão em {FormatTime(entrant.FinishTime ?? 0f)}"
             : entrant.Eliminated
-                ? "eliminado"
-                : $"não terminou (volta {entrant.Car.LapsCompleted}/{race.TargetLaps})";
+                ? $"eliminado na volta {entrant.Car.LapsCompleted + 1}"
+                : $"não terminou (volta {entrant.Car.LapsCompleted + 1})";
         string best = entrant.Car.BestLapTime is { } b ? FormatTime(b) : "--:--.---";
         Console.WriteLine($"  {position,2}. {entrant.Car.Name,-8} {status}  | melhor volta: {best}");
         position++;

@@ -8,45 +8,42 @@ public class RaceSimulationTests
     [Fact]
     public void CreateDefaultRace_AllAiOpponents_EventuallyFinishes()
     {
-        RaceSimulation race = RaceFactory.CreateDefaultRace(aiOpponents: 3, targetLaps: 1, includeHuman: false, randomSeed: 123);
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.Elimination, aiOpponents: 3, includeHuman: false, randomSeed: 123);
 
         const float dt = 0.05f;
         float elapsed = 0f;
-        while (!race.IsRaceOver && elapsed < 60f)
+        while (!race.IsRaceOver && elapsed < 90f)
         {
             race.Update(dt, CarInput.None);
             elapsed += dt;
         }
 
         Assert.True(race.IsRaceOver, "A corrida deveria terminar dentro do tempo limite do teste.");
-        Assert.All(race.Entrants, e => Assert.True(e.Finished));
         Assert.All(race.Entrants, e => Assert.NotNull(e.FinishPlace));
     }
 
     [Fact]
-    public void GetStandings_AssignsDistinctFinishPlacesInArrivalOrder()
+    public void GetStandings_OrdersByFinalPlace()
     {
-        RaceSimulation race = RaceFactory.CreateDefaultRace(aiOpponents: 4, targetLaps: 1, includeHuman: false, randomSeed: 99);
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.Elimination, aiOpponents: 4, includeHuman: false, randomSeed: 99);
 
         const float dt = 0.05f;
         float elapsed = 0f;
-        while (!race.IsRaceOver && elapsed < 60f)
+        while (!race.IsRaceOver && elapsed < 90f)
         {
             race.Update(dt, CarInput.None);
             elapsed += dt;
         }
 
         var standings = race.GetStandings();
-        var places = standings.Select(e => e.FinishPlace).ToList();
-
-        Assert.Equal([1, 2, 3, 4], places);
-        Assert.True(standings[0].FinishTime <= standings[^1].FinishTime);
+        Assert.Equal([1, 2, 3, 4], standings.Select(e => e.FinishPlace).ToList());
+        Assert.False(standings[0].Eliminated);
     }
 
     [Fact]
     public void Update_HumanInputOnlyAppliesToHumanEntrant()
     {
-        RaceSimulation race = RaceFactory.CreateDefaultRace(aiOpponents: 1, targetLaps: 1, includeHuman: true, randomSeed: 5);
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.Elimination, aiOpponents: 1, includeHuman: true, randomSeed: 5);
         RaceEntrant human = race.Entrants.First(e => e.Kind == DriverKind.Human);
         RaceEntrant ai = race.Entrants.First(e => e.Kind == DriverKind.Ai);
 
@@ -64,6 +61,6 @@ public class RaceSimulationTests
     public void Constructor_NoEntrants_Throws()
     {
         Track track = TrackFactory.CreateRingTrack();
-        Assert.Throws<ArgumentException>(() => new RaceSimulation(track, [], targetLaps: 3));
+        Assert.Throws<ArgumentException>(() => new RaceSimulation(track, [], RaceMode.Elimination));
     }
 }

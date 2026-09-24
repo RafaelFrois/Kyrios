@@ -21,19 +21,16 @@ public class HazardTests
     }
 
     [Fact]
-    public void NonTimeAttackModes_HaveNoHazards()
+    public void DeathRace_HasNoHazards()
     {
-        RaceSimulation sprint = RaceFactory.CreateDefaultRace(aiOpponents: 1, includeHuman: true, mode: RaceMode.Sprint);
-        Assert.Empty(sprint.Hazards);
-
-        RaceSimulation elimination = RaceFactory.CreateDefaultRace(aiOpponents: 1, includeHuman: true, mode: RaceMode.Elimination);
+        RaceSimulation elimination = RaceFactory.CreateDefaultRace(RaceMode.Elimination, aiOpponents: 1, includeHuman: true);
         Assert.Empty(elimination.Hazards);
     }
 
     [Fact]
     public void TimeAttack_HasHazardsPlacedOnTrack()
     {
-        RaceSimulation race = RaceFactory.CreateDefaultRace(aiOpponents: 1, includeHuman: true, mode: RaceMode.TimeAttack);
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.TimeAttack, aiOpponents: 1, includeHuman: true);
 
         Assert.NotEmpty(race.Hazards);
         Assert.All(race.Hazards, hazard => Assert.False(race.Track.CollidesWithWall(hazard.Position, 0.05f)));
@@ -45,8 +42,7 @@ public class HazardTests
         // Deixa a IA guiar sozinha (ela segue a centerline, incluindo as curvas) por várias voltas —
         // os obstáculos ficam bem em cima da centerline em cada reta, então dá bastante chance de bater
         // em algum sem precisar cronometrar manualmente um único encontro.
-        RaceSimulation race = RaceFactory.CreateDefaultRace(
-            aiOpponents: 1, includeHuman: false, randomSeed: 3, mode: RaceMode.TimeAttack);
+        RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.TimeAttack, aiOpponents: 1, includeHuman: false, randomSeed: 3);
         RaceEntrant scored = race.ScoredEntrant;
 
         const float dt = 0.05f;

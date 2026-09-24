@@ -2,23 +2,27 @@ using Microsoft.Xna.Framework;
 
 namespace Kyrios.Game;
 
-/// <summary>Dificuldade de uma conquista ou de uma skin — só informativa (cor + rótulo na tela).</summary>
+/// <summary>Dificuldade de uma conquista, skin ou pista — só informativa (cor + rótulo na tela).</summary>
 public enum Difficulty
 {
     Easy,
     Medium,
     Hard,
+
+    /// <summary>Rara / especial: condições incomuns, combinações ou feitos específicos.</summary>
+    Rare,
 }
 
 public enum AchievementCategory
 {
-    Races,
     DeathRace,
     TimeAttack,
-    Records,
+    Tracks,
     Skins,
-    Playing,
-    Absurd,
+    General,
+
+    /// <summary>Conquistas idiotas/absurdas — existem só pra fazer rir.</summary>
+    Silly,
 }
 
 /// <summary>
@@ -43,7 +47,10 @@ public sealed record Achievement(
     UnlockRequirement Condition,
     AchievementIcon Icon,
     bool IsSecret = false,
-    AchievementIcon LockedIcon = null);
+    AchievementIcon LockedIcon = null) : IUnlockable
+{
+    UnlockRequirement IUnlockable.Requirement => Condition;
+}
 
 /// <summary>Nomes e cores de categorias e dificuldades (compartilhados pela página de conquistas, pelo
 /// seletor de skins e pelas notificações).</summary>
@@ -51,48 +58,47 @@ public static class ProgressionStyle
 {
     public static readonly AchievementCategory[] CategoryOrder =
     [
-        AchievementCategory.Races,
         AchievementCategory.DeathRace,
         AchievementCategory.TimeAttack,
-        AchievementCategory.Records,
+        AchievementCategory.Tracks,
         AchievementCategory.Skins,
-        AchievementCategory.Playing,
-        AchievementCategory.Absurd,
+        AchievementCategory.General,
+        AchievementCategory.Silly,
     ];
 
     public static string CategoryName(AchievementCategory category) => category switch
     {
-        AchievementCategory.Races => "CORRIDAS",
         AchievementCategory.DeathRace => "MORTAL",
         AchievementCategory.TimeAttack => "RELOGIO",
-        AchievementCategory.Records => "RECORDES",
+        AchievementCategory.Tracks => "PISTAS",
         AchievementCategory.Skins => "SKINS",
-        AchievementCategory.Playing => "JOGANDO",
-        _ => "ABSURDAS",
+        AchievementCategory.General => "GERAL",
+        _ => "IDIOTAS",
     };
 
     public static Color CategoryColor(AchievementCategory category) => category switch
     {
-        AchievementCategory.Races => new Color(255, 200, 40),
         AchievementCategory.DeathRace => new Color(235, 85, 75),
         AchievementCategory.TimeAttack => new Color(80, 200, 235),
-        AchievementCategory.Records => new Color(120, 230, 130),
+        AchievementCategory.Tracks => new Color(120, 230, 130),
         AchievementCategory.Skins => new Color(215, 125, 235),
-        AchievementCategory.Playing => new Color(245, 150, 60),
-        _ => new Color(255, 120, 175),
+        AchievementCategory.General => new Color(255, 200, 40),
+        _ => new Color(255, 140, 70),
     };
 
     public static string DifficultyName(Difficulty difficulty) => difficulty switch
     {
         Difficulty.Easy => "FACIL",
         Difficulty.Medium => "MEDIA",
-        _ => "DIFICIL",
+        Difficulty.Hard => "DIFICIL",
+        _ => "RARA",
     };
 
     public static Color DifficultyColor(Difficulty difficulty) => difficulty switch
     {
         Difficulty.Easy => new Color(95, 215, 105),
         Difficulty.Medium => new Color(245, 200, 55),
-        _ => new Color(235, 75, 65),
+        Difficulty.Hard => new Color(235, 75, 65),
+        _ => new Color(185, 110, 245),
     };
 }

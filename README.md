@@ -13,13 +13,15 @@ roda a mesma lógica.
 
 - `src/Kyrios.Core` — biblioteca com toda a lógica do jogo (sem depender de
   janela nem de console): vetores, física do carro, pista, checkpoints/voltas,
-  IA dos adversários e a simulação da corrida. É compartilhada pelas duas
+  IA dos adversários e a simulação da partida. É compartilhada pelas duas
   versões abaixo.
-- `src/Kyrios.Game` — **jogo gráfico** (MonoGame): abre uma janela, desenha a
-  pista e os carros, e pode ser publicado como executável standalone.
+- `src/Kyrios.Game` — **jogo gráfico** (MonoGame): menus, pistas/cenários,
+  skins, conquistas, progressão e salvamento; pode ser publicado como
+  executável standalone.
 - `src/Kyrios.ConsoleGame` — versão de terminal (ASCII), útil quando não dá
   pra abrir uma janela (ex: SSH sem X11) ou pra rodar em CI.
-- `tests/Kyrios.Core.Tests` — testes automatizados (xUnit) da lógica do jogo.
+- `tests/` — testes automatizados (xUnit) da lógica (`Kyrios.Core.Tests`) e da
+  progressão/catálogos (`Kyrios.Game.Tests`).
 
 ### Pré-requisito
 
@@ -31,33 +33,39 @@ roda a mesma lógica.
 dotnet run --project src/Kyrios.Game
 ```
 
-Isso compila e abre a janela do jogo direto. Controles:
+Controles (teclado ou controle):
 
-- Setas ou `WASD` — acelerar, frear/ré e virar
-- `Shift` — turbo (consome o medidor no canto superior direito, que enche com
-  o tempo e mais rápido em cada checkpoint/volta)
-- `Espaço` — freio de mão
-- `Esc` — sair a qualquer momento
-- `R` — correr de novo (mesmo modo) / `M` — trocar de modo (na tela de resultado)
+- Setas ou `WASD` — acelerar, frear/ré e virar (controle: gatilhos + analógico)
+- `Shift` — turbo (controle: RB ou B)
+- `Espaço` — freio de mão (controle: A)
+- `Esc` / `P` — pausar (controle: START)
+- `F11` — tela cheia
 
-Depois da tela inicial, escolha o modo:
+No menu: **JOGAR** leva direto por modo → pista → carro (o jogo lembra as
+últimas escolhas, então é só ir apertando ENTER). Também dá pra ver e equipar
+**SKINS** e **PISTAS**, acompanhar as **CONQUISTAS** e ajustar o som em
+**CONFIGURAÇÕES**.
 
-- **Corrida** — o clássico: complete 3 voltas na pista em anel, passando
-  pelos 3 checkpoints (marcados em amarelo) na ordem certa, na frente dos
-  adversários de IA.
-- **Eliminação** — a cada volta completada por qualquer carro, o último
-  colocado é eliminado, até sobrar um único campeão. Muda o ritmo do jogo
-  inteiro: cada volta é uma faca no pescoço.
+Modos:
 
-Seu melhor tempo de volta/corrida (modo Corrida) e seu retrospecto de vitórias
-(modo Eliminação) ficam salvos localmente entre sessões — o jogo avisa na tela
-de resultado quando você bate um recorde pessoal.
+- **Corrida Mortal** — 4 carros; a cada volta completada por qualquer carro, o
+  último colocado é eliminado, até sobrar um só. Seja o último de pé.
+- **Contra o Relógio** — o relógio só desce; checkpoints dão tempo e pontos,
+  batidas tiram tempo. Acaba quando o tempo zera.
 
-Os carros também colidem de verdade entre si e reagem diferente a bater de
-frente numa parede (ricocheteia, perde velocidade) ou só raspar de lado
-(quase não perde nada) — e a IA "gruda" na disputa (rubber-banding): fica mais
-dura com quem está na frente e mais fácil com quem está atrás, pra manter a
-corrida disputada até o fim.
+Pistas: todas usam **exatamente o mesmo circuito** (curvas, checkpoints,
+largada e colisões iguais) — muda só o cenário: Autódromo, Praia, Floresta,
+Cidade à Noite, Deserto, Neve, Supermercado, Cidade Neon, Vulcão, Mesa da
+Cozinha e Quarto de Criança. Cada uma esconde um detalhe secreto na pista.
+
+Progressão: skins, pistas e conquistas (fáceis, médias, difíceis, raras,
+idiotas e secretas) são liberadas pelo que você faz nos dois modos. Tudo fica
+salvo localmente (`%AppData%/MegRace/records.json` no Windows).
+
+Para adicionar conteúdo, basta uma linha no catálogo correspondente:
+`CarSkins.cs` (skins), `TrackThemes.cs` + `TrackSceneries*.cs` (pistas) e
+`Achievements.cs` (conquistas); os requisitos prontos ficam em
+`UnlockRequirements.cs`.
 
 ### Gerar um executável (sem precisar do .NET instalado)
 
@@ -91,14 +99,14 @@ copie a pasta inteira, não só o executável.
 dotnet run --project src/Kyrios.ConsoleGame
 ```
 
-Mesmos controles da versão gráfica. Também tem um modo sem interface
+Joga a Corrida Mortal no terminal. Também tem um modo sem interface
 (headless), útil para CI ou terminais sem teclado interativo:
 
 ```bash
-dotnet run --project src/Kyrios.ConsoleGame -- --simulate --ai 4 --laps 3 --seed 42
+dotnet run --project src/Kyrios.ConsoleGame -- --simulate --ai 4 --seed 42
 
-# ou modo eliminação
-dotnet run --project src/Kyrios.ConsoleGame -- --simulate --ai 5 --seed 42 --mode elimination
+# ou Contra o Relógio
+dotnet run --project src/Kyrios.ConsoleGame -- --simulate --ai 1 --seed 42 --mode timeattack
 ```
 
 ### Testes

@@ -9,49 +9,7 @@ namespace Kyrios.Game;
 /// </summary>
 public static class Soundtrack
 {
-    /// <summary>Corrida clássica: pentatônica maior animada e uma batida constante e confiante — 150 BPM.</summary>
-    public static SoundEffect BuildSprintTheme()
-    {
-        const float bpm = 150f;
-        const float melodyRoot = 440f; // A4
-        const float bassRoot = 110f; // A2
-        const float kickRoot = 90f;
-
-        Note[] melody =
-        [
-            new(0, 0.5f), new(4, 0.5f), new(7, 0.5f), new(9, 0.5f), new(7, 0.5f), new(4, 0.5f), new(2, 0.5f), new(0, 0.5f),
-            new(4, 0.5f), new(7, 0.5f), new(12, 0.5f), new(9, 0.5f), new(7, 0.5f), new(4, 0.5f), new(2, 0.5f), new(0, 0.5f),
-            new(0, 0.5f), new(4, 0.5f), new(7, 0.5f), new(9, 0.5f), new(7, 0.5f), new(4, 0.5f), new(2, 0.5f), new(0, 0.5f),
-            new(4, 0.5f), new(7, 0.5f), new(9, 0.5f), new(12, 0.5f), new(9, 0.5f), new(7, 0.5f), new(4, 0.5f), new(0, 0.5f),
-        ];
-
-        Note[] bass =
-        [
-            new(0, 1f), new(7, 1f), new(0, 1f), new(7, 1f),
-            new(0, 1f), new(7, 1f), new(0, 1f), new(9, 1f),
-            new(0, 1f), new(7, 1f), new(0, 1f), new(7, 1f),
-            new(0, 1f), new(7, 1f), new(0, 1f), new(7, 1f),
-        ];
-
-        Note[] kick =
-        [
-            new(0, 1f), new(null, 1f), new(0, 1f), new(null, 1f),
-            new(0, 1f), new(null, 1f), new(0, 1f), new(null, 1f),
-            new(0, 1f), new(null, 1f), new(0, 1f), new(null, 1f),
-            new(0, 1f), new(null, 1f), new(0, 1f), new(null, 1f),
-        ];
-
-        Note[] hihat = MakeRepeatedHits(32, 0.5f);
-
-        float[] melodyBuf = Synth.RenderVoice(melody, bpm, Waveform.Square, 0.18f, melodyRoot, sustain: 0.8f);
-        float[] bassBuf = Synth.RenderVoice(bass, bpm, Waveform.Triangle, 0.22f, bassRoot, sustain: 0.9f);
-        float[] kickBuf = Synth.RenderVoice(kick, bpm, Waveform.Sine, 0.32f, kickRoot, sustain: 0.2f);
-        float[] hihatBuf = Synth.RenderVoice(hihat, bpm, Waveform.Noise, 0.06f, 1f, sustain: 0.12f);
-
-        return ToSoundEffect(Synth.Mix(melodyBuf, bassBuf, kickBuf, hihatBuf));
-    }
-
-    /// <summary>Eliminação: menor natural, mais rápida e agressiva, com contratempo de caixa — 170 BPM.</summary>
+    /// <summary>Corrida Mortal: menor natural, mais rápida e agressiva, com contratempo de caixa — 170 BPM.</summary>
     public static SoundEffect BuildEliminationTheme()
     {
         const float bpm = 170f;
@@ -280,6 +238,18 @@ public static class Soundtrack
         (int Semitone, float Duration)[] notes = [(0, 0.09f), (4, 0.09f), (7, 0.09f), (12, 0.16f), (7, 0.08f), (12, 0.08f), (16, 0.38f)];
         return ToSoundEffect(RenderJingle(root, notes, Waveform.Square, 0.28f));
     }
+
+    /// <summary>Duas notas descendo, secas — toca quando um carro é eliminado da Corrida Mortal.</summary>
+    public static SoundEffect BuildEliminationSting()
+    {
+        const float root = 392f;
+        (int Semitone, float Duration)[] notes = [(0, 0.08f), (-5, 0.16f)];
+        return ToSoundEffect(RenderJingle(root, notes, Waveform.Square, 0.3f));
+    }
+
+    /// <summary>Zumbido grave e curto — toca ao tentar escolher algo bloqueado.</summary>
+    public static SoundEffect BuildDenyBuzz() =>
+        ToSoundEffect(Synth.GenerateTone(110f, 0.12f, Waveform.Square, 0.25f, attack: 0.002f, release: 0.03f));
 
     /// <summary>Bip agudo e seco — toca a cada segundo nos últimos instantes do Contrarrelógio.</summary>
     public static SoundEffect BuildCountdownTick() =>

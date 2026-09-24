@@ -1,17 +1,17 @@
 namespace Kyrios.Core;
 
-/// <summary>Monta uma <see cref="RaceSimulation"/> pronta para jogar: pista padrão, 1 humano + N adversários de IA.</summary>
+/// <summary>Monta uma <see cref="RaceSimulation"/> pronta para jogar: pista padrão, 1 humano + N adversários de IA.
+/// Todas as pistas/cenários do jogo usam este mesmo circuito — só o visual muda.</summary>
 public static class RaceFactory
 {
     public static readonly string[] AiNames =
         ["Rex", "Nina", "Hugo", "Vale", "Zara", "Tico", "Dara", "Kai", "Duke", "Mia"];
 
     public static RaceSimulation CreateDefaultRace(
+        RaceMode mode,
         int aiOpponents = 3,
-        int targetLaps = 3,
         bool includeHuman = true,
-        int? randomSeed = null,
-        RaceMode mode = RaceMode.Sprint)
+        int? randomSeed = null)
     {
         Track track = TrackFactory.CreateRingTrack();
         int totalCars = aiOpponents + (includeHuman ? 1 : 0);
@@ -43,6 +43,6 @@ public static class RaceFactory
         }
 
         IReadOnlyList<Hazard>? hazards = mode == RaceMode.TimeAttack ? TrackFactory.CreateTimeAttackHazards() : null;
-        return new RaceSimulation(track, entrants, targetLaps, mode, hazards);
+        return new RaceSimulation(track, entrants, mode, hazards);
     }
 }

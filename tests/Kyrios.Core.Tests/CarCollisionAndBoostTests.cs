@@ -138,7 +138,7 @@ public class CarCollisionAndBoostTests
         var driver = new AIDriver(track, randomSeed: 42);
         var entrantB = new RaceEntrant(carB, DriverKind.Ai, driver);
 
-        var race = new RaceSimulation(track, [entrantA, entrantB], targetLaps: 1);
+        var race = new RaceSimulation(track, [entrantA, entrantB], RaceMode.Elimination);
 
         race.Update(0.05f, CarInput.None);
 

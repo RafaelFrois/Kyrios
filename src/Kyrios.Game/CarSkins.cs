@@ -5,23 +5,23 @@ namespace Kyrios.Game;
 /// <summary>Uma aparência pro carro do jogador. <see cref="Id"/> é o que fica salvo (estável mesmo se a lista
 /// for reordenada), <see cref="Name"/> é o que aparece no menu, <see cref="Paint"/> desenha o veículo virado
 /// pra frente (+x) no espaço local de um <see cref="CarPainter"/> e <see cref="Requirement"/> diz o que é
-/// preciso pra liberá-la (o estado bloqueado/desbloqueado em si fica no progresso salvo, ver
-/// <see cref="SkinUnlocks"/>). <see cref="Difficulty"/> é só informativa; uma skin <see cref="IsSecret"/>
-/// esconde nome, visual e requisito até ser liberada. Só muda o visual — a física é a mesma.</summary>
+/// preciso pra liberá-la (o estado bloqueado/desbloqueado em si fica no progresso salvo). <see cref="Difficulty"/>
+/// é só informativa; uma skin <see cref="IsSecret"/> esconde nome, visual e requisito até ser liberada. Só muda
+/// o visual — a física é a mesma.</summary>
 public sealed record CarSkin(
     string Id,
     string Name,
     Action<CarPainter> Paint,
     UnlockRequirement Requirement,
     Difficulty Difficulty = Difficulty.Easy,
-    bool IsSecret = false);
+    bool IsSecret = false) : IUnlockable;
 
 /// <summary>
-/// Catálogo de skins, na ordem do seletor (das mais fáceis às mais difíceis). Pra adicionar uma nova:
-/// escreva um método <c>Paint*(CarPainter p)</c> desenhando o veículo mais ou menos dentro de
-/// x ∈ [-0.7, 0.7] e y ∈ [-0.45, 0.45] (o tamanho do carro clássico), e acrescente uma linha em
-/// <see cref="All"/> com o requisito (ver os atalhos em <see cref="Unlock"/>) e a dificuldade. Nomes em
-/// maiúsculas e sem acento (a fonte pixelizada não tem).
+/// Catálogo de skins, na ordem do seletor (das mais fáceis às mais raras). Pra adicionar uma nova: escreva um
+/// método <c>Paint*(CarPainter p)</c> desenhando o veículo mais ou menos dentro de x ∈ [-0.7, 0.7] e
+/// y ∈ [-0.45, 0.45] (o tamanho do carro de corrida padrão), e acrescente uma linha em <see cref="All"/> com o
+/// requisito (atalhos em <see cref="Unlock"/>) e a dificuldade. Nomes em maiúsculas e sem acento (a fonte
+/// pixelizada não tem).
 /// </summary>
 public static class CarSkins
 {
@@ -29,37 +29,41 @@ public static class CarSkins
 
     public static IReadOnlyList<CarSkin> All { get; } =
     [
-        new("classico", "CARRO CLASSICO", PaintClassic, Unlock.FromStart),
+        new("padrao", "CARRO DE CORRIDA", PaintRaceCar, Unlock.FromStart),
 
-        // ----- Fáceis -----
-        new("pato", "PATO", PaintDuck, Unlock.GamesPlayed(5)),
-        new("galinha", "GALINHA", PaintChicken, Unlock.Wins(3)),
-        new("banana", "BANANA", PaintBanana, Unlock.TimeAttackTotal(2000)),
+        // ----- Fáceis: saem naturalmente nas primeiras partidas -----
+        new("pato", "PATO", PaintDuck, Unlock.GamesPlayed(3)),
+        new("galinha", "GALINHA", PaintChicken, Unlock.DeathRaceWins(1)),
+        new("banana", "BANANA", PaintBanana, Unlock.TimeAttackScore(400)),
+        new("melancia", "MELANCIA", PaintWatermelon, Unlock.TracksPlayed(2)),
         new("tijolo", "TIJOLO", PaintBrick, Unlock.AchievementEarned(Achievements.WhereAreTheBrakesId)),
 
-        // ----- Médias -----
+        // ----- Médias: dedicação ou alguma habilidade -----
         new("jacare", "JACARE", PaintAlligator, Unlock.DeathRaceWins(10), Difficulty.Medium),
-        new("peixe", "PEIXE", PaintFish, Unlock.TimeAttackTotal(7500), Difficulty.Medium),
-        new("batata", "BATATA", PaintPotato, Unlock.Wins(15), Difficulty.Medium),
-        new("tubarao", "TUBARAO", PaintShark, Unlock.ClassicRaceUnder(30f), Difficulty.Medium),
-        new("carrinho", "CARRINHO DE MERCADO", PaintShoppingCart, Unlock.GamesPlayed(50), Difficulty.Medium),
-        new("suco", "CAIXINHA DE SUCO", PaintJuiceBox, Unlock.AchievementsUnlocked(10), Difficulty.Medium),
-        new("pizza", "PIZZA", PaintPizza, Unlock.All("VENCA 5 CLASSICAS E 5 MORTAIS", Unlock.ClassicWins(5), Unlock.DeathRaceWins(5)), Difficulty.Medium),
+        new("peixe", "PEIXE", PaintFish, Unlock.TimeAttackScoreOnTrack("praia", 700), Difficulty.Medium),
+        new("tubarao", "TUBARAO", PaintShark, Unlock.DeathRaceWinsOnTrack("praia"), Difficulty.Medium),
+        new("torradeira", "TORRADEIRA", PaintToaster, Unlock.TimeAttackScore(1000), Difficulty.Medium),
+        new("carrinho", "CARRINHO DE MERCADO", PaintShoppingCart, Unlock.Stat("PASSE POR 300 CHECKPOINTS", p => p.TotalCheckpoints, 300), Difficulty.Medium),
+        new("batata", "BATATA", PaintPotato, Unlock.GamesPlayed(25), Difficulty.Medium),
+        new("suco", "CAIXINHA DE SUCO", PaintJuiceBox, Unlock.AchievementsUnlocked(15), Difficulty.Medium),
+        new("pizza", "PIZZA", PaintPizza, Unlock.All("5 VITORIAS NA MORTAL E 3000 PTS NO RELOGIO", Unlock.DeathRaceWins(5), Unlock.TimeAttackTotal(3000)), Difficulty.Medium),
 
-        // ----- Difíceis -----
+        // ----- Difíceis: bastante progresso ou domínio de um modo -----
         new("dino", "DINOSSAURO", PaintDinosaur, Unlock.AchievementEarned(Achievements.PredatorId), Difficulty.Hard),
         new("privada", "VASO SANITARIO", PaintToilet, Unlock.DeathRaceWinStreak(10), Difficulty.Hard),
-        new("ovni", "OVNI", PaintUfo, Unlock.All("10 SKINS E 15000 PTS NO RELOGIO", Unlock.SkinsUnlocked(10), Unlock.TimeAttackTotal(15000)), Difficulty.Hard),
+        new("ovni", "OVNI", PaintUfo, Unlock.All("10 SKINS E 10000 PTS NO RELOGIO", Unlock.SkinsUnlocked(10), Unlock.TimeAttackTotal(10000)), Difficulty.Hard),
+        new("sofa", "SOFA", PaintSofa, Unlock.GamesPlayed(100), Difficulty.Hard),
 
-        // Raríssima: uma volta que só sai com a pilotagem praticamente perfeita (a IA mais rápida fica em ~9.3 s).
-        new("sapo", "SAPO", PaintFrog, Unlock.ClassicLapUnder(8.3f), Difficulty.Hard),
+        // ----- Raras: feitos específicos -----
+        new("sapo", "SAPO", PaintFrog, Unlock.Stat("VENCA A MORTAL SEM BATER EM NADA", p => p.EliminationCleanWins, 1), Difficulty.Rare),
+        new("foguete", "FOGUETE", PaintRocket, Unlock.TrackSecretsFound(5), Difficulty.Rare),
 
         // Secreta: vem de uma conquista secreta — nome, visual e requisito ficam escondidos até lá.
-        new("ursinho", "URSINHO", PaintTeddyBear, Unlock.AchievementEarned(Achievements.WasThatSupposedToHappenId), Difficulty.Hard, IsSecret: true),
+        new("ursinho", "URSINHO", PaintTeddyBear, Unlock.AchievementEarned(Achievements.WasThatSupposedToHappenId), Difficulty.Rare, IsSecret: true),
     ];
 
-    /// <summary>O carro de corrida original — continua sendo o dos rivais e o padrão do jogador.</summary>
-    public static CarSkin Classic => All[0];
+    /// <summary>O carro de corrida padrão — o dos rivais e o inicial do jogador.</summary>
+    public static CarSkin Default => All[0];
 
     public static int IndexOf(string id)
     {
@@ -76,7 +80,7 @@ public static class CarSkins
 
     public static CarSkin Find(string id) => All.FirstOrDefault(skin => skin.Id == id);
 
-    private static void PaintClassic(CarPainter p)
+    private static void PaintRaceCar(CarPainter p)
     {
         const float length = 1.35f;
         const float width = 0.85f;
@@ -580,5 +584,94 @@ public static class CarSkins
         p.Circle(0.02f, 0f, 0.12f, new Color(110, 220, 90));
         p.Circle(0.08f, 0.05f, 0.035f, Color.Black);
         p.Circle(0.08f, -0.05f, 0.035f, Color.Black);
+    }
+
+    private static void PaintWatermelon(CarPainter p)
+    {
+        var rind = new Color(40, 120, 50);
+        var stripe = new Color(70, 160, 70);
+        var white = new Color(235, 240, 210);
+        var flesh = new Color(235, 70, 80);
+        var seed = new Color(30, 25, 25);
+
+        p.Shadow(1.35f, 0.85f);
+        p.Capsule(0f, 0f, 1.35f, 0.85f, rind);
+        p.Rect(-0.3f, 0f, 0.08f, 0.85f, stripe);
+        p.Rect(0.15f, 0f, 0.08f, 0.85f, stripe);
+        p.Capsule(0.04f, 0f, 1.18f, 0.66f, white);
+        p.Capsule(0.06f, 0f, 1.08f, 0.56f, flesh);
+        foreach ((float x, float y) in new[] { (-0.25f, -0.12f), (0f, 0.1f), (0.25f, -0.1f), (0.35f, 0.12f), (-0.1f, -0.02f) })
+        {
+            p.Rect(x, y, 0.08f, 0.045f, seed, 0.4f);
+        }
+    }
+
+    private static void PaintToaster(CarPainter p)
+    {
+        var body = new Color(200, 205, 215);
+        var edge = new Color(140, 145, 160);
+        var slot = new Color(40, 40, 45);
+        var toast = new Color(215, 160, 80);
+        var crust = new Color(150, 95, 40);
+
+        p.Shadow(1.2f, 0.8f);
+        p.Capsule(0f, 0f, 1.2f, 0.8f, edge);
+        p.Capsule(0f, 0f, 1.12f, 0.72f, body);
+        p.Rect(-0.3f, -0.2f, 0.25f, 0.08f, Color.White);
+
+        // Torradas pulando pra fora e voltando, como se a torradeira estivesse ligada.
+        float bounce = MathF.Max(0f, MathF.Sin(p.Time * 4f)) * 0.08f;
+        foreach (float y in new[] { -0.15f, 0.15f })
+        {
+            p.Rect(0.05f, y, 0.78f, 0.16f, slot);
+            p.Rect(0.05f + bounce, y, 0.7f, 0.1f, crust);
+            p.Rect(0.05f + bounce, y, 0.62f, 0.06f, toast);
+        }
+
+        p.Rect(-0.45f, 0.42f, 0.2f, 0.08f, slot);
+    }
+
+    private static void PaintSofa(CarPainter p)
+    {
+        var frame = new Color(140, 40, 45);
+        var cushion = new Color(200, 70, 70);
+        var seam = new Color(160, 50, 55);
+        var remote = new Color(35, 35, 40);
+
+        p.Shadow(1.3f, 0.95f);
+        p.Rect(-0.05f, 0f, 1.3f, 0.95f, frame);
+        p.Rect(-0.5f, 0f, 0.28f, 0.95f, CarPainter.Darken(frame, 0.85f));
+        p.Rect(0.08f, -0.39f, 1.02f, 0.17f, CarPainter.Darken(frame, 0.9f));
+        p.Rect(0.08f, 0.39f, 1.02f, 0.17f, CarPainter.Darken(frame, 0.9f));
+        p.Rect(0.13f, -0.15f, 0.84f, 0.28f, cushion);
+        p.Rect(0.13f, 0.15f, 0.84f, 0.28f, cushion);
+        p.Rect(0.13f, 0f, 0.84f, 0.03f, seam);
+        p.Rect(0.2f, 0.18f, 0.2f, 0.08f, remote, 0.3f);
+        p.Circle(0.25f, 0.2f, 0.02f, new Color(220, 50, 50));
+    }
+
+    private static void PaintRocket(CarPainter p)
+    {
+        var hull = new Color(235, 238, 245);
+        var hullShade = new Color(185, 190, 205);
+        var red = new Color(220, 55, 50);
+        var glass = new Color(90, 180, 240);
+
+        p.Shadow(1.4f, 0.6f);
+
+        // Chama tremulando atrás (sempre visível, é um foguete).
+        float flicker = 0.12f + (MathF.Sin(p.Time * 25f) * 0.05f);
+        p.Circle(-0.78f - flicker, 0f, 0.2f, new Color(255, 130, 30));
+        p.Circle(-0.7f - (flicker * 0.5f), 0f, 0.13f, new Color(255, 230, 90));
+
+        p.Rect(-0.5f, -0.33f, 0.3f, 0.2f, red, 0.5f);
+        p.Rect(-0.5f, 0.33f, 0.3f, 0.2f, red, -0.5f);
+        p.Capsule(-0.02f, 0f, 1.3f, 0.5f, hullShade);
+        p.Capsule(0f, -0.03f, 1.24f, 0.4f, hull);
+        p.Circle(0.52f, 0f, 0.2f, red);
+        p.Rect(0.38f, 0f, 0.14f, 0.5f, red);
+        p.Circle(0.1f, 0f, 0.13f, hullShade);
+        p.Circle(0.1f, 0f, 0.1f, glass);
+        p.Circle(0.07f, -0.03f, 0.03f, Color.White);
     }
 }
