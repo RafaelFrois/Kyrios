@@ -57,7 +57,7 @@ static void ShowIntroScreen()
     Console.WriteLine("  Esc                -> sair a qualquer momento");
     Console.WriteLine("  R (no fim)         -> correr de novo");
     Console.WriteLine();
-    Console.WriteLine("CORRIDA MORTAL: 4 carros. A cada volta completada,");
+    Console.WriteLine("CORRIDA MORTAL: 10 carros. A cada volta completada,");
     Console.WriteLine("o último colocado é eliminado. Seja o último de pé!");
     Console.WriteLine();
     Console.WriteLine("Pressione qualquer tecla para começar...");
@@ -66,7 +66,7 @@ static void ShowIntroScreen()
 
 static bool PlayOneRace()
 {
-    RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.Elimination, aiOpponents: 3);
+    RaceSimulation race = RaceFactory.CreateDefaultRace(RaceMode.Elimination, aiOpponents: 9);
     RaceEntrant player = race.Entrants.First(e => e.Kind == DriverKind.Human);
     var renderer = new ConsoleRenderer(race.Track);
     var input = new InputManager();
@@ -165,7 +165,7 @@ static string FormatTime(float seconds)
 
 static void RunHeadlessSimulation(string[] args)
 {
-    int aiOpponents = 4;
+    int aiOpponents = 9;
     int? seed = null;
     RaceMode mode = RaceMode.Elimination;
 

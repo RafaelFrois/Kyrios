@@ -48,7 +48,7 @@ skins e pistas liberadas aparecem num aviso no topo da tela.
 
 Modos:
 
-- **Corrida Mortal** — 4 carros; a cada volta completada por qualquer carro, o
+- **Corrida Mortal** — 10 carros (9 rivais + você); a cada volta completada por qualquer carro, o
   último colocado é eliminado, até sobrar um só. Seja o último de pé.
 - **Contra o Relógio** — o relógio só desce; checkpoints dão tempo e pontos,
   batidas tiram tempo. Acaba quando o tempo zera.
@@ -103,7 +103,7 @@ Joga a Corrida Mortal no terminal. Também tem um modo sem interface
 (headless), útil para CI ou terminais sem teclado interativo:
 
 ```bash
-dotnet run --project src/Kyrios.ConsoleGame -- --simulate --ai 4 --seed 42
+dotnet run --project src/Kyrios.ConsoleGame -- --simulate --ai 9 --seed 42
 
 # ou Contra o Relógio
 dotnet run --project src/Kyrios.ConsoleGame -- --simulate --ai 1 --seed 42 --mode timeattack

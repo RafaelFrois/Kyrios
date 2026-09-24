@@ -364,7 +364,7 @@ public sealed partial class GameRoot
         int position = standings.ToList().IndexOf(_player) + 1;
         int remaining = _race.Entrants.Count(e => !e.Eliminated);
 
-        var panel = new Rectangle(10, 8, 250, 62);
+        var panel = new Rectangle(10, 8, 290, 62);
         DrawHudPanel(panel);
         bool isOut = _player.Eliminated;
         Color placeColor = isOut ? DangerColor : position == 1 ? AccentColor : TextColor;
@@ -377,8 +377,8 @@ public sealed partial class GameRoot
         }
 
         PixelFont.Draw(_spriteBatch, _pixel, $"DE {_race.Entrants.Count}", new Vector2(afterNumber, panel.Y + 32f), 1.5f, StatBadgeLabelColor);
-        PixelFont.Draw(_spriteBatch, _pixel, isOut ? "ELIMINADO" : $"VOLTA {_player.Car.LapsCompleted + 1}", new Vector2(panel.X + 118f, panel.Y + 14f), 2f, isOut ? DangerColor : TextColor);
-        PixelFont.Draw(_spriteBatch, _pixel, $"RESTAM {remaining} CARROS", new Vector2(panel.X + 118f, panel.Y + 38f), 1.5f, StatBadgeLabelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, isOut ? "ELIMINADO" : $"VOLTA {_player.Car.LapsCompleted + 1}", new Vector2(panel.X + 144f, panel.Y + 14f), 2f, isOut ? DangerColor : TextColor);
+        PixelFont.Draw(_spriteBatch, _pixel, $"RESTAM {remaining} CARROS", new Vector2(panel.X + 144f, panel.Y + 38f), 1.5f, StatBadgeLabelColor);
 
         // Próxima eliminação: acontece quando o líder completar a volta — a barra mostra o quanto falta.
         RaceEntrant leader = standings.FirstOrDefault(e => !e.Eliminated && !e.Finished);

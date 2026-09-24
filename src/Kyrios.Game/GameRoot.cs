@@ -84,6 +84,11 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         (new Color(220, 90, 220), "ROXO"),
         (new Color(120, 220, 90), "VERDE"),
         (new Color(230, 90, 70), "VERMELHO"),
+        (new Color(90, 120, 230), "ANIL"),
+        (new Color(240, 130, 50), "LARANJA"),
+        (new Color(190, 225, 60), "LIMA"),
+        (new Color(255, 110, 180), "ROSA"),
+        (new Color(165, 110, 70), "MARROM"),
     ];
 
     private readonly GraphicsDeviceManager _graphics;
@@ -181,8 +186,8 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
 
     private float AreaHeight => _windowHeight - (2f * TrackMargin);
 
-    /// <summary>Corrida Mortal com 4 carros; o Contra o Relógio tem rivais só como tráfego.</summary>
-    private static int AiOpponentsFor(RaceMode mode) => mode == RaceMode.Elimination ? 3 : 4;
+    /// <summary>Corrida Mortal com 10 carros (9 rivais + o jogador); o Contra o Relógio tem rivais só como tráfego.</summary>
+    private static int AiOpponentsFor(RaceMode mode) => mode == RaceMode.Elimination ? 9 : 4;
 
     private void StartNewRace(RaceMode mode)
     {

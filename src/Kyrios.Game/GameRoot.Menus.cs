@@ -242,7 +242,7 @@ public sealed partial class GameRoot
 
         string best = _saveData.BestScoreTimeAttack is > 0f and { } score ? $"RECORDE: {score:0} PTS" : "SEM RECORDE AINDA";
         string wins = _saveData.EliminationWins == 1 ? "1 VITORIA" : $"{_saveData.EliminationWins} VITORIAS";
-        DrawModeTitle(leftX, "CORRIDA MORTAL", "SO O ULTIMO DE PE VENCE", wins, DangerColor, _modeFocus == 0);
+        DrawModeTitle(leftX, "CORRIDA MORTAL", "10 CARROS, SO O ULTIMO DE PE VENCE", wins, DangerColor, _modeFocus == 0);
         DrawModeTitle(rightX, "CONTRA O RELOGIO", "CHECKPOINTS DAO TEMPO E PONTOS", best, BoostFillColor, _modeFocus == 1);
 
         // O lado não escolhido apaga; a faixa do meio acende na cor do escolhido.

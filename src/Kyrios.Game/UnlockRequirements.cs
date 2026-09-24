@@ -103,7 +103,7 @@ public sealed class AllOfRequirement(string description, params UnlockRequiremen
 /// <summary>
 /// Atalhos legíveis pra montar as condições dos catálogos (<see cref="CarSkins"/>, <see cref="TrackThemes"/> e
 /// <see cref="Achievements"/>) — é lá que ficam os valores de cada item, então ajustar a dificuldade é só
-/// trocar o número na linha dele. Referência de escala: na Corrida Mortal (4 carros) uma corrida dura ~40 s e
+/// trocar o número na linha dele. Referência de escala: na Corrida Mortal (10 carros) uma corrida dura ~30 s e
 /// uma volta rápida ~9 s; uma partida muito boa no Contra o Relógio fica em 1500-2000 pts.
 /// </summary>
 public static class Unlock
