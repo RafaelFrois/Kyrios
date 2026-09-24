@@ -51,18 +51,14 @@ public sealed partial class GameRoot
     private enum ResultItem
     {
         Replay,
-        ChooseTrack,
         Menu,
     }
 
     private static readonly ResultItem[] ResultItems = Enum.GetValues<ResultItem>();
     private int _resultFocus;
     private float _resultsTime;
-    private int _unlocksRevealed;
 
     private const float BannerSeconds = 1.8f;
-    private const float UnlockRevealInterval = 0.35f;
-    private const float UnlockRevealDelay = 0.6f;
 
     private void ResetRaceFeedback()
     {
@@ -135,6 +131,7 @@ public sealed partial class GameRoot
             ProcessRaceEndRecords();
             _audio.PlayResultJingle(DetermineOutcome());
             _resultFocus = 0;
+            _resultsTime = 0f;
             _state = State.Results;
         }
     }
@@ -494,32 +491,15 @@ public sealed partial class GameRoot
 
     // ---------- Resultado ----------
 
-    private void StartResultsReveal()
-    {
-        _resultsTime = 0f;
-        _unlocksRevealed = 0;
-    }
+    /// <summary>Fica abaixo da área do aviso de desbloqueio (que desce do topo), pra não cobrir nada.</summary>
+    private static readonly Rectangle ResultsPanel = new(294, 112, 600, 344);
 
-    private static readonly Rectangle ResultsPanel = new(120, 20, 948, 438);
-
-    private Rectangle ResultButtonRect(int i) => new(ResultsPanel.X + 150 + (i * 220), ResultsPanel.Bottom - 56, 200, 40);
+    private Rectangle ResultButtonRect(int i) => new(ResultsPanel.X + 70 + (i * 240), ResultsPanel.Bottom - 60, 220, 40);
 
     private void UpdateResults(float frameSeconds)
     {
         _resultsTime += frameSeconds;
         _bannerTimer = 0f;
-
-        // Os desbloqueios aparecem um de cada vez, cada um com seu som — é a "notificação" do fim da partida.
-        int shouldShow = Math.Min(_raceUnlocks.Count, Math.Max(0, (int)((_resultsTime - UnlockRevealDelay) / UnlockRevealInterval) + 1));
-        if (_resultsTime >= UnlockRevealDelay && shouldShow > _unlocksRevealed)
-        {
-            _unlocksRevealed = shouldShow;
-            if (_unlocksRevealed <= 5)
-            {
-                UnlockNotice notice = _raceUnlocks[_unlocksRevealed - 1];
-                _audio.PlayUnlock(isSkin: notice.Achievement is null);
-            }
-        }
 
         Point mouse = LogicalMousePoint();
         if (_input.MouseMoved)
@@ -533,14 +513,9 @@ public sealed partial class GameRoot
             }
         }
 
-        if (_input.MenuRight)
+        if (_input.MenuRight || _input.MenuLeft)
         {
             _resultFocus = (_resultFocus + 1) % ResultItems.Length;
-            _audio.PlayMenuMove();
-        }
-        else if (_input.MenuLeft)
-        {
-            _resultFocus = (_resultFocus - 1 + ResultItems.Length) % ResultItems.Length;
             _audio.PlayMenuMove();
         }
 
@@ -562,19 +537,13 @@ public sealed partial class GameRoot
             return;
         }
 
-        switch (ResultItems[_resultFocus])
+        if (ResultItems[_resultFocus] == ResultItem.Replay)
         {
-            case ResultItem.Replay:
-                BeginRace(_race.Mode);
-                break;
-            case ResultItem.ChooseTrack:
-                _selectedMode = _race.Mode;
-                StartNewRace(_race.Mode);
-                OpenCarousel(State.TrackSelect, playFlow: true);
-                break;
-            case ResultItem.Menu:
-                GoToMainMenu();
-                break;
+            BeginRace(_race.Mode);
+        }
+        else
+        {
+            GoToMainMenu();
         }
     }
 
@@ -592,73 +561,25 @@ public sealed partial class GameRoot
         Rectangle panel = ResultsPanel;
 
         bool timeAttack = _race.Mode == RaceMode.TimeAttack;
-        bool won = !timeAttack && _player.Finished;
-        (string headline, Color color, string[] icon) = timeAttack
-            ? (_records.NewScoreRecord ? "NOVO RECORDE!" : "TEMPO ESGOTADO!", _records.NewScoreRecord ? RecordColor : BoostFillColor, AchievementIcons.Stopwatch)
-            : won ? ("VITORIA!", AccentColor, AchievementIcons.Trophy) : ("ELIMINADO", DangerColor, AchievementIcons.Skull);
+        (string headline, Color color) = timeAttack
+            ? (_records.NewScoreRecord ? "NOVO RECORDE!" : "TEMPO ESGOTADO!", _records.NewScoreRecord ? RecordColor : BoostFillColor)
+            : _player.Finished ? ("VITORIA!", AccentColor) : ("ELIMINADO", DangerColor);
 
         DrawAccentPanel(panel, color);
         float pop = 1f + (MathF.Max(0f, 1f - (_resultsTime / 0.3f)) * 0.3f);
-        var iconTile = new Rectangle(panel.X + 28, panel.Y + 22, 58, 58);
-        DrawIconTile(iconTile, AchievementIcons.Art(icon), color, colored: true);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, headline, new Vector2(panel.X + 104f, panel.Y + 24f), 4.5f * pop, color);
-        string subtitle = $"{(timeAttack ? "CONTRA O RELOGIO" : "CORRIDA MORTAL")}  -  {SelectedTrack.Name}  -  {SelectedSkin.Name}";
-        PixelFont.Draw(_spriteBatch, _pixel, subtitle, new Vector2(panel.X + 106f, panel.Y + 64f), FitTextSize(subtitle, panel.Width - 140f, 1.6f), StatBadgeLabelColor);
+        DrawCenteredText(panel, headline, panel.Y + 26f, 4.5f * pop, color, shadow: true);
 
-        // Coluna da esquerda: números da partida.
-        var left = new Rectangle(panel.X + 28, panel.Y + 100, 390, 250);
-        foreach ((string label, string value, bool highlight) row in BuildResultRows())
+        var rows = new Rectangle(panel.X + 40, panel.Y + 84, panel.Width - 80, 0);
+        foreach ((string label, string value, bool highlight) in BuildResultRows())
         {
-            DrawResultRow(left, row.label, row.value, row.highlight);
-            left.Y += 34;
+            DrawResultRow(rows, label, value, highlight);
+            rows.Y += 32;
         }
 
-        _spriteBatch.Draw(_pixel, new Rectangle(panel.X + 440, panel.Y + 100, 2, 262), PanelBorderColor);
-
-        // Coluna da direita: o que foi liberado agora e o que está perto.
-        float x = panel.X + 464f;
-        float y = panel.Y + 100f;
-        PixelFont.Draw(_spriteBatch, _pixel, "NOVOS DESBLOQUEIOS", new Vector2(x, y), BodySize, AccentColor);
-        y += 24f;
-        if (_raceUnlocks.Count == 0)
-        {
-            PixelFont.Draw(_spriteBatch, _pixel, "NENHUM DESTA VEZ", new Vector2(x, y + 4f), SmallSize, StatBadgeLabelColor);
-            y += 30f;
-        }
-        else
-        {
-            int shown = Math.Min(Math.Min(_unlocksRevealed, _raceUnlocks.Count), 5);
-            for (int i = 0; i < shown; i++)
-            {
-                DrawUnlockLine(_raceUnlocks[i], x, y, i == shown - 1 ? MathF.Max(0f, 1f - ((_resultsTime - UnlockRevealDelay - (i * UnlockRevealInterval)) / 0.25f)) : 0f);
-                y += 34f;
-            }
-
-            if (_raceUnlocks.Count > 5 && _unlocksRevealed >= 5)
-            {
-                PixelFont.Draw(_spriteBatch, _pixel, $"+ {_raceUnlocks.Count - 5} MAIS (VEJA EM CONQUISTAS)", new Vector2(x, y), SmallSize, StatBadgeLabelColor);
-                y += 20f;
-            }
-
-        }
-
-        y = MathF.Max(y + 8f, panel.Y + 262f);
-        PixelFont.Draw(_spriteBatch, _pixel, "PROXIMOS DESBLOQUEIOS", new Vector2(x, y), 1.6f, StatBadgeLabelColor);
-        y += 18f;
-        foreach ((string kind, string name, UnlockRequirement requirement, float fraction) in Progression.NextUnlocks(_saveData, 2))
-        {
-            string line = $"{kind}: {name}";
-            PixelFont.Draw(_spriteBatch, _pixel, line, new Vector2(x, y), FitTextSize(line, 250f, 1.5f), TextColor);
-            DrawProgressBar(new Rectangle((int)x + 262, (int)y + 2, 180, 7), fraction, RecordColor, 3f);
-            string progress = requirement.ProgressText(_saveData) ?? string.Empty;
-            PixelFont.Draw(_spriteBatch, _pixel, progress, new Vector2(x + 450f, y), 1.3f, RecordColor);
-            y += 20f;
-        }
-
-        string[] labels = ["JOGAR NOVAMENTE", "ESCOLHER PISTA", "MENU"];
+        string[] labels = ["JOGAR NOVAMENTE", "MENU"];
         for (int i = 0; i < labels.Length; i++)
         {
-            DrawButton(ResultButtonRect(i), labels[i], _resultFocus == i, primary: i == 0, textSize: 1.7f);
+            DrawButton(ResultButtonRect(i), labels[i], _resultFocus == i, primary: i == 0, textSize: 1.8f);
         }
     }
 
@@ -693,31 +614,14 @@ public sealed partial class GameRoot
 
     private void DrawResultRow(Rectangle area, string label, string value, bool highlight)
     {
-        DrawRoundedRect(new Rectangle(area.X, area.Y, area.Width, 28), highlight ? StatBadgeFill : new Color(28, 32, 46), 6f);
+        DrawRoundedRect(new Rectangle(area.X, area.Y, area.Width, 26), highlight ? StatBadgeFill : new Color(28, 32, 46), 6f);
         if (highlight)
         {
-            _spriteBatch.Draw(_pixel, new Rectangle(area.X, area.Y, 4, 28), RecordColor);
+            _spriteBatch.Draw(_pixel, new Rectangle(area.X, area.Y, 4, 26), RecordColor);
         }
 
-        PixelFont.Draw(_spriteBatch, _pixel, label, new Vector2(area.X + 12f, area.Y + 9f), SmallSize, StatBadgeLabelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, label, new Vector2(area.X + 12f, area.Y + 8f), SmallSize, StatBadgeLabelColor);
         float valueWidth = PixelFont.Measure(value, 2f);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, value, new Vector2(area.Right - 12f - valueWidth, area.Y + 7f), 2f, highlight ? RecordColor : TextColor);
-    }
-
-    /// <summary>Uma linha de desbloqueio no resultado: ícone + tipo + nome (salta ao aparecer).</summary>
-    private void DrawUnlockLine(UnlockNotice notice, float x, float y, float pop)
-    {
-        (string kind, string name, AchievementIcon icon, Color color) = notice switch
-        {
-            { Achievement: { } a } => ("CONQUISTA", a.Name, a.Icon, ProgressionStyle.CategoryColor(a.Category)),
-            { Skin: { } s } => ("NOVA SKIN", s.Name, AchievementIcons.Skin(s.Id), AccentColor),
-            { Track: { } t } => ("NOVA PISTA", t.Name, AchievementIcons.Art(t.Icon), new Color(120, 230, 130)),
-            _ => ("?", "?", AchievementIcons.Secret, TextColor),
-        };
-
-        int size = (int)(28f * (1f + (pop * 0.4f)));
-        DrawIconTile(new Rectangle((int)x, (int)y - ((size - 28) / 2), size, size), icon, color, colored: true);
-        PixelFont.Draw(_spriteBatch, _pixel, kind, new Vector2(x + 38f, y + 1f), 1.3f, color);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, name, new Vector2(x + 38f, y + 13f), FitTextSize(name, 420f, 1.8f), TextColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, value, new Vector2(area.Right - 12f - valueWidth, area.Y + 6f), 2f, highlight ? RecordColor : TextColor);
     }
 }

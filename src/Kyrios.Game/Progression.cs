@@ -217,38 +217,6 @@ public static class Progression
         save.UnlockedTrackIds.RemoveAll(id => TrackThemes.Find(id) is null);
     }
 
-    /// <summary>Os itens ainda bloqueados mais perto de serem liberados (maior fração de progresso primeiro) —
-    /// pra mostrar "o que vem a seguir" na tela de resultado. Só entram os que dá pra medir e não são secretos.</summary>
-    public static List<(string Kind, string Name, UnlockRequirement Requirement, float Fraction)> NextUnlocks(SaveData save, int count)
-    {
-        var candidates = new List<(string Kind, string Name, UnlockRequirement Requirement, float Fraction)>();
-
-        foreach (CarSkin skin in CarSkins.All.Where(s => !s.IsSecret && !Unlockables.IsUnlocked(s, save.UnlockedSkinIds)))
-        {
-            AddCandidate(candidates, "SKIN", skin.Name, skin.Requirement, save);
-        }
-
-        foreach (TrackTheme track in TrackThemes.All.Where(t => !Unlockables.IsUnlocked(t, save.UnlockedTrackIds)))
-        {
-            AddCandidate(candidates, "PISTA", track.Name, track.Requirement, save);
-        }
-
-        foreach (Achievement achievement in Achievements.All.Where(a => !a.IsSecret && !save.UnlockedAchievementIds.Contains(a.Id)))
-        {
-            AddCandidate(candidates, "CONQUISTA", achievement.Name, achievement.Condition, save);
-        }
-
-        return [.. candidates.OrderByDescending(c => c.Fraction).Take(count)];
-    }
-
-    private static void AddCandidate(List<(string, string, UnlockRequirement, float)> candidates, string kind, string name, UnlockRequirement requirement, SaveData save)
-    {
-        if (requirement.ProgressFraction(save) is { } fraction && fraction > 0f && fraction < 1f)
-        {
-            candidates.Add((kind, name, requirement, fraction));
-        }
-    }
-
     private static void Increment(Dictionary<string, int> counters, string key)
     {
         if (key is not null)

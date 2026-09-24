@@ -22,10 +22,6 @@ public sealed partial class GameRoot
     private int _mainFocus;
     private int _modeFocus;
 
-    /// <summary>true quando os seletores fazem parte do "JOGAR" (modo → pista → carro → corrida); false quando
-    /// foram abertos pelo menu (SKINS/PISTAS) só pra ver e equipar.</summary>
-    private bool _playFlow;
-
     private State _settingsReturnState = State.MainMenu;
     private SettingsRow _settingsSelection = SettingsRow.Music;
     private SettingsRow? _draggingSettingsRow;
@@ -107,10 +103,10 @@ public sealed partial class GameRoot
                 _state = State.ModeSelect;
                 break;
             case MainItem.Skins:
-                OpenCarousel(State.SkinSelect, playFlow: false);
+                OpenCarousel(State.SkinSelect);
                 break;
             case MainItem.Tracks:
-                OpenCarousel(State.TrackSelect, playFlow: false);
+                OpenCarousel(State.TrackSelect);
                 break;
             case MainItem.Achievements:
                 OpenAchievements(State.MainMenu);
@@ -149,13 +145,12 @@ public sealed partial class GameRoot
             DrawButton(MainButtonRect(item), label, _mainFocus == i, primary: item == MainItem.Play, badge, textSize: item == MainItem.Play ? 3.2f : 2f);
         }
 
-        DrawMenuShowcase(new Rectangle(620, 112, 530, 302));
+        DrawMenuShowcase(new Rectangle(620, 112, 530, 220));
         DrawStudioLogo(new Vector2(20f, AreaHeight - 8f));
         DrawKeyHints(("SETAS", "NAVEGAR"), ("ENTER", "CONFIRMAR"), ("C", "CONQUISTAS"), ("ESC", "SAIR"));
     }
 
-    /// <summary>Painel "pronto pra correr": a skin equipada, a pista escolhida e o próximo desbloqueio mais
-    /// perto — o jogador vê o que tem e o que falta sem sair do menu.</summary>
+    /// <summary>Painel "pronto pra correr": a skin equipada, a pista escolhida e o último modo jogado.</summary>
     private void DrawMenuShowcase(Rectangle panel)
     {
         DrawAccentPanel(panel, AccentColor);
@@ -175,27 +170,21 @@ public sealed partial class GameRoot
         string modeName = _selectedMode == RaceMode.TimeAttack ? "CONTRA O RELOGIO" : "CORRIDA MORTAL";
         PixelFont.Draw(_spriteBatch, _pixel, "ULTIMO MODO", new Vector2(panel.X + 270f, panel.Y + 140f), 1.4f, StatBadgeLabelColor);
         PixelFont.Draw(_spriteBatch, _pixel, modeName, new Vector2(panel.X + 270f, panel.Y + 156f), BodySize, TextColor);
-
-        _spriteBatch.Draw(_pixel, new Rectangle(panel.X + 20, panel.Y + 214, panel.Width - 40, 2), PanelBorderColor);
-        PixelFont.Draw(_spriteBatch, _pixel, "PROXIMO DESBLOQUEIO", new Vector2(panel.X + 20f, panel.Y + 226f), 1.4f, AccentColor);
-        var next = Progression.NextUnlocks(_saveData, 1);
-        if (next.Count == 0)
-        {
-            PixelFont.Draw(_spriteBatch, _pixel, "JOGUE PARA DESCOBRIR!", new Vector2(panel.X + 20f, panel.Y + 246f), BodySize, TextColor);
-            return;
-        }
-
-        (string kind, string name, UnlockRequirement requirement, float fraction) = next[0];
-        PixelFont.Draw(_spriteBatch, _pixel, $"{kind}: {name}", new Vector2(panel.X + 20f, panel.Y + 244f), FitTextSize($"{kind}: {name}", panel.Width - 40f, BodySize), TextColor);
-        PixelFont.Draw(_spriteBatch, _pixel, requirement.Description, new Vector2(panel.X + 20f, panel.Y + 262f), FitTextSize(requirement.Description, panel.Width - 40f, 1.4f), StatBadgeLabelColor);
-        DrawProgressBar(new Rectangle(panel.X + 20, panel.Y + 278, panel.Width - 180, 8), fraction, RecordColor, 4f);
-        string label = requirement.ProgressText(_saveData) ?? string.Empty;
-        PixelFont.Draw(_spriteBatch, _pixel, label, new Vector2(panel.Right - 150f, panel.Y + 276f), 1.4f, RecordColor);
     }
 
     // ---------- Seleção de modo ----------
 
-    private Rectangle ModeCardRect(int index) => new(74 + (index * 540), 80, 500, 318);
+    private static readonly Color DeathRaceTint = new(120, 24, 30);
+    private static readonly Color TimeAttackTint = new(18, 60, 110);
+
+    /// <summary>A tela é cortada ao meio por uma diagonal: esquerda = Corrida Mortal, direita = Contra o Relógio.</summary>
+    private float ModeSplitX(float y) => (AreaWidth / 2f) + ((y - (AreaHeight / 2f)) * -0.22f);
+
+    private int ModeUnderMouse()
+    {
+        Point mouse = LogicalMousePoint();
+        return mouse.Y > 60 && mouse.X < ModeSplitX(mouse.Y) ? 0 : mouse.Y > 60 ? 1 : -1;
+    }
 
     private void UpdateModeSelect()
     {
@@ -206,16 +195,10 @@ public sealed partial class GameRoot
             return;
         }
 
-        Point mouse = LogicalMousePoint();
-        if (_input.MouseMoved)
+        if (_input.MouseMoved && ModeUnderMouse() is >= 0 and var hovered && hovered != _modeFocus)
         {
-            for (int i = 0; i < 2; i++)
-            {
-                if (ModeCardRect(i).Contains(mouse))
-                {
-                    _modeFocus = i;
-                }
-            }
+            _modeFocus = hovered;
+            _audio.PlayMenuMove();
         }
 
         if (_input.MenuLeft || _input.MenuRight || _input.MenuUp || _input.MenuDown)
@@ -224,57 +207,131 @@ public sealed partial class GameRoot
             _audio.PlayMenuMove();
         }
 
-        bool clicked = _input.WasMouseLeftJustPressed && ModeCardRect(_modeFocus).Contains(mouse);
+        bool clicked = _input.WasMouseLeftJustPressed && ModeUnderMouse() == _modeFocus;
         if (_input.Confirm || clicked)
         {
-            _selectedMode = _modeFocus == 1 ? RaceMode.TimeAttack : RaceMode.Elimination;
-            OpenCarousel(State.TrackSelect, playFlow: true);
+            // A pista e a skin já vêm escolhidas do menu: escolheu o modo, a partida começa.
+            BeginRace(_modeFocus == 1 ? RaceMode.TimeAttack : RaceMode.Elimination);
         }
     }
 
     private void DrawModeSelect()
     {
-        DimScreen(MenuBackgroundDim);
-        DrawScreenHeader("ESCOLHA O MODO", "O MESMO CIRCUITO, DUAS FORMAS DE CORRER");
-        DrawPlaySteps(0);
+        DimScreen(Color.Black * 0.55f);
 
-        DrawModeCard(ModeCardRect(0), _modeFocus == 0, "CORRIDA MORTAL", "SO O ULTIMO DE PE VENCE", AchievementIcons.Skull, DangerColor,
-            ["4 CARROS NA PISTA", "A CADA VOLTA COMPLETADA, O ULTIMO", "COLOCADO E ELIMINADO", "SOBREVIVA ATE O FIM PARA VENCER"],
-            ("VITORIAS", _saveData.EliminationWins.ToString()), ("MELHOR SEQUENCIA", _saveData.BestEliminationWinStreak.ToString()));
+        // Metades coloridas separadas por uma faixa diagonal, com listras de velocidade correndo por trás.
+        float stripeShift = (_visualTime * 60f) % 36f;
+        for (int y = -TrackMargin; y < AreaHeight + TrackMargin; y += 2)
+        {
+            int split = (int)ModeSplitX(y);
+            _spriteBatch.Draw(_pixel, new Rectangle(-TrackMargin, y, split - 4 + TrackMargin, 2), DeathRaceTint * 0.9f);
+            _spriteBatch.Draw(_pixel, new Rectangle(split + 4, y, (int)AreaWidth + TrackMargin - split, 2), TimeAttackTint * 0.9f);
+            for (float x = -TrackMargin - stripeShift + ((y * 0.22f) % 36f); x < AreaWidth + TrackMargin; x += 36f)
+            {
+                if (MathF.Abs(x - split) > 10f)
+                {
+                    _spriteBatch.Draw(_pixel, new Rectangle((int)x, y, 3, 2), Color.White * 0.03f);
+                }
+            }
+        }
 
-        string best = _saveData.BestScoreTimeAttack is > 0f and { } score ? $"{score:0} PTS" : "--";
-        DrawModeCard(ModeCardRect(1), _modeFocus == 1, "CONTRA O RELOGIO", "CADA SEGUNDO CONTA", AchievementIcons.Stopwatch, BoostFillColor,
-            ["O RELOGIO SO DIMINUI", "CHECKPOINTS DAO TEMPO E PONTOS", "BATIDAS TIRAM TEMPO", "ACABA QUANDO O TEMPO ZERA"],
-            ("RECORDE", best), ("PONTOS ACUMULADOS", $"{_saveData.TotalTimeAttackScore:0}"));
+        float leftX = AreaWidth * 0.26f;
+        float rightX = AreaWidth * 0.74f;
+        DrawDeathRaceArt(new Vector2(leftX, 196f));
+        DrawTimeAttackArt(new Vector2(rightX, 190f));
 
-        DrawKeyHints(("SETAS", "ESCOLHER"), ("ENTER", "CONTINUAR"), ("ESC", "VOLTAR"));
+        string best = _saveData.BestScoreTimeAttack is > 0f and { } score ? $"RECORDE: {score:0} PTS" : "SEM RECORDE AINDA";
+        string wins = _saveData.EliminationWins == 1 ? "1 VITORIA" : $"{_saveData.EliminationWins} VITORIAS";
+        DrawModeTitle(leftX, "CORRIDA MORTAL", "SO O ULTIMO DE PE VENCE", wins, DangerColor, _modeFocus == 0);
+        DrawModeTitle(rightX, "CONTRA O RELOGIO", "CHECKPOINTS DAO TEMPO E PONTOS", best, BoostFillColor, _modeFocus == 1);
+
+        // O lado não escolhido apaga; a faixa do meio acende na cor do escolhido.
+        Color focusColor = _modeFocus == 0 ? DangerColor : BoostFillColor;
+        for (int y = -TrackMargin; y < AreaHeight + TrackMargin; y += 2)
+        {
+            int split = (int)ModeSplitX(y);
+            Rectangle dark = _modeFocus == 0
+                ? new Rectangle(split + 4, y, (int)AreaWidth + TrackMargin - split, 2)
+                : new Rectangle(-TrackMargin, y, split - 4 + TrackMargin, 2);
+            _spriteBatch.Draw(_pixel, dark, Color.Black * 0.55f);
+            _spriteBatch.Draw(_pixel, new Rectangle(split - 4, y, 8, 2), focusColor);
+        }
+
+        DrawArrowButton(BackButtonRect, pointRight: false, BackButtonRect.Contains(LogicalMousePoint()), flashing: false);
+        DrawKeyHints(("SETAS", "ESCOLHER"), ("ENTER", "CORRER"), ("ESC", "VOLTAR"));
     }
 
-    private void DrawModeCard(Rectangle rect, bool selected, string name, string tagline, string[] icon, Color color, string[] rules, (string Label, string Value) statA, (string Label, string Value) statB)
+    private void DrawModeTitle(float centerX, string title, string line, string stat, Color color, bool selected)
     {
+        var area = new Rectangle((int)(centerX - 280f), 0, 560, 0);
+        float bounce = selected ? MathF.Sin(_visualTime * 4f) * 2f : 0f;
+        DrawCenteredText(area, title, 300f + bounce, 4.2f, selected ? Color.White : StatBadgeLabelColor, shadow: true);
+        DrawCenteredText(area, line, 344f, 1.9f, color);
+        DrawCenteredText(area, stat, 372f, 1.6f, StatBadgeLabelColor);
         if (selected)
         {
             float pulse = (MathF.Sin(_visualTime * 5f) + 1f) / 2f;
-            DrawRoundedRect(InflateRect(rect, 3f, 3f), Color.Lerp(color, Color.White, pulse * 0.35f), 12f);
+            const string cta = "ENTER PARA CORRER";
+            float width = PixelFont.Measure(cta, 1.8f) + 28f;
+            var chip = new Rectangle((int)(centerX - (width / 2f)), 402, (int)width, 26);
+            DrawRoundedRect(chip, Color.Lerp(color, Color.White, pulse * 0.25f), 6f);
+            DrawCenteredText(chip, cta, chip.Y + 7f, 1.8f, MenuBackground);
         }
+    }
 
-        DrawAccentPanel(rect, selected ? color : PanelBorderColor);
-        DrawIconTile(new Rectangle(rect.X + 22, rect.Y + 24, 72, 72), AchievementIcons.Art(icon), color, colored: selected);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, name, new Vector2(rect.X + 112f, rect.Y + 34f), 3f, selected ? TextColor : StatBadgeLabelColor);
-        PixelFont.Draw(_spriteBatch, _pixel, tagline, new Vector2(rect.X + 112f, rect.Y + 66f), SmallSize, color);
-
-        PixelFont.Draw(_spriteBatch, _pixel, "REGRAS", new Vector2(rect.X + 24f, rect.Y + 118f), SmallSize, AccentColor);
-        float y = rect.Y + 140f;
-        foreach (string rule in rules)
+    /// <summary>Quatro carros correndo lado a lado; de tempos em tempos o último é eliminado.</summary>
+    private void DrawDeathRaceArt(Vector2 center)
+    {
+        float cycle = (_visualTime % 2.6f) / 2.6f;
+        bool eliminated = cycle > 0.55f;
+        Color[] colors = [AccentColor, AiLooks[0].Color, AiLooks[1].Color, AiLooks[2].Color];
+        for (int i = 0; i < 4; i++)
         {
-            _spriteBatch.Draw(_pixel, new Rectangle(rect.X + 26, (int)y + 4, 5, 5), color);
-            PixelFont.Draw(_spriteBatch, _pixel, rule, new Vector2(rect.X + 40f, y), 1.7f, TextColor);
-            y += 22f;
+            var carCenter = center + new Vector2(105f - (i * 70f), MathF.Sin((_visualTime * 6f) + i) * 3f);
+            bool out_ = i == 3 && eliminated;
+            if (!out_)
+            {
+                for (int s = 0; s < 3; s++)
+                {
+                    float trail = ((_visualTime * 180f) + (s * 14f) + (i * 9f)) % 40f;
+                    _spriteBatch.Draw(_pixel, new Rectangle((int)(carCenter.X - 34f - trail), (int)carCenter.Y - 6 + (s * 6), 12, 2), Color.White * 0.25f);
+                }
+            }
+
+            CarSkin skin = i == 0 ? SelectedSkin : CarSkins.Default;
+            _carPainter.Begin(carCenter + (out_ ? new Vector2(-(cycle - 0.55f) * 60f, 0f) : Vector2.Zero), 0f, 40f, colors[i], out_, _visualTime);
+            skin.Paint(_carPainter);
         }
 
-        int badgeWidth = (rect.Width - 58) / 2;
-        DrawStatBadge(new Rectangle(rect.X + 22, rect.Bottom - 56, badgeWidth, 34), statA.Label, statA.Value, RecordColor);
-        DrawStatBadge(new Rectangle(rect.X + 36 + badgeWidth, rect.Bottom - 56, badgeWidth, 34), statB.Label, statB.Value, RecordColor);
+        if (eliminated)
+        {
+            float pop = MathF.Min(1f, (cycle - 0.55f) / 0.08f);
+            var x = center + new Vector2(105f - 210f - ((cycle - 0.55f) * 60f), 0f);
+            DrawFilledRectRotated(x, 44f * pop, 7f, 0.8f, DangerColor);
+            DrawFilledRectRotated(x, 44f * pop, 7f, -0.8f, DangerColor);
+        }
+    }
+
+    /// <summary>Cronômetro grande com o ponteiro girando e o "+3.0 S" de checkpoint subindo.</summary>
+    private void DrawTimeAttackArt(Vector2 center)
+    {
+        _spriteBatch.Draw(_pixel, new Rectangle((int)center.X - 9, (int)center.Y - 76, 18, 14), new Color(190, 195, 205));
+        _spriteBatch.Draw(_pixel, new Rectangle((int)center.X - 14, (int)center.Y - 82, 28, 7), new Color(150, 155, 168));
+        DrawCircle(center, 64f, new Color(150, 155, 168));
+        DrawCircle(center, 57f, new Color(240, 242, 248));
+        for (int i = 0; i < 12; i++)
+        {
+            float a = i * MathF.Tau / 12f;
+            DrawFilledRectRotated(center + (new Vector2(MathF.Cos(a), MathF.Sin(a)) * 47f), i % 3 == 0 ? 10f : 6f, 3f, a, new Color(60, 64, 78));
+        }
+
+        float hand = (_visualTime * 2.2f) - (MathF.PI / 2f);
+        DrawFilledRectRotated(center + (new Vector2(MathF.Cos(hand), MathF.Sin(hand)) * 20f), 42f, 4f, hand, DangerColor);
+        DrawCircle(center, 5f, new Color(60, 64, 78));
+
+        float rise = (_visualTime % 1.4f) / 1.4f;
+        const string bonus = "+3.0 S";
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, bonus, center + new Vector2(66f, -10f - (rise * 40f)), 2.4f, RecordColor * (1f - rise));
     }
 
     // ---------- Seletor de pista / skin (o mesmo componente) ----------
@@ -314,10 +371,9 @@ public sealed partial class GameRoot
     private static readonly Rectangle CarouselRightArrow = new(868, 153, 48, 60);
     private static readonly Rectangle CarouselConfirmButton = new(930, 356, 220, 40);
 
-    private void OpenCarousel(State state, bool playFlow)
+    private void OpenCarousel(State state)
     {
         _state = state;
-        _playFlow = playFlow;
         _previewTrackIndex = _selectedTrackIndex;
         _previewSkinIndex = _selectedSkinIndex;
         _audio.PlayMenuConfirm();
@@ -336,12 +392,7 @@ public sealed partial class GameRoot
         if (_input.Back || WasBackButtonClicked())
         {
             _audio.PlayMenuConfirm();
-            _state = !_playFlow ? State.MainMenu : CarouselIsTracks ? State.ModeSelect : State.TrackSelect;
-            if (_state == State.TrackSelect)
-            {
-                _previewTrackIndex = _selectedTrackIndex;
-            }
-
+            _state = State.MainMenu;
             return;
         }
 
@@ -392,8 +443,8 @@ public sealed partial class GameRoot
         }
     }
 
-    /// <summary>ENTER no seletor: se o item estiver liberado, equipa (e salva); no "JOGAR", ainda avança pra
-    /// próxima etapa (pista → carro → corrida). Bloqueado: balança e avisa, sem trocar nada.</summary>
+    /// <summary>ENTER no seletor: se o item estiver liberado, equipa (e salva). Bloqueado: balança e avisa, sem
+    /// trocar nada.</summary>
     private void ConfirmCarousel()
     {
         int index = CarouselIndex;
@@ -417,21 +468,7 @@ public sealed partial class GameRoot
 
         _saveData.Save();
         _equipFlash = 0.6f;
-
-        if (!_playFlow)
-        {
-            _audio.PlayMenuConfirm();
-            return;
-        }
-
-        if (CarouselIsTracks)
-        {
-            OpenCarousel(State.SkinSelect, playFlow: true);
-        }
-        else
-        {
-            BeginRace(_selectedMode);
-        }
+        _audio.PlayMenuConfirm();
     }
 
     private void DrawCarousel()
@@ -441,12 +478,7 @@ public sealed partial class GameRoot
             ? Unlockables.Count(TrackThemes.All, _saveData.UnlockedTrackIds)
             : Unlockables.Count(CarSkins.All, _saveData.UnlockedSkinIds);
         string noun = CarouselIsTracks ? "PISTAS" : "SKINS";
-        string title = CarouselIsTracks ? (_playFlow ? "ESCOLHA A PISTA" : "PISTAS") : (_playFlow ? "ESCOLHA SEU CARRO" : "SKINS");
-        DrawScreenHeader(title, $"{earned + 1}/{earnable + 1} {noun} DESBLOQUEADAS");
-        if (_playFlow)
-        {
-            DrawPlaySteps(CarouselIsTracks ? 1 : 2);
-        }
+        DrawScreenHeader(noun, $"{earned + 1}/{earnable + 1} {noun} DESBLOQUEADAS");
 
         int index = CarouselIndex;
         bool unlocked = CarouselUnlocked(index);
@@ -483,17 +515,7 @@ public sealed partial class GameRoot
         string name = hidden ? "SKIN SECRETA" : CarouselIsTracks ? TrackThemes.All[index].Name : CarSkins.All[index].Name;
         DrawCenteredText(area, name, 304f, 3.2f, unlocked ? TextColor : new Color(170, 176, 192), shadow: true);
 
-        Difficulty difficulty = CarouselIsTracks ? TrackThemes.All[index].Difficulty : CarSkins.All[index].Difficulty;
-        bool fromStart = item.Requirement is AlwaysUnlockedRequirement;
-        string noun1 = CarouselIsTracks ? "PISTA" : "SKIN";
-        float chipWidth = PixelFont.Measure(CarouselEquipped(index) ? $"{noun1} EQUIPADA" : unlocked ? "DESBLOQUEADA" : "BLOQUEADA", 1.6f) + 34f;
-        float tagWidth = fromStart ? 0f : PixelFont.Measure(ProgressionStyle.DifficultyName(difficulty), 1.5f) + 12f;
-        float rowX = (AreaWidth - chipWidth - (fromStart ? 0f : tagWidth + 16f)) / 2f;
-        DrawStatusChip(new Vector2(rowX + (chipWidth / 2f), 342f), unlocked, CarouselEquipped(index), noun1);
-        if (!fromStart)
-        {
-            DrawDifficultyTag(new Vector2(rowX + chipWidth + 16f, 337f), difficulty, 1.5f, dimmed: false);
-        }
+        DrawStatusChip(new Vector2(AreaWidth / 2f, 342f), unlocked, CarouselEquipped(index), CarouselIsTracks ? "PISTA" : "SKIN");
 
         if (unlocked)
         {
@@ -519,14 +541,13 @@ public sealed partial class GameRoot
             }
         }
 
-        if (_playFlow || unlocked)
+        if (unlocked)
         {
-            string action = _playFlow ? (CarouselIsTracks ? "CONTINUAR" : "CORRER!") : CarouselEquipped(index) ? "EQUIPADA" : "EQUIPAR";
-            DrawButton(CarouselConfirmButton, action, focused: unlocked, primary: _playFlow && unlocked);
+            DrawButton(CarouselConfirmButton, CarouselEquipped(index) ? "EQUIPADA" : "EQUIPAR", focused: !CarouselEquipped(index));
         }
 
         DrawThumbnails();
-        DrawKeyHints(("SETAS", "TROCAR"), ("ENTER", _playFlow ? (CarouselIsTracks ? "CONTINUAR" : "CORRER") : "EQUIPAR"), ("ESC", "VOLTAR"));
+        DrawKeyHints(("SETAS", "TROCAR"), ("ENTER", "EQUIPAR"), ("ESC", "VOLTAR"));
     }
 
     /// <summary>Vitrine da skin: holofote, "chão" e o carro grande girando devagar. Skin secreta bloqueada não

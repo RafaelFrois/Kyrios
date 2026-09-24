@@ -222,10 +222,9 @@ public sealed partial class GameRoot
 
         float textX = rect.X + 64f;
         float textRight = rect.Right - 10f;
-        float tagWidth = DrawDifficultyTag(new Vector2(textRight, rect.Y + 9f), achievement.Difficulty, 1.25f, dimmed: !unlocked, alignRight: true);
 
         string name = hiddenSecret ? "CONQUISTA SECRETA" : achievement.Name;
-        float nameSize = FitTextSize(name, textRight - tagWidth - 10f - textX, 1.9f);
+        float nameSize = FitTextSize(name, textRight - textX, 1.9f);
         Color nameColor = unlocked ? TextColor : hiddenSecret ? AccentColor * 0.85f : LockedTextColor;
         PixelFont.DrawShadowed(_spriteBatch, _pixel, name, new Vector2(textX, rect.Y + 8f), nameSize, nameColor);
 

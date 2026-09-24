@@ -2,7 +2,8 @@ using Microsoft.Xna.Framework;
 
 namespace Kyrios.Game;
 
-/// <summary>Dificuldade de uma conquista, skin ou pista — só informativa (cor + rótulo na tela).</summary>
+/// <summary>Dificuldade de uma conquista, skin ou pista — organiza os catálogos e o equilíbrio da progressão
+/// (não aparece na tela).</summary>
 public enum Difficulty
 {
     Easy,
@@ -52,8 +53,7 @@ public sealed record Achievement(
     UnlockRequirement IUnlockable.Requirement => Condition;
 }
 
-/// <summary>Nomes e cores de categorias e dificuldades (compartilhados pela página de conquistas, pelo
-/// seletor de skins e pelas notificações).</summary>
+/// <summary>Nomes e cores das categorias de conquista (página de conquistas e notificações).</summary>
 public static class ProgressionStyle
 {
     public static readonly AchievementCategory[] CategoryOrder =
@@ -84,21 +84,5 @@ public static class ProgressionStyle
         AchievementCategory.Skins => new Color(215, 125, 235),
         AchievementCategory.General => new Color(255, 200, 40),
         _ => new Color(255, 140, 70),
-    };
-
-    public static string DifficultyName(Difficulty difficulty) => difficulty switch
-    {
-        Difficulty.Easy => "FACIL",
-        Difficulty.Medium => "MEDIA",
-        Difficulty.Hard => "DIFICIL",
-        _ => "RARA",
-    };
-
-    public static Color DifficultyColor(Difficulty difficulty) => difficulty switch
-    {
-        Difficulty.Easy => new Color(95, 215, 105),
-        Difficulty.Medium => new Color(245, 200, 55),
-        Difficulty.Hard => new Color(235, 75, 65),
-        _ => new Color(185, 110, 245),
     };
 }

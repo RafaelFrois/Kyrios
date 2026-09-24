@@ -116,7 +116,6 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
     private SaveData _saveData = null!;
     private bool _recordsProcessed;
     private RecordFlags _records;
-    private List<UnlockNotice> _raceUnlocks = [];
     private bool _playerWasCollidingLastTick;
     private int _lastCountdownTickSecond = int.MaxValue;
 
@@ -146,7 +145,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
 
         // Progresso que já cumpre algum requisito (ex.: um save de uma versão anterior) libera tudo logo ao
         // abrir, com as notificações de sempre. Escolhas salvas que não estejam liberadas voltam pro padrão.
-        CheckUnlocks(showToasts: true);
+        CheckUnlocks();
         _selectedSkinIndex = CarSkins.IndexOf(_saveData.SelectedSkinId);
         if (!SkinUnlocks.IsUnlocked(SelectedSkin, _saveData))
         {
@@ -191,7 +190,6 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         _player = _race.Entrants.First(e => e.Kind == DriverKind.Human);
         _recordsProcessed = false;
         _records = default;
-        _raceUnlocks = [];
         _playerWasCollidingLastTick = false;
         _lastCountdownTickSecond = int.MaxValue;
         _raceTracker.Reset(_race, SelectedTrack.SecretSpot);
@@ -267,7 +265,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
 
     /// <summary>Fim de partida — o único ponto em que o progresso muda. Fluxo: estatísticas atualizadas
     /// (<see cref="Progression.RecordRace"/>) → conquistas, skins e pistas conferidas e liberadas → salva →
-    /// a tela de resultado mostra o que foi desbloqueado.</summary>
+    /// cada desbloqueio aparece no aviso que desce do topo da tela.</summary>
     private void ProcessRaceEndRecords()
     {
         if (_recordsProcessed)
@@ -281,27 +279,19 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         RaceReport report = _raceTracker.BuildReport(_race, _player, SelectedSkin.Id, SelectedTrack.Id, silent);
         _records = Progression.RecordRace(_saveData, report);
         _saveData.Save();
-        _raceUnlocks = CheckUnlocks(showToasts: false);
-        StartResultsReveal();
+        CheckUnlocks();
     }
 
-    /// <summary>Libera o que o progresso atual já cumpre, salva e devolve a lista. Fora da tela de resultado
-    /// (ex.: ao abrir o jogo), cada desbloqueio vira uma notificação — ou um resumo, se forem muitos.</summary>
-    private List<UnlockNotice> CheckUnlocks(bool showToasts)
+    /// <summary>Libera o que o progresso atual já cumpre, salva e enfileira um aviso pra cada desbloqueio
+    /// (ou um resumo, se forem muitos de uma vez).</summary>
+    private void CheckUnlocks()
     {
         List<UnlockNotice> notices = Progression.CheckUnlocks(_saveData);
-        if (notices.Count == 0)
+        if (notices.Count > 0)
         {
-            return notices;
-        }
-
-        _saveData.Save();
-        if (showToasts)
-        {
+            _saveData.Save();
             EnqueueUnlockToasts(notices);
         }
-
-        return notices;
     }
 
     /// <summary>Decide qual dos três jingles de resultado combina com o desfecho da partida.</summary>

@@ -139,31 +139,6 @@ public sealed partial class GameRoot
         }
     }
 
-    /// <summary>Etapas do "JOGAR" (modo → pista → carro), no canto superior direito — o jogador sempre sabe
-    /// onde está e quanto falta pra correr.</summary>
-    private void DrawPlaySteps(int current)
-    {
-        string[] steps = ["MODO", "PISTA", "CARRO"];
-        const float size = 1.5f;
-        float x = AreaWidth - 20f;
-        for (int i = steps.Length - 1; i >= 0; i--)
-        {
-            float labelWidth = PixelFont.Measure(steps[i], size);
-            x -= labelWidth;
-            Color color = i == current ? AccentColor : i < current ? RecordColor : StatBadgeLabelColor * 0.8f;
-            PixelFont.Draw(_spriteBatch, _pixel, steps[i], new Vector2(x, 26f), size, color);
-            x -= 20f;
-            DrawCircle(new Vector2(x + 8f, 31f), 8f, i == current ? AccentColor : i < current ? RecordColor * 0.8f : PanelBorderColor);
-            PixelFont.Draw(_spriteBatch, _pixel, (i + 1).ToString(), new Vector2(x + 5f, 27f), 1.3f, i <= current ? MenuBackground : StatBadgeLabelColor);
-            x -= 18f;
-            if (i > 0)
-            {
-                _spriteBatch.Draw(_pixel, new Rectangle((int)x - 2, 30, 12, 2), i <= current ? RecordColor * 0.7f : PanelBorderColor);
-                x -= 16f;
-            }
-        }
-    }
-
     private void DrawCenteredText(Rectangle area, string text, float y, float size, Color color, bool shadow = false)
     {
         float width = PixelFont.Measure(text, size);
@@ -186,27 +161,6 @@ public sealed partial class GameRoot
         {
             DrawRoundedRect(new Rectangle(rect.X, rect.Y, Math.Max(fillWidth, (int)(radius * 2f)), rect.Height), fill, radius);
         }
-    }
-
-    /// <summary>Bolinha colorida + "FACIL"/"MEDIA"/"DIFICIL"/"RARA". Devolve a largura ocupada.</summary>
-    private float DrawDifficultyTag(Vector2 anchor, Difficulty difficulty, float size, bool dimmed, bool alignRight = false)
-    {
-        string label = ProgressionStyle.DifficultyName(difficulty);
-        Color color = ProgressionStyle.DifficultyColor(difficulty);
-        if (dimmed)
-        {
-            color = Color.Lerp(color, new Color(120, 126, 142), 0.4f);
-        }
-
-        float dotRadius = 2.2f * size;
-        float gap = 3f * size;
-        float textWidth = PixelFont.Measure(label, size);
-        float totalWidth = (dotRadius * 2f) + gap + textWidth;
-        float x = alignRight ? anchor.X - totalWidth : anchor.X;
-
-        DrawCircle(new Vector2(x + dotRadius, anchor.Y + (PixelFont.LineHeight(size) / 2f)), dotRadius, color);
-        PixelFont.Draw(_spriteBatch, _pixel, label, new Vector2(x + (dotRadius * 2f) + gap, anchor.Y), size, color);
-        return totalWidth;
     }
 
     /// <summary>Cadeado pixelizado (fechado, ou aberto com a alça levantada), centrado em <paramref name="center"/>.
@@ -277,18 +231,6 @@ public sealed partial class GameRoot
         var inner = new Rectangle(tile.X + 2, tile.Y + 2, tile.Width - 4, tile.Height - 4);
         DrawRoundedRect(inner, colored ? Color.Lerp(new Color(20, 22, 30), tint, 0.28f) : new Color(32, 34, 44), 5f);
         _iconRenderer.Draw(icon, inner, colored, _visualTime);
-    }
-
-    /// <summary>Estatística em destaque num chip próprio: tarja colorida + rótulo discreto + valor grande.</summary>
-    private void DrawStatBadge(Rectangle rect, string label, string value, Color color)
-    {
-        DrawRoundedRect(rect, StatBadgeFill, 6f);
-        _spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Y, 4, rect.Height), color);
-        const float labelSize = 1.4f;
-        const float valueSize = 2f;
-        PixelFont.Draw(_spriteBatch, _pixel, label, new Vector2(rect.X + 12f, rect.Y + ((rect.Height - PixelFont.LineHeight(labelSize)) / 2f)), labelSize, StatBadgeLabelColor);
-        float valueWidth = PixelFont.Measure(value, valueSize);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, value, new Vector2(rect.Right - 10f - valueWidth, rect.Y + ((rect.Height - PixelFont.LineHeight(valueSize)) / 2f)), valueSize, color);
     }
 
     /// <summary>Título do jogo com contorno e gradiente.</summary>

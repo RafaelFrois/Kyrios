@@ -41,10 +41,10 @@ Controles (teclado ou controle):
 - `Esc` / `P` — pausar (controle: START)
 - `F11` — tela cheia
 
-No menu: **JOGAR** leva direto por modo → pista → carro (o jogo lembra as
-últimas escolhas, então é só ir apertando ENTER). Também dá pra ver e equipar
-**SKINS** e **PISTAS**, acompanhar as **CONQUISTAS** e ajustar o som em
-**CONFIGURAÇÕES**.
+No menu, escolha e equipe o carro em **SKINS** e o cenário em **PISTAS**;
+depois é só ir em **JOGAR**, escolher o modo e a partida começa. Também dá pra
+acompanhar as **CONQUISTAS** e ajustar o som em **CONFIGURAÇÕES**. Conquistas,
+skins e pistas liberadas aparecem num aviso no topo da tela.
 
 Modos:
 
