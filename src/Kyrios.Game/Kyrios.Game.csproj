@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>MegRace</AssemblyName>
+    <RootNamespace>Kyrios.Game</RootNamespace>
+    <ApplicationIcon>Icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Ícone da janela (o MonoGame procura um recurso chamado Icon.bmp) e a logo do mascote usada nos menus. -->
+    <EmbeddedResource Include="Icon.bmp" LogicalName="Icon.bmp" />
+    <EmbeddedResource Include="Assets\logo.png" LogicalName="MegRace.Logo.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.5.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Kyrios.Core\Kyrios.Core.csproj" />
+  </ItemGroup>
+
+</Project>
