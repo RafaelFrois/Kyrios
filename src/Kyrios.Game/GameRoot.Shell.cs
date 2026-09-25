@@ -17,6 +17,7 @@ public sealed partial class GameRoot
     private static readonly Keys[] SecretCode = [Keys.Up, Keys.Up, Keys.Down, Keys.Down, Keys.Left, Keys.Right, Keys.Left, Keys.Right, Keys.B, Keys.A];
 
     private Texture2D _logo;
+    private Matrix _screenTransform;
     private State _lastState;
     private float _stateTime;
     private bool _fadeActive;
@@ -30,7 +31,13 @@ public sealed partial class GameRoot
     /// pra um clique duplo em "JOGAR" não escolher também o modo que estava embaixo do cursor.</summary>
     private bool MouseClicked => _input.WasMouseLeftJustPressed && _stateTime > ClickGuardSeconds;
 
-    /// <summary>A logo do mascote (embutida no executável), já com o alfa pré-multiplicado como o SpriteBatch espera.</summary>
+    /// <summary>Largura (em pixels lógicos, com escala 1) em que a logo é desenhada — os tamanhos de tela
+    /// usam múltiplos disso, independente da resolução da imagem embutida.</summary>
+    private const float LogoBaseWidth = 96f;
+
+    /// <summary>A logo do mascote (embutida no executável em alta resolução), já com o alfa pré-multiplicado
+    /// como o SpriteBatch espera e com mipmaps feitos à mão, pra ficar nítida e sem serrilhado tanto
+    /// pequena na janela quanto grande em tela cheia.</summary>
     private Texture2D LoadLogo()
     {
         using Stream stream = typeof(GameRoot).Assembly.GetManifestResourceStream("MegRace.Logo.png");
@@ -39,16 +46,54 @@ public sealed partial class GameRoot
             return null;
         }
 
-        Texture2D texture = Texture2D.FromStream(GraphicsDevice, stream);
-        var data = new Color[texture.Width * texture.Height];
-        texture.GetData(data);
-        for (int i = 0; i < data.Length; i++)
+        using Texture2D source = Texture2D.FromStream(GraphicsDevice, stream);
+        int width = source.Width;
+        int height = source.Height;
+        var level = new Color[width * height];
+        source.GetData(level);
+        for (int i = 0; i < level.Length; i++)
         {
-            data[i] = Color.FromNonPremultiplied(data[i].R, data[i].G, data[i].B, data[i].A);
+            level[i] = Color.FromNonPremultiplied(level[i].R, level[i].G, level[i].B, level[i].A);
         }
 
-        texture.SetData(data);
+        var texture = new Texture2D(GraphicsDevice, width, height, mipmap: true, SurfaceFormat.Color);
+        for (int mip = 0; mip < texture.LevelCount; mip++)
+        {
+            texture.SetData(mip, null, level, 0, level.Length);
+            (level, width, height) = HalveImage(level, width, height);
+        }
+
         return texture;
+    }
+
+    /// <summary>Metade da resolução pela média de cada bloco 2x2 (as bordas ímpares repetem o último pixel).</summary>
+    private static (Color[] Pixels, int Width, int Height) HalveImage(Color[] pixels, int width, int height)
+    {
+        int halfWidth = Math.Max(1, width / 2);
+        int halfHeight = Math.Max(1, height / 2);
+        var result = new Color[halfWidth * halfHeight];
+        for (int y = 0; y < halfHeight; y++)
+        {
+            for (int x = 0; x < halfWidth; x++)
+            {
+                int r = 0, g = 0, b = 0, a = 0;
+                for (int dy = 0; dy < 2; dy++)
+                {
+                    for (int dx = 0; dx < 2; dx++)
+                    {
+                        Color c = pixels[(Math.Min((y * 2) + dy, height - 1) * width) + Math.Min((x * 2) + dx, width - 1)];
+                        r += c.R;
+                        g += c.G;
+                        b += c.B;
+                        a += c.A;
+                    }
+                }
+
+                result[(y * halfWidth) + x] = new Color(r / 4, g / 4, b / 4, a / 4);
+            }
+        }
+
+        return (result, halfWidth, halfHeight);
     }
 
     /// <summary>Chamar no fim de cada Update: percebe a troca de tela, zera o relógio da tela nova e decide se ela
@@ -74,6 +119,8 @@ public sealed partial class GameRoot
         }
     }
 
+    /// <summary>Desenha a logo com filtro suave (o resto da interface é pixel art com filtro "ponto"): troca o
+    /// modo do SpriteBatch só pra ela e volta ao normal em seguida.</summary>
     private void DrawLogo(Vector2 center, float scale, float squash = 0f, Color? tint = null)
     {
         if (_logo is null)
@@ -82,10 +129,16 @@ public sealed partial class GameRoot
         }
 
         var origin = new Vector2(_logo.Width / 2f, _logo.Height / 2f);
-        var size = new Vector2(scale * (1f + (squash * 0.1f)), scale * (1f - (squash * 0.12f)));
+        float fit = scale * LogoBaseWidth / _logo.Width;
+        var size = new Vector2(fit * (1f + (squash * 0.1f)), fit * (1f - (squash * 0.12f)));
         Color color = tint ?? Color.White;
+
+        _spriteBatch.End();
+        _spriteBatch.Begin(samplerState: SamplerState.LinearClamp, transformMatrix: _screenTransform);
         _spriteBatch.Draw(_logo, center + new Vector2(3f, 4f), null, Color.Black * (0.35f * (color.A / 255f)), 0f, origin, size, SpriteEffects.None, 0f);
         _spriteBatch.Draw(_logo, center, null, color, 0f, origin, size, SpriteEffects.None, 0f);
+        _spriteBatch.End();
+        _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: _screenTransform);
     }
 
     // ---------- Abertura ----------

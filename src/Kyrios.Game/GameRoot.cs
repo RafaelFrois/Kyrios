@@ -528,6 +528,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
 
         GraphicsDevice.Clear(CarPainter.Darken(theme.Scenery.Background, 0.4f));
         Matrix transform = BuildScreenTransform();
+        _screenTransform = transform;
 
         _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: transform);
         DrawWorld(theme);
