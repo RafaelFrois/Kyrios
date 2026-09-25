@@ -10,7 +10,10 @@ public enum Difficulty
     Medium,
     Hard,
 
-    /// <summary>Rara / especial: condições incomuns, combinações ou feitos específicos.</summary>
+    /// <summary>Muito difícil: domínio de um modo, combinações longas ou condições bem específicas.</summary>
+    VeryHard,
+
+    /// <summary>Rara / troféu: o topo da coleção — combinações enormes, segredos e descobertas.</summary>
     Rare,
 }
 

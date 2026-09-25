@@ -776,4 +776,292 @@ public static class AchievementIcons
         "............",
         "............",
     ];
+
+    public static readonly string[] Mountain =
+    [
+        "............",
+        ".....WW.....",
+        "....WWWL....",
+        "...WWLLLL...",
+        "...ELLLLE...",
+        "..EELLLEEE..",
+        "..EEEEEEEEg.",
+        ".gEEEEEEEEgg",
+        "ggEEEEEEEEgg",
+        "gGgEEEEEEgGg",
+        "GGGGgGGGGGGG",
+        "GGGGGGGGGGGG",
+    ];
+
+    public static readonly string[] SoccerBall =
+    [
+        "....KKKK....",
+        "..KKWWWWKK..",
+        ".KWWWKKWWWK.",
+        ".KWWKKKKWWK.",
+        "KWWWKKKKWWWK",
+        "KKWWWWWWWWKK",
+        "KKKWWWWWWKKK",
+        "KWWWWKKWWWWK",
+        ".KWWKKKKWWK.",
+        ".KWWWKKWWWK.",
+        "..KKWWWWKK..",
+        "....KKKK....",
+    ];
+
+    public static readonly string[] Fish =
+    [
+        "............",
+        "............",
+        ".....OOOO...",
+        "O...OOOOOO..",
+        "OO.OOOOOWKO.",
+        "OOOOOOOOKKOO",
+        "OOOOOYOOOOOO",
+        "OO.OOOYOOOO.",
+        "O...OOOOOO..",
+        ".....OOOO...",
+        "............",
+        "............",
+    ];
+
+    public static readonly string[] Couch =
+    [
+        "............",
+        "............",
+        "..RRRRRRRR..",
+        ".RrrrrrrrrR.",
+        ".RrrrrrrrrR.",
+        "RRRRRRRRRRRR",
+        "RrRRRRRRRRrR",
+        "RrRRRRRRRRrR",
+        "RRRRRRRRRRRR",
+        ".N........N.",
+        "............",
+        "............",
+    ];
+
+    public static readonly string[] Computer =
+    [
+        "............",
+        "KKKKKKKKKKKK",
+        "KBBBBBBBBBBK",
+        "KBCCBBBBBBBK",
+        "KBCBBBBBBBBK",
+        "KBBBBBBBBBBK",
+        "KBBBBBBBBBBK",
+        "KKKKKKKKKKKK",
+        ".....EE.....",
+        ".....EE.....",
+        "...EEEEEE...",
+        "............",
+    ];
+
+    public static readonly string[] FerrisWheel =
+    [
+        "....RRRR....",
+        "..RR.EE.RR..",
+        ".R...EE...R.",
+        ".R.E.EE.E.R.",
+        "R...EEEE...R",
+        "RLLLEYYELLLR",
+        "RLLLEYYELLLR",
+        "R...EEEE...R",
+        ".R.E.EE.E.R.",
+        ".R..E..E..R.",
+        "..RE....ER..",
+        ".EEEEEEEEEE.",
+    ];
+
+    public static readonly string[] Keyboard =
+    [
+        "............",
+        "............",
+        "KKKKKKKKKKKK",
+        "KLKLKLKLKLKK",
+        "KKKKKKKKKKKK",
+        "KLKLKCKLKLKK",
+        "KKKKKKKKKKKK",
+        "KLKCCCKLKLKK",
+        "KKKKKKKKKKKK",
+        "KKLLLLLLLLKK",
+        "KKKKKKKKKKKK",
+        "............",
+    ];
+
+    public static readonly string[] TrashCan =
+    [
+        "....EEEE....",
+        "..LLLLLLLL..",
+        ".LLLLLLLLLL.",
+        "..EEEEEEEE..",
+        "..ELELELEE..",
+        "..ELELELEE..",
+        "..ELELELEE..",
+        "..ELELELEE..",
+        "..ELELELEE..",
+        "..ELELELEE..",
+        "..EEEEEEEE..",
+        "............",
+    ];
+
+    public static readonly string[] Gear =
+    [
+        ".....LL.....",
+        "..L..LL..L..",
+        "...LLLLLL...",
+        "..LLLLLLLL..",
+        "LLLLLEELLLLL",
+        "LLLLE..ELLLL",
+        "LLLLE..ELLLL",
+        "LLLLLEELLLLL",
+        "..LLLLLLLL..",
+        "...LLLLLL...",
+        "..L..LL..L..",
+        ".....LL.....",
+    ];
+
+    public static readonly string[] Alien =
+    [
+        "....GGGG....",
+        "..GGGGGGGG..",
+        ".GGGGGGGGGG.",
+        ".GKKGGGGKKG.",
+        "GGKKKGGKKKGG",
+        "GGGKKGGKKGGG",
+        ".GGGGGGGGGG.",
+        "..GGGGGGGG..",
+        "...GGKKGG...",
+        "....GGGG....",
+        ".....GG.....",
+        "............",
+    ];
+
+    public static readonly string[] Cloud =
+    [
+        "............",
+        "............",
+        "....WWW.....",
+        "...WWWWW.WW.",
+        "..WWWWWWWWWW",
+        ".WWWWWWWWWWW",
+        "WWWWWWWWWWWW",
+        "WWWWWWWWWWWL",
+        ".LLLLLLLLLL.",
+        "............",
+        ".RRYYGGBBPP.",
+        "............",
+    ];
+
+    public static readonly string[] Planet =
+    [
+        "............",
+        "....OOOO....",
+        "...OYYYOO...",
+        "..OOOOOOOO.Y",
+        "..OYYYYYOOY.",
+        "YYYYYYYYYYY.",
+        ".YOOOOOOOY..",
+        "Y.OYYYYOO...",
+        "..OOOOOOOO..",
+        "...OOOOOO...",
+        "....OOOO....",
+        "............",
+    ];
+
+    public static readonly string[] Chip =
+    [
+        "...L.L.L.L..",
+        "..KKKKKKKKK.",
+        ".LKEEEEEEEKL",
+        "..KEKKKKKEK.",
+        ".LKEKYYYKEKL",
+        "..KEKYYYKEK.",
+        ".LKEKYYYKEKL",
+        "..KEKKKKKEK.",
+        ".LKEEEEEEEKL",
+        "..KKKKKKKKK.",
+        "...L.L.L.L..",
+        "............",
+    ];
+
+    public static readonly string[] Pencil =
+    [
+        "..........RR",
+        ".........RRR",
+        "........YYR.",
+        ".......YYY..",
+        "......YYY...",
+        ".....YYY....",
+        "....YYY.....",
+        "...YYY......",
+        "..NNY.......",
+        "..NN........",
+        ".KN.........",
+        "K...........",
+    ];
+
+    public static readonly string[] EightBall =
+    [
+        "....KKKK....",
+        "..KKKKKKKK..",
+        ".KKKKKKKKKK.",
+        ".KKKWWWKKKK.",
+        "KKKWWKWWKKKK",
+        "KKKWKWKWKKKK",
+        "KKKWWKWWKKKK",
+        "KKKKWWWKKKKK",
+        ".KKKKKKKKKK.",
+        ".KKKKKKKKEK.",
+        "..KKKKKKKK..",
+        "....KKKK....",
+    ];
+
+    public static readonly string[] Cake =
+    [
+        "...Y..Y..Y..",
+        "...R..R..R..",
+        "...W..W..W..",
+        "..FFFFFFFFF.",
+        ".FWFWFWFWFWF",
+        ".FFFFFFFFFFF",
+        ".NNNNNNNNNNN",
+        ".FFFFFFFFFFF",
+        ".NNNNNNNNNNN",
+        ".FFFFFFFFFFF",
+        "LLLLLLLLLLLL",
+        "............",
+    ];
+
+    public static readonly string[] Pumpkin =
+    [
+        ".....gg.....",
+        "......g.....",
+        "..OOOOOOOO..",
+        ".OOOOOOOOOO.",
+        "OOKKOOOOKKOO",
+        "OOKKOOOOKKOO",
+        "OOOOOKKOOOOO",
+        "OOKOOOOOOKOO",
+        "OOOKKKKKKOOO",
+        ".OOOOOOOOOO.",
+        "..OOOOOOOO..",
+        "............",
+    ];
+
+    public static readonly string[] Invader =
+    [
+        "............",
+        "............",
+        "..G......G..",
+        "...G....G...",
+        "..GGGGGGGG..",
+        ".GGKGGGGKGG.",
+        "GGGGGGGGGGGG",
+        "G.GGGGGGGG.G",
+        "G.G......G.G",
+        "...GG..GG...",
+        "............",
+        "............",
+    ];
 }

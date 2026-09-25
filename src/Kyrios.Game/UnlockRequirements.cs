@@ -64,9 +64,14 @@ public sealed class StatAtLeastRequirement : UnlockRequirement
 }
 
 /// <summary>Um melhor tempo salvo (menor = melhor) precisa ficar abaixo de uma meta.</summary>
-public sealed class TimeBelowRequirement(string description, Func<SaveData, float?> bestTime, float targetSeconds) : UnlockRequirement
+public sealed class TimeBelowRequirement(Func<string> description, Func<SaveData, float?> bestTime, float targetSeconds) : UnlockRequirement
 {
-    public override string Description => description;
+    public TimeBelowRequirement(string description, Func<SaveData, float?> bestTime, float targetSeconds)
+        : this(() => description, bestTime, targetSeconds)
+    {
+    }
+
+    public override string Description => description();
 
     public override bool IsMet(SaveData progress) => bestTime(progress) is { } time && time < targetSeconds;
 
@@ -83,10 +88,12 @@ public sealed class ConditionRequirement(Func<string> description, Func<SaveData
 }
 
 /// <summary>Combinação: todas as condições precisam estar cumpridas. O progresso mostrado é o da primeira
-/// que ainda falta.</summary>
+/// que ainda falta; as telas podem listar cada parte (<see cref="Parts"/>) com o próprio progresso.</summary>
 public sealed class AllOfRequirement(string description, params UnlockRequirement[] parts) : UnlockRequirement
 {
     public override string Description => description;
+
+    public IReadOnlyList<UnlockRequirement> Parts => parts;
 
     public override bool IsMet(SaveData progress) => parts.All(part => part.IsMet(progress));
 
@@ -201,6 +208,15 @@ public static class Unlock
         p => TrackThemes.All.Count(t => p.CleanTracks.Contains(t.Id)),
         count);
 
+    public static UnlockRequirement GamesOnTrack(string trackId, int games) => Stat(
+        () => $"JOGUE {games} PARTIDAS NA PISTA {TrackName(trackId)}",
+        p => p.GamesByTrack.GetValueOrDefault(trackId),
+        () => games);
+
+    public static UnlockRequirement CleanOnTrack(string trackId) => new ConditionRequirement(
+        () => $"TERMINE UMA PARTIDA SEM BATER NA PISTA {TrackName(trackId)}",
+        p => p.CleanTracks.Contains(trackId));
+
     public static UnlockRequirement TrackSecretsFound(int count) => Stat(
         $"ENCONTRE {Plural(count, "SEGREDO ESCONDIDO", "SEGREDOS ESCONDIDOS")} NAS PISTAS",
         p => TrackThemes.All.Count(t => p.FoundTrackSecrets.Contains(t.Id)),
@@ -241,6 +257,12 @@ public static class Unlock
         p => Unlockables.Count(CarSkins.All, p.UnlockedSkinIds).Earned,
         () => Unlockables.Count(CarSkins.All, []).Earnable);
 
+    /// <summary>Todas as skins menos a própria que usa este requisito (o troféu final da coleção).</summary>
+    public static UnlockRequirement AllOtherSkins() => Stat(
+        () => "DESBLOQUEIE TODAS AS OUTRAS SKINS",
+        p => Unlockables.Count(CarSkins.All, p.UnlockedSkinIds).Earned,
+        () => Unlockables.Count(CarSkins.All, []).Earnable - 1);
+
     public static UnlockRequirement SkinEarned(string skinId) => new ConditionRequirement(
         () => $"DESBLOQUEIE A SKIN {SkinName(skinId)}",
         p => p.UnlockedSkinIds.Contains(skinId));
@@ -272,7 +294,111 @@ public static class Unlock
         p => skinIds.Count(id => p.WinsBySkin.ContainsKey(id)),
         () => skinIds.Length);
 
+    public static UnlockRequirement PlayedWithSkinOnTrack(string skinId, string trackId) => Stat(
+        () => $"JOGUE NA PISTA {TrackName(trackId)} USANDO {SkinName(skinId)}",
+        p => p.GamesBySkinOnTrack.GetValueOrDefault(Progression.SkinOnTrackKey(skinId, trackId)),
+        () => 1);
+
+    /// <summary>Venceu a Mortal na pista usando qualquer skin da categoria.</summary>
+    public static UnlockRequirement WinWithCategoryOnTrack(SkinCategory category, string trackId) => new ConditionRequirement(
+        () => $"VENCA NA PISTA {TrackName(trackId)} USANDO {SkinCategories.Article(category)} {SkinCategories.Singular(category)}",
+        p => CarSkins.All.Any(skin => skin.Category == category && p.WinsBySkinOnTrack.ContainsKey(Progression.SkinOnTrackKey(skin.Id, trackId))));
+
+    /// <summary>Quantas categorias de skin diferentes já venceram a Mortal.</summary>
+    public static UnlockRequirement CategoriesWon(int categories) => Stat(
+        $"VENCA COM SKINS DE {categories} CATEGORIAS DIFERENTES",
+        p => Enum.GetValues<SkinCategory>().Count(category => CarSkins.All.Any(skin => skin.Category == category && p.WinsBySkin.ContainsKey(skin.Id))),
+        categories);
+
+    public static UnlockRequirement MostGamesWithOneSkin(int games) => Stat(
+        $"JOGUE {games} PARTIDAS COM UMA MESMA SKIN",
+        p => p.GamesBySkin.Count == 0 ? 0 : p.GamesBySkin.Values.Max(),
+        games);
+
+    /// <summary>Tem todas as skins dadas desbloqueadas.</summary>
+    public static UnlockRequirement SkinsEarned(string description, params string[] skinIds) => Stat(
+        () => description,
+        p => skinIds.Count(id => p.UnlockedSkinIds.Contains(id)),
+        () => skinIds.Length);
+
+    public static UnlockRequirement GamesWithSkin(string skinId, int games) => Stat(
+        () => $"JOGUE {games} PARTIDAS COM {SkinName(skinId)}",
+        p => p.GamesBySkin.GetValueOrDefault(skinId),
+        () => games);
+
+    /// <summary>Venceu com a skin em N pistas diferentes.</summary>
+    public static UnlockRequirement WinsWithSkinOnTracks(string skinId, int tracks) => Stat(
+        () => $"VENCA COM {SkinName(skinId)} EM {tracks} PISTAS DIFERENTES",
+        p => TrackThemes.All.Count(t => p.WinsBySkinOnTrack.ContainsKey(Progression.SkinOnTrackKey(skinId, t.Id))),
+        () => tracks);
+
+    /// <summary>Venceu a Mortal com N skins diferentes de uma categoria.</summary>
+    public static UnlockRequirement WinsWithCategory(SkinCategory category, int skins) => Stat(
+        () => skins == 1
+            ? $"VENCA A MORTAL COM {SkinCategories.Article(category)} {SkinCategories.Singular(category)}"
+            : $"VENCA COM {skins} {SkinCategories.Plural(category)} DIFERENTES",
+        p => CarSkins.All.Count(skin => skin.Category == category && p.WinsBySkin.ContainsKey(skin.Id)),
+        () => skins);
+
+    public static UnlockRequirement SkinsOfCategoryUnlocked(SkinCategory category, int skins) => Stat(
+        () => $"DESBLOQUEIE {skins} {SkinCategories.Plural(category)}",
+        p => CarSkins.All.Count(skin => skin.Category == category && Unlockables.IsUnlocked(skin, p.UnlockedSkinIds)),
+        () => skins);
+
+    public static UnlockRequirement SameSkinWinStreak(int wins) => Stat(
+        $"VENCA {wins} MORTAIS SEGUIDAS COM A MESMA SKIN", p => p.BestSameSkinWinStreak, wins);
+
+    public static UnlockRequirement SameSkinGameStreak(int games) => Stat(
+        $"JOGUE {games} PARTIDAS SEGUIDAS SEM TROCAR DE SKIN", p => p.BestSameSkinGameStreak, games);
+
+    // ----- Habilidade -----
+    public static UnlockRequirement LapUnderOnTrack(string trackId, float seconds) => new TimeBelowRequirement(
+        () => $"FACA UMA VOLTA EM MENOS DE {seconds:0.#} S NA PISTA {TrackName(trackId)}",
+        p => p.BestLapByTrack.TryGetValue(trackId, out float lap) ? lap : null,
+        seconds);
+
+    /// <summary>Fez a pontuação em N pistas diferentes (cada uma numa partida).</summary>
+    public static UnlockRequirement ScoreOnTracks(int points, int tracks) => Stat(
+        $"FACA {points} PTS NO RELOGIO EM {tracks} PISTAS DIFERENTES",
+        p => p.BestScoreByTrack.Count(pair => pair.Value >= points),
+        tracks);
+
+    public static UnlockRequirement Standstill(int seconds, string flavor = null) => Stat(
+        flavor ?? $"FIQUE {seconds} S PARADO NUMA PARTIDA", p => p.LongestStandstillSeconds, seconds);
+
+    public static UnlockRequirement DaysPlayed(int days) => Stat(
+        $"JOGUE EM {days} DIAS DIFERENTES", p => p.DaysPlayed, days);
+
+    /// <summary>Uma interação escondida dos menus (ver <see cref="Discovery"/>).</summary>
+    public static UnlockRequirement Discovered(string discoveryId, string description) => new ConditionRequirement(
+        () => description,
+        p => p.Discoveries.Contains(discoveryId));
+
     // ----- Conquistas -----
+    public static UnlockRequirement AchievementsOfDifficulty(Difficulty difficulty, int count) => Stat(
+        () => $"DESBLOQUEIE {count} CONQUISTAS {DifficultyAdjective(difficulty, count)}",
+        p => Achievements.All.Count(a => a.Difficulty == difficulty && Achievements.IsUnlocked(a, p)),
+        () => count);
+
+    public static UnlockRequirement SecretAchievements(int count) => Stat(
+        () => $"DESBLOQUEIE {count} CONQUISTAS SECRETAS",
+        p => Achievements.All.Count(a => a.IsSecret && Achievements.IsUnlocked(a, p)),
+        () => count);
+
+    private static string DifficultyAdjective(Difficulty difficulty, int count) => (difficulty, count == 1) switch
+    {
+        (Difficulty.Easy, true) => "FACIL",
+        (Difficulty.Easy, false) => "FACEIS",
+        (Difficulty.Medium, true) => "MEDIA",
+        (Difficulty.Medium, false) => "MEDIAS",
+        (Difficulty.Hard, true) => "DIFICIL",
+        (Difficulty.Hard, false) => "DIFICEIS",
+        (Difficulty.VeryHard, true) => "MUITO DIFICIL",
+        (Difficulty.VeryHard, false) => "MUITO DIFICEIS",
+        (_, true) => "RARA",
+        _ => "RARAS",
+    };
+
     public static UnlockRequirement AchievementsUnlocked(int count) => Stat(
         $"DESBLOQUEIE {count} CONQUISTAS", p => Achievements.UnlockedCount(p), count);
 

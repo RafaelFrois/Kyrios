@@ -591,9 +591,10 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         DrawCheckpoints(theme);
         DrawHazards();
         DrawParticles();
-        DrawCars();
+        DrawCars(theme);
         _scenery.DrawAmbient(theme, _visualTime);
         _scenery.DrawDarkness(theme, AreaWidth, AreaHeight);
+        _scenery.DrawAmbient(theme, _visualTime, glowing: true);
     }
 
     /// <summary>Faixas de checkpoint pulsando na cor da pista. Durante a partida, o PRÓXIMO checkpoint do
@@ -664,8 +665,9 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         }
     }
 
-    private void DrawCars()
+    private void DrawCars(TrackTheme theme)
     {
+        _carPainter.ColorFilter = theme.Scenery.CarFilter;
         foreach (RaceEntrant entrant in _race.Entrants)
         {
             Car car = entrant.Car;
@@ -685,6 +687,8 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
             _carPainter.Begin(center, car.Angle, CellSize, _carColors[entrant], eliminated, _visualTime);
             skin.Paint(_carPainter);
         }
+
+        _carPainter.ColorFilter = null;
     }
 
     private void DrawParticles()

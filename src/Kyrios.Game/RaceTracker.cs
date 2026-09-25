@@ -49,8 +49,17 @@ public sealed class RaceReport
     /// <summary>Maior sequência de checkpoints seguidos sem bater.</summary>
     public int BestCleanCheckpointStreak { get; init; }
 
+    /// <summary>Contra o Relógio: checkpoints cruzados com menos de 1 s no relógio.</summary>
+    public int ClutchCheckpoints { get; init; }
+
     /// <summary>Contra o Relógio: cruzou algum checkpoint com menos de 1 s no relógio.</summary>
-    public bool ClutchCheckpoint { get; init; }
+    public bool ClutchCheckpoint => ClutchCheckpoints > 0;
+
+    /// <summary>Contra o Relógio: o menor tempo que sobrava no relógio ao cruzar um checkpoint.</summary>
+    public float? ClosestCall { get; init; }
+
+    /// <summary>Contra o Relógio: batidas nos obstáculos móveis.</summary>
+    public int HazardHits { get; init; }
 
     /// <summary>Contra o Relógio: mais tempo que chegou a ter no relógio.</summary>
     public float MaxTimeBanked { get; init; }
@@ -60,6 +69,30 @@ public sealed class RaceReport
 
     /// <summary>Passou pelo detalhe escondido da pista.</summary>
     public bool FoundSecret { get; init; }
+
+    /// <summary>Corrida Mortal: nunca saiu do 1º lugar depois da largada.</summary>
+    public bool LedWholeRace { get; init; }
+
+    /// <summary>Corrida Mortal: esteve em último com só 3 carros (ou menos) na pista.</summary>
+    public bool WasLastInFinalThree { get; init; }
+
+    /// <summary>Corrida Mortal: o último rival eliminado estava colado no jogador.</summary>
+    public bool PhotoFinish { get; init; }
+
+    /// <summary>Não soltou o acelerador nenhuma vez depois da largada.</summary>
+    public bool FullThrottle { get; init; }
+
+    /// <summary>Não virou pra direita nenhuma vez.</summary>
+    public bool NeverSteeredRight { get; init; }
+
+    /// <summary>Checkpoints cruzados andando de ré.</summary>
+    public int ReverseCheckpoints { get; init; }
+
+    /// <summary>Mais tempo seguido andando na contramão.</summary>
+    public float LongestWrongWaySeconds { get; init; }
+
+    /// <summary>Quando a partida terminou (hora local) — default = desconhecido (testes).</summary>
+    public DateTime PlayedAt { get; init; }
 
     public int Pauses { get; init; }
 
@@ -82,6 +115,9 @@ public sealed class RaceTracker
     private const float LazyWinSpeed = 0.5f;
     private const float ClutchSecondsLeft = 1f;
     private const float SecretRadius = 1.1f;
+    private const float PhotoFinishDistance = 2f;
+    private const float WrongWaySpeed = 2f;
+    private const int ClutchFieldSize = 3;
 
     private Vector2D? _secretSpot;
     private int _collisions;
@@ -96,7 +132,18 @@ public sealed class RaceTracker
     private int _roundsSurvived;
     private int _previousActiveCount;
     private float? _previousTimeRemaining;
-    private bool _clutchCheckpoint;
+    private int _clutchCheckpoints;
+    private float? _closestCall;
+    private int _hazardHits;
+    private bool _wasHazardColliding;
+    private bool _wasEverNotFirst;
+    private bool _wasLastInFinalThree;
+    private bool _photoFinish;
+    private bool _releasedThrottle;
+    private bool _steeredRight;
+    private int _reverseCheckpoints;
+    private float _wrongWay;
+    private float _longestWrongWay;
     private int _checkpoints;
     private int _cleanStreak;
     private int _bestCleanStreak;
@@ -131,7 +178,18 @@ public sealed class RaceTracker
         _roundsSurvived = 0;
         _previousActiveCount = race.Entrants.Count;
         _previousTimeRemaining = race.TimeRemaining ?? RaceSimulation.TimeAttackStartSeconds;
-        _clutchCheckpoint = false;
+        _clutchCheckpoints = 0;
+        _closestCall = null;
+        _hazardHits = 0;
+        _wasHazardColliding = false;
+        _wasEverNotFirst = false;
+        _wasLastInFinalThree = false;
+        _photoFinish = false;
+        _releasedThrottle = false;
+        _steeredRight = false;
+        _reverseCheckpoints = 0;
+        _wrongWay = 0f;
+        _longestWrongWay = 0f;
         _checkpoints = 0;
         _cleanStreak = 0;
         _bestCleanStreak = 0;
@@ -147,8 +205,9 @@ public sealed class RaceTracker
 
     public void RegisterPause() => _pauses++;
 
-    /// <summary>Chamar logo depois de cada <see cref="RaceSimulation.Update"/> da partida do jogador.</summary>
-    public void Observe(RaceSimulation race, RaceEntrant player, float dt)
+    /// <summary>Chamar logo depois de cada <see cref="RaceSimulation.Update"/> da partida do jogador, com o mesmo
+    /// input que foi usado nele.</summary>
+    public void Observe(RaceSimulation race, RaceEntrant player, float dt, CarInput input = default)
     {
         Car car = player.Car;
         SecretFoundThisTick = false;
@@ -161,7 +220,7 @@ public sealed class RaceTracker
 
         _previousActiveCount = activeCount;
 
-        if (ReferenceEquals(race.EliminatedThisTick, player))
+        if (race.EliminationsThisTick.Contains(player))
         {
             _eliminatedWhileBoosting = car.IsBoosting;
         }
@@ -175,11 +234,21 @@ public sealed class RaceTracker
         if (done)
         {
             _playerWasDone = true;
-            if (race.Mode == RaceMode.Elimination && player.Finished && car.Speed <= LazyWinSpeed)
+            if (race.Mode == RaceMode.Elimination && player.Finished)
             {
-                _lazyWin = true;
+                _lazyWin = car.Speed <= LazyWinSpeed;
+                RaceEntrant runnerUp = race.EliminationsThisTick.LastOrDefault();
+                _photoFinish = runnerUp is not null && runnerUp.Car.Position.DistanceTo(car.Position) <= PhotoFinishDistance;
             }
         }
+
+        bool started = race.ElapsedTime > StartGraceSeconds;
+        if (started && !done)
+        {
+            _releasedThrottle |= input.Throttle < 0.95f;
+        }
+
+        _steeredRight |= !done && input.Steering > 0.1f;
 
         bool colliding = car.HadHeadOnCollisionThisTick || car.HadCarCollisionThisTick || car.HadHazardCollisionThisTick;
         if (colliding && !_wasColliding)
@@ -194,8 +263,17 @@ public sealed class RaceTracker
 
         _wasColliding = colliding;
 
+        bool hazardColliding = car.HadHazardCollisionThisTick;
+        if (hazardColliding && !_wasHazardColliding)
+        {
+            _hazardHits++;
+        }
+
+        _wasHazardColliding = hazardColliding;
+
         if (car.CheckpointCrossedThisTick)
         {
+            _reverseCheckpoints += car.Speed < ReverseSpeed ? 1 : 0;
             _checkpoints++;
             _cleanStreak++;
             _bestCleanStreak = Math.Max(_bestCleanStreak, _cleanStreak);
@@ -212,6 +290,9 @@ public sealed class RaceTracker
         _reverse = car.Speed < ReverseSpeed ? _reverse + dt : 0f;
         _longestReverse = MathF.Max(_longestReverse, _reverse);
 
+        _wrongWay = started && IsGoingTheWrongWay(race.Track, car) ? _wrongWay + dt : 0f;
+        _longestWrongWay = MathF.Max(_longestWrongWay, _wrongWay);
+
         if (!_foundSecret && _secretSpot is { } spot && car.Position.DistanceTo(spot) < SecretRadius)
         {
             _foundSecret = true;
@@ -220,22 +301,63 @@ public sealed class RaceTracker
 
         if (race.Mode == RaceMode.TimeAttack)
         {
-            if (car.CheckpointCrossedThisTick && _previousTimeRemaining is { } before && before < ClutchSecondsLeft)
+            if (car.CheckpointCrossedThisTick && _previousTimeRemaining is { } before)
             {
-                _clutchCheckpoint = true;
+                _clutchCheckpoints += before < ClutchSecondsLeft ? 1 : 0;
+                _closestCall = MathF.Min(_closestCall ?? float.MaxValue, before);
             }
 
             _previousTimeRemaining = race.TimeRemaining;
             _maxTimeBanked = MathF.Max(_maxTimeBanked, race.TimeRemaining ?? 0f);
             _timeLost += race.TimeLostThisTick;
         }
-        else if (!done && race.ElapsedTime > StartGraceSeconds && IsLastAmongRacing(race, player))
+        else if (!done && started)
         {
-            _wasEverLast = true;
+            List<RaceEntrant> racing = [.. race.GetStandings().Where(e => !e.Eliminated && !e.Finished)];
+            bool last = racing.Count > 1 && ReferenceEquals(racing[^1], player);
+            _wasEverLast |= last;
+            _wasLastInFinalThree |= last && racing.Count <= ClutchFieldSize;
+            _wasEverNotFirst |= racing.Count > 0 && !ReferenceEquals(racing[0], player);
         }
     }
 
-    public RaceReport BuildReport(RaceSimulation race, RaceEntrant player, string skinId, string trackId, bool silent)
+    /// <summary>Andando (de frente ou de ré) no sentido contrário ao do circuito, pelo trecho da linha central
+    /// mais próximo.</summary>
+    private static bool IsGoingTheWrongWay(Track track, Car car)
+    {
+        if (MathF.Abs(car.Speed) < WrongWaySpeed || track.CenterLine.Count < 2)
+        {
+            return false;
+        }
+
+        IReadOnlyList<Vector2D> line = track.CenterLine;
+        float bestDistance = float.MaxValue;
+        Vector2D direction = default;
+        for (int i = 0; i < line.Count; i++)
+        {
+            Vector2D a = line[i];
+            Vector2D b = line[(i + 1) % line.Count];
+            Vector2D ab = b - a;
+            float lengthSquared = Vector2D.Dot(ab, ab);
+            if (lengthSquared <= 0f)
+            {
+                continue;
+            }
+
+            float t = Math.Clamp(Vector2D.Dot(car.Position - a, ab) / lengthSquared, 0f, 1f);
+            float distance = car.Position.DistanceTo(a + (ab * t));
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                direction = ab * (1f / MathF.Sqrt(lengthSquared));
+            }
+        }
+
+        Vector2D velocity = Vector2D.FromAngle(car.Angle) * MathF.Sign(car.Speed);
+        return Vector2D.Dot(velocity, direction) < -0.6f;
+    }
+
+    public RaceReport BuildReport(RaceSimulation race, RaceEntrant player, string skinId, string trackId, bool silent, DateTime playedAt = default)
     {
         return new RaceReport
         {
@@ -260,7 +382,17 @@ public sealed class RaceTracker
             LazyWin = _lazyWin,
             Checkpoints = _checkpoints,
             BestCleanCheckpointStreak = _bestCleanStreak,
-            ClutchCheckpoint = _clutchCheckpoint,
+            ClutchCheckpoints = _clutchCheckpoints,
+            ClosestCall = _closestCall,
+            HazardHits = _hazardHits,
+            LedWholeRace = race.Mode == RaceMode.Elimination && !_wasEverNotFirst,
+            WasLastInFinalThree = _wasLastInFinalThree,
+            PhotoFinish = _photoFinish,
+            FullThrottle = !_releasedThrottle,
+            NeverSteeredRight = !_steeredRight,
+            ReverseCheckpoints = _reverseCheckpoints,
+            LongestWrongWaySeconds = _longestWrongWay,
+            PlayedAt = playedAt,
             MaxTimeBanked = _maxTimeBanked,
             TimeLostToCrashes = _timeLost,
             FoundSecret = _foundSecret,
@@ -269,9 +401,4 @@ public sealed class RaceTracker
         };
     }
 
-    private static bool IsLastAmongRacing(RaceSimulation race, RaceEntrant player)
-    {
-        List<RaceEntrant> racing = [.. race.GetStandings().Where(e => !e.Eliminated && !e.Finished)];
-        return racing.Count > 1 && ReferenceEquals(racing[^1], player);
-    }
 }

@@ -165,20 +165,38 @@ public static partial class TrackSceneries
         EdgeB = new Color(232, 230, 224),
         PaintStatic = c =>
         {
-            // Pneus empilhados na margem e placas de patrocinador.
+            // Margem: alambrado de proteção atrás de uma fileira de pneus empilhados, com arbustos por fora.
+            foreach (Rectangle band in MarginAreas())
+            {
+                GroundSpeckles(c, band, band.Width * band.Height / 90, new Color(54, 136, 84), new Color(30, 90, 54));
+            }
+
+            for (float x = -40f; x < W + 40f; x += 34f)
+            {
+                Tree(c, x + c.R(-4f, 4f), -34f + c.R(-2f, 2f), c.R(8f, 11f), new Color(22, 86, 52), new Color(36, 112, 62), new Color(70, 150, 90));
+            }
+
+            foreach ((float y, bool top) in new[] { (-8f, true), (H + 8f, false) })
+            {
+                c.Rect(-40f, y - 1f, W + 80f, 2f, new Color(170, 176, 186));
+                for (float x = -40f; x < W + 40f; x += 8f)
+                {
+                    c.Rect(x, y - (top ? 6f : -2f), 1f, 4f, new Color(150, 156, 166) * 0.8f);
+                }
+
+                for (float x = -40f; x < W + 40f; x += 48f)
+                {
+                    c.Rect(x, y - 3f, 3f, 6f, new Color(120, 126, 136));
+                }
+            }
+
             c.AlongMargin(40f, (x, y) =>
             {
+                c.Circle(x + 1f, y + 2f, 7f, Color.Black * 0.3f);
                 c.Circle(x, y, 7f, new Color(28, 28, 30));
                 c.Circle(x, y, 3.8f, new Color(78, 78, 82));
+                c.Circle(x - 2f, y - 2f, 1.5f, Color.White * 0.15f);
             });
-            string[] sponsors = ["MEGA", "TURBO", "DOMUS", "NITRO", "RACE", "PNEUS"];
-            Color[] boards = [new(200, 40, 40), new(40, 90, 200), new(240, 190, 30), new(30, 140, 80)];
-            for (int i = 0; i < 6; i++)
-            {
-                float bx = 90f + (i * 190f);
-                c.Rect(bx, -33f, 110f, 16f, boards[i % boards.Length]);
-                c.TextC(sponsors[i], bx + 55f, -25f, 1.5f, Color.White);
-            }
 
             // Grama cortada em faixas, arquibancada lotada, box e árvores.
             for (float x = InL; x < InR; x += 44f)
@@ -197,18 +215,56 @@ public static partial class TrackSceneries
                 c.Rect(c.R(266f, 920f), c.R(144f, 182f), 2f, 2f, c.Pick(Color.White, new(230, 60, 60), new(60, 120, 230), new(250, 210, 60), new(40, 40, 40), new(240, 140, 180)));
             }
 
-            c.Rect(262f, 186f, 664f, 4f, Color.Black * 0.25f);
-
-            c.Rect(500f, 292f, 190f, 48f, new Color(228, 230, 236));
-            c.Rect(500f, 292f, 190f, 14f, new Color(40, 90, 200));
-            c.TextC("PIT LANE", 595f, 299f, 1.4f, Color.White);
-            for (int i = 0; i < 6; i++)
+            for (float x = 330f; x < 920f; x += 132f)
             {
-                c.Rect(508f + (i * 30f), 314f, 22f, 22f, new Color(70, 74, 84));
+                c.Rect(x, 136f, 6f, 50f, new Color(80, 84, 96));
             }
 
-            c.TextC("MEGRACE", 595f, 248f, 5f, Color.White * 0.12f);
-            foreach ((float x, float y, float r) in new[] { (272f, 300f, 20f), (305f, 330f, 14f), (915f, 300f, 20f), (880f, 330f, 14f), (268f, 222f, 12f), (922f, 225f, 12f) })
+            c.Rect(262f, 186f, 664f, 4f, Color.Black * 0.25f);
+
+            // Box: prédio sem letreiro, com faixa azul, garagens e o pátio de concreto na frente.
+            c.Rect(494f, 288f, 202f, 56f, new Color(150, 154, 162));
+            c.Rect(500f, 292f, 190f, 48f, new Color(228, 230, 236));
+            c.Rect(500f, 292f, 190f, 10f, new Color(40, 90, 200));
+            c.Rect(500f, 302f, 190f, 2f, new Color(250, 200, 40));
+            for (int i = 0; i < 6; i++)
+            {
+                c.Rect(508f + (i * 30f), 312f, 22f, 24f, new Color(70, 74, 84));
+                for (int k = 0; k < 4; k++)
+                {
+                    c.Rect(508f + (i * 30f), 314f + (k * 6f), 22f, 1f, new Color(96, 100, 112));
+                }
+            }
+
+            c.Rect(500f, 278f, 190f, 10f, new Color(170, 172, 178));
+            foreach (float x in new[] { 520f, 580f, 640f })
+            {
+                c.Rect(x, 280f, 16f, 5f, new Color(250, 250, 250) * 0.6f);
+            }
+
+            // Paddock no meio do gramado: tendas das equipes, caminhões e o caminho de cascalho.
+            c.Rect(300f, 238f, 420f, 12f, new Color(150, 146, 136));
+            c.Rect(300f, 238f, 420f, 2f, new Color(176, 172, 162));
+            (float X, Color Color)[] tents = [(330f, new(220, 60, 60)), (400f, new(60, 120, 220)), (470f, new(250, 200, 50)), (620f, new(40, 150, 90)), (690f, new(230, 120, 200))];
+            foreach ((float tx, Color color) in tents)
+            {
+                c.Rect(tx - 20f, 206f, 44f, 34f, Color.Black * 0.25f);
+                c.Rect(tx - 22f, 202f, 44f, 34f, color);
+                c.Rect(tx - 22f, 218f, 44f, 2f, CarPainter.Darken(color, 0.7f));
+                c.Rect(tx - 1f, 202f, 2f, 34f, CarPainter.Darken(color, 0.8f));
+                c.Rect(tx - 22f, 202f, 44f, 3f, Color.White * 0.3f);
+            }
+
+            foreach ((float tx, Color color) in new[] { (360f, new Color(220, 60, 60)), (560f, new Color(60, 120, 220)), (700f, new Color(40, 150, 90)) })
+            {
+                c.Rect(tx - 38f, 256f, 80f, 24f, Color.Black * 0.25f);
+                c.Rect(tx - 40f, 252f, 62f, 24f, new Color(236, 238, 242));
+                c.Rect(tx - 40f, 262f, 62f, 4f, color);
+                c.Rect(tx + 24f, 254f, 18f, 20f, color);
+                c.Rect(tx + 34f, 257f, 6f, 14f, new Color(60, 80, 110));
+            }
+
+            foreach ((float x, float y, float r) in new[] { (272f, 300f, 20f), (305f, 330f, 14f), (915f, 300f, 20f), (880f, 330f, 14f), (268f, 222f, 12f), (922f, 225f, 12f), (820f, 300f, 11f), (760f, 330f, 9f) })
             {
                 Tree(c, x, y, r, new Color(22, 86, 52), new Color(36, 112, 62), new Color(70, 150, 90));
             }
@@ -642,7 +698,28 @@ public static partial class TrackSceneries
                 c.Circle(x, y, 3f, new Color(60, 55, 50));
             }
 
-            foreach ((float x, float y, float h) in new[] { (560f, 190f, 32f), (700f, 342f, 26f), (880f, 280f, 36f), (620f, 160f, 22f), (920f, 340f, 24f) })
+            // Oásis com palmeiras, um arco de pedra e uma caveira de boi.
+            c.Ellipse(820f, 228f, 56f, 26f, new Color(190, 170, 110));
+            c.Ellipse(820f, 228f, 48f, 20f, new Color(70, 150, 170));
+            c.Ellipse(808f, 223f, 22f, 7f, new Color(130, 200, 215));
+            for (int i = 0; i < 10; i++)
+            {
+                float a = i * MathF.Tau / 10f;
+                c.Rect(820f + (MathF.Cos(a) * 50f), 228f + (MathF.Sin(a) * 23f), 2f, 6f, new Color(90, 140, 60));
+            }
+
+            Palm(c, 770f, 210f, 16f);
+            Palm(c, 872f, 246f, 18f);
+            c.Ellipse(700f, 176f, 34f, 12f, new Color(150, 100, 60));
+            c.Ellipse(700f, 176f, 22f, 6f, new Color(214, 170, 112));
+            c.GlowEllipse(706f, 186f, 34f, 10f, Color.Black * 0.25f);
+            c.Ellipse(640f, 300f, 7f, 5f, new Color(240, 235, 220));
+            c.Line(634f, 297f, 626f, 292f, 2f, new Color(240, 235, 220));
+            c.Line(646f, 297f, 654f, 292f, 2f, new Color(240, 235, 220));
+            c.Rect(638f, 300f, 1.5f, 1.5f, Color.Black);
+            c.Rect(641f, 300f, 1.5f, 1.5f, Color.Black);
+
+            foreach ((float x, float y, float h) in new[] { (560f, 190f, 32f), (700f, 342f, 26f), (905f, 300f, 34f), (620f, 160f, 22f), (920f, 340f, 24f) })
             {
                 Cactus(c, x, y, h);
             }

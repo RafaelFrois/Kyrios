@@ -11,6 +11,19 @@ public readonly record struct RecordFlags(bool NewScoreRecord, bool NewLapRecord
     public bool Any => NewScoreRecord || NewLapRecord;
 }
 
+/// <summary>Ids das interações escondidas dos menus (ficam em <see cref="SaveData.Discoveries"/>).</summary>
+public static class Discovery
+{
+    /// <summary>O código clássico (cima, cima, baixo, baixo, esquerda, direita, esquerda, direita, B, A) no menu.</summary>
+    public const string Konami = "konami";
+
+    /// <summary>Cutucar a galinha do logo no menu principal várias vezes.</summary>
+    public const string Cocorico = "cocorico";
+
+    /// <summary>Ficar um bom tempo parado no menu principal sem mexer em nada.</summary>
+    public const string MenuIdle = "menu_parado";
+}
+
 /// <summary>Qualquer coisa desbloqueável por progresso (skin, pista, conquista): um id estável e uma condição.</summary>
 public interface IUnlockable
 {
@@ -74,6 +87,7 @@ public static class Progression
     {
         bool newScore = false;
         bool newLap = false;
+        bool firstGameWithSkin = report.SkinId is not null && !save.SkinsUsed.Contains(report.SkinId);
 
         switch (report.Mode)
         {
@@ -91,6 +105,15 @@ public static class Progression
                     save.EliminationCleanWins += report.Collisions == 0 ? 1 : 0;
                     save.EliminationNoBoostWins += report.BoostSeconds <= 0f ? 1 : 0;
                     save.EliminationLazyWins += report.LazyWin ? 1 : 0;
+                    save.EliminationWireToWireWins += report.LedWholeRace ? 1 : 0;
+                    save.EliminationClutchWins += report.WasLastInFinalThree ? 1 : 0;
+                    save.EliminationPhotoFinishWins += report.PhotoFinish ? 1 : 0;
+                    save.EliminationFullThrottleWins += report.FullThrottle ? 1 : 0;
+                    save.EliminationLeftOnlyWins += report.NeverSteeredRight ? 1 : 0;
+                    save.FreshSkinWins += firstGameWithSkin ? 1 : 0;
+                    save.SameSkinWinStreak = report.SkinId is not null && report.SkinId == save.LastWinSkinId ? save.SameSkinWinStreak + 1 : 1;
+                    save.BestSameSkinWinStreak = Math.Max(save.BestSameSkinWinStreak, save.SameSkinWinStreak);
+                    save.LastWinSkinId = report.SkinId;
                     Increment(save.WinsBySkin, report.SkinId);
                     Increment(save.WinsByTrack, report.TrackId);
                     if (report.SkinId is not null && report.TrackId is not null)
@@ -101,8 +124,11 @@ public static class Progression
                 else
                 {
                     save.EliminationWinStreak = 0;
+                    save.SameSkinWinStreak = 0;
+                    save.LastWinSkinId = null;
                 }
 
+                save.EliminationPodiums += report.Place <= 3 ? 1 : 0;
                 if (report.Place == report.EntrantCount)
                 {
                     save.EliminationFirstOuts++;
@@ -138,7 +164,19 @@ public static class Progression
 
                 KeepMax(save.BestScoreBySkin, report.SkinId, report.Score);
                 KeepMax(save.BestScoreByTrack, report.TrackId, report.Score);
+                if (report.BoostSeconds <= 0f)
+                {
+                    save.BestNoBoostTimeAttackScore = MathF.Max(save.BestNoBoostTimeAttackScore, report.Score);
+                }
+
                 save.TimeAttackClutchCheckpoints += report.ClutchCheckpoint ? 1 : 0;
+                save.MostClutchCheckpointsInRun = Math.Max(save.MostClutchCheckpointsInRun, report.ClutchCheckpoints);
+                save.TimeAttackHazardHits += report.HazardHits;
+                if (report.ClosestCall is { } call && (save.ClosestTimeAttackCall is null || call < save.ClosestTimeAttackCall))
+                {
+                    save.ClosestTimeAttackCall = call;
+                }
+
                 save.TimeAttackZeroScores += report.Score <= 0f ? 1 : 0;
                 save.MostTimeAttackLaps = Math.Max(save.MostTimeAttackLaps, report.LapsCompleted);
                 save.MostTimeBanked = MathF.Max(save.MostTimeBanked, report.MaxTimeBanked);
@@ -152,8 +190,23 @@ public static class Progression
             save.BestLapTime = lap;
         }
 
+        if (report.BestLapTime is { } trackLap && report.TrackId is not null
+            && (!save.BestLapByTrack.TryGetValue(report.TrackId, out float trackBest) || trackLap < trackBest))
+        {
+            save.BestLapByTrack[report.TrackId] = trackLap;
+        }
+
         Increment(save.GamesByTrack, report.TrackId);
+        Increment(save.GamesBySkin, report.SkinId);
+        if (report.SkinId is not null && report.TrackId is not null)
+        {
+            Increment(save.GamesBySkinOnTrack, SkinOnTrackKey(report.SkinId, report.TrackId));
+        }
+
         AddOnce(save.SkinsUsed, report.SkinId);
+        save.SameSkinGameStreak = report.SkinId is not null && report.SkinId == save.LastSkinId ? save.SameSkinGameStreak + 1 : 1;
+        save.BestSameSkinGameStreak = Math.Max(save.BestSameSkinGameStreak, save.SameSkinGameStreak);
+        save.LastSkinId = report.SkinId;
         if (report.Collisions == 0)
         {
             AddOnce(save.CleanTracks, report.TrackId);
@@ -176,6 +229,18 @@ public static class Progression
         save.TotalPauses += report.Pauses;
         save.MostPausesInOneRace = Math.Max(save.MostPausesInOneRace, report.Pauses);
         save.SilentGames += report.Silent ? 1 : 0;
+        save.ReverseCheckpoints += report.ReverseCheckpoints;
+        save.LongestWrongWaySeconds = MathF.Max(save.LongestWrongWaySeconds, report.LongestWrongWaySeconds);
+        if (report.PlayedAt != default)
+        {
+            save.NightOwlGames += report.PlayedAt.Hour < 5 ? 1 : 0;
+            string day = report.PlayedAt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            if (day != save.LastPlayedDay)
+            {
+                save.DaysPlayed++;
+                save.LastPlayedDay = day;
+            }
+        }
 
         return new RecordFlags(newScore, newLap);
     }

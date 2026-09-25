@@ -42,8 +42,15 @@ public sealed class RaceSimulation
     /// <summary>O participante "principal" (o jogador, ou o primeiro carro se não houver humano) — quem pontua no modo Contrarrelógio.</summary>
     public RaceEntrant ScoredEntrant => Entrants[0];
 
-    /// <summary>Corrida Mortal: quem foi eliminado neste tick (null na maioria dos ticks) — pra tela avisar na hora.</summary>
-    public RaceEntrant? EliminatedThisTick { get; private set; }
+    /// <summary>Corrida Mortal: quem foi eliminado neste tick (null na maioria dos ticks) — pra tela avisar na hora.
+    /// Se mais de um carro caiu no mesmo tick (duas voltas completadas juntas), é o primeiro deles; a lista
+    /// completa está em <see cref="EliminationsThisTick"/>.</summary>
+    public RaceEntrant? EliminatedThisTick => _eliminationsThisTick.Count > 0 ? _eliminationsThisTick[0] : null;
+
+    /// <summary>Corrida Mortal: todos os eliminados neste tick, na ordem em que caíram (quase sempre 0 ou 1).</summary>
+    public IReadOnlyList<RaceEntrant> EliminationsThisTick => _eliminationsThisTick;
+
+    private readonly List<RaceEntrant> _eliminationsThisTick = [];
 
     /// <summary>Contra o Relógio: segundos ganhos (checkpoint/volta) neste tick, já com o decaimento aplicado.</summary>
     public float TimeGainedThisTick { get; private set; }
@@ -95,11 +102,11 @@ public sealed class RaceSimulation
         }
 
         ElapsedTime += dt;
-        EliminatedThisTick = null;
+        _eliminationsThisTick.Clear();
         TimeGainedThisTick = 0f;
         TimeLostThisTick = 0f;
         PointsGainedThisTick = 0f;
-        bool anyLapCompletedThisTick = false;
+        int lapsCompletedThisTick = 0;
         RaceEntrant scored = ScoredEntrant;
         bool scoredCheckpointThisTick = false;
         bool scoredLapThisTick = false;
@@ -122,7 +129,7 @@ public sealed class RaceSimulation
 
             if (completedLap && Mode == RaceMode.Elimination)
             {
-                anyLapCompletedThisTick = true;
+                lapsCompletedThisTick++;
             }
         }
 
@@ -141,7 +148,9 @@ public sealed class RaceSimulation
         switch (Mode)
         {
             case RaceMode.Elimination:
-                if (anyLapCompletedThisTick)
+                // Uma eliminação por volta completada — duas voltas fechadas no mesmo tick derrubam dois carros,
+                // do mesmo jeito que aconteceria se tivessem sido fechadas com um tick de diferença.
+                for (int i = 0; i < lapsCompletedThisTick; i++)
                 {
                     EliminateLastPlace();
                 }
@@ -414,7 +423,7 @@ public sealed class RaceSimulation
         RaceEntrant last = active.OrderBy(RaceProgressValue).First();
         last.Eliminated = true;
         last.FinishPlace = active.Count;
-        EliminatedThisTick = last;
+        _eliminationsThisTick.Add(last);
     }
 
     /// <summary>Quanto maior, mais adiantado na corrida — combina voltas, checkpoints e proximidade do próximo alvo.</summary>

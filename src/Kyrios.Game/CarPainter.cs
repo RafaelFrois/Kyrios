@@ -36,6 +36,10 @@ public sealed class CarPainter
 
     public bool Eliminated { get; private set; }
 
+    /// <summary>Filtro de cor aplicado a tudo o que for desenhado (ex.: a paleta verde do mundo retrô); null = nenhum.
+    /// Quem liga precisa desligar depois.</summary>
+    public Func<Color, Color> ColorFilter { get; set; }
+
     /// <summary>Relógio visual em segundos, pra pequenas animações (asas batendo, rabo balançando...).</summary>
     public float Time { get; private set; }
 
@@ -66,6 +70,28 @@ public sealed class CarPainter
 
         float scale = (worldRadius * 2f) / _circle.Width;
         _spriteBatch.Draw(_circle, ToWorld(x, y), null, Shade(color), 0f, new Vector2(_circle.Width / 2f), scale, SpriteEffects.None, 0f);
+    }
+
+    /// <summary>Elipse com o raio <paramref name="radiusX"/> ao longo da frente do carro e <paramref name="radiusY"/>
+    /// pro lado — girada por <paramref name="rotation"/> a mais em relação ao carro, se precisar.</summary>
+    public void Ellipse(float x, float y, float radiusX, float radiusY, Color color, float rotation = 0f)
+    {
+        if (radiusX <= 0f || radiusY <= 0f)
+        {
+            return;
+        }
+
+        var scale = new Vector2(radiusX * 2f * _unit / _circle.Width, radiusY * 2f * _unit / _circle.Height);
+        _spriteBatch.Draw(_circle, ToWorld(x, y), null, Shade(color), _angle + rotation, new Vector2(_circle.Width / 2f), scale, SpriteEffects.None, 0f);
+    }
+
+    /// <summary>Segmento de reta de (x1, y1) a (x2, y2), com a espessura dada (tudo em unidades do carro).</summary>
+    public void Line(float x1, float y1, float x2, float y2, float thickness, Color color)
+    {
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        float length = MathF.Sqrt((dx * dx) + (dy * dy));
+        Rect((x1 + x2) / 2f, (y1 + y2) / 2f, length, thickness, color, MathF.Atan2(dy, dx));
     }
 
     /// <summary>Retângulo centrado em (x, y), com o comprimento ao longo da frente do carro — girado por
@@ -123,6 +149,11 @@ public sealed class CarPainter
 
     private Color Shade(Color color)
     {
+        if (ColorFilter is not null)
+        {
+            color = ColorFilter(color);
+        }
+
         if (_monochrome)
         {
             color = Grayscale(color);

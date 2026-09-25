@@ -50,6 +50,32 @@ public sealed class SaveData
     /// <summary>Vezes em que o jogador foi eliminado com o turbo ligado.</summary>
     public int EliminatedWhileBoosting { get; set; }
 
+    /// <summary>Corridas terminadas entre os 3 primeiros.</summary>
+    public int EliminationPodiums { get; set; }
+
+    /// <summary>Vitórias sem sair do 1º lugar nenhuma vez depois da largada.</summary>
+    public int EliminationWireToWireWins { get; set; }
+
+    /// <summary>Vitórias depois de ter estado em último com só 3 carros (ou menos) na pista.</summary>
+    public int EliminationClutchWins { get; set; }
+
+    /// <summary>Vitórias em que o último rival caiu colado no jogador.</summary>
+    public int EliminationPhotoFinishWins { get; set; }
+
+    /// <summary>Vitórias sem soltar o acelerador depois da largada.</summary>
+    public int EliminationFullThrottleWins { get; set; }
+
+    /// <summary>Vitórias sem virar pra direita nenhuma vez.</summary>
+    public int EliminationLeftOnlyWins { get; set; }
+
+    /// <summary>Vitórias seguidas com a mesma skin (a atual e a melhor).</summary>
+    public int SameSkinWinStreak { get; set; }
+    public int BestSameSkinWinStreak { get; set; }
+    public string LastWinSkinId { get; set; }
+
+    /// <summary>Vitórias logo na primeira partida com uma skin.</summary>
+    public int FreshSkinWins { get; set; }
+
     // ----- Contra o Relógio -----
     public float? BestScoreTimeAttack { get; set; }
     public int TimeAttackRaces { get; set; }
@@ -78,6 +104,18 @@ public sealed class SaveData
     /// <summary>Mais segundos perdidos em batidas numa única partida.</summary>
     public float MostTimeLostInOneRun { get; set; }
 
+    /// <summary>Melhor pontuação numa partida sem usar o turbo.</summary>
+    public float BestNoBoostTimeAttackScore { get; set; }
+
+    /// <summary>Mais checkpoints cruzados com menos de 1 s no relógio numa única partida.</summary>
+    public int MostClutchCheckpointsInRun { get; set; }
+
+    /// <summary>O menor tempo que já sobrava no relógio ao cruzar um checkpoint (null = nunca cruzou).</summary>
+    public float? ClosestTimeAttackCall { get; set; }
+
+    /// <summary>Batidas nos obstáculos móveis do Contra o Relógio, somando todas as partidas.</summary>
+    public int TimeAttackHazardHits { get; set; }
+
     // ----- Gerais (os dois modos) -----
     /// <summary>Vezes que o recorde do Contra o Relógio foi registrado (inclusive o primeiro).</summary>
     public int RecordsSet { get; set; }
@@ -105,6 +143,34 @@ public sealed class SaveData
     /// <summary>Partidas jogadas com música e efeitos no mudo.</summary>
     public int SilentGames { get; set; }
 
+    /// <summary>Checkpoints cruzados andando de ré.</summary>
+    public int ReverseCheckpoints { get; set; }
+
+    /// <summary>Mais tempo seguido andando na contramão numa partida.</summary>
+    public float LongestWrongWaySeconds { get; set; }
+
+    /// <summary>Partidas terminadas de madrugada (0h às 5h).</summary>
+    public int NightOwlGames { get; set; }
+
+    /// <summary>Dias diferentes em que jogou pelo menos uma partida.</summary>
+    public int DaysPlayed { get; set; }
+    public string LastPlayedDay { get; set; }
+
+    /// <summary>Partidas seguidas com a mesma skin (a atual e a melhor).</summary>
+    public int SameSkinGameStreak { get; set; }
+    public int BestSameSkinGameStreak { get; set; }
+    public string LastSkinId { get; set; }
+
+    // ----- Fora das corridas (menus) -----
+    /// <summary>Interações escondidas já descobertas nos menus (ids estáveis, ver <see cref="Discovery"/>).</summary>
+    public List<string> Discoveries { get; set; } = [];
+
+    /// <summary>Tentativas de equipar algo ainda bloqueado.</summary>
+    public int DeniedEquips { get; set; }
+
+    /// <summary>Vezes que trocou a skin equipada.</summary>
+    public int SkinChanges { get; set; }
+
     // ----- Por skin -----
     /// <summary>Vitórias na Corrida Mortal por id de skin usada.</summary>
     public Dictionary<string, int> WinsBySkin { get; set; } = [];
@@ -117,6 +183,9 @@ public sealed class SaveData
 
     /// <summary>Skins já usadas em alguma partida terminada.</summary>
     public List<string> SkinsUsed { get; set; } = [];
+
+    /// <summary>Partidas terminadas por id de skin usada.</summary>
+    public Dictionary<string, int> GamesBySkin { get; set; } = [];
 
     // ----- Por pista -----
     public Dictionary<string, int> GamesByTrack { get; set; } = [];
@@ -131,6 +200,12 @@ public sealed class SaveData
 
     /// <summary>Vitórias na Corrida Mortal por combinação "skin@pista".</summary>
     public Dictionary<string, int> WinsBySkinOnTrack { get; set; } = [];
+
+    /// <summary>Melhor volta (qualquer modo) por pista.</summary>
+    public Dictionary<string, float> BestLapByTrack { get; set; } = [];
+
+    /// <summary>Partidas terminadas por combinação "skin@pista" (qualquer modo).</summary>
+    public Dictionary<string, int> GamesBySkinOnTrack { get; set; } = [];
 
     /// <summary>Partidas terminadas nos dois modos (abandonar no meio não conta).</summary>
     [JsonIgnore]
@@ -167,21 +242,25 @@ public sealed class SaveData
         }
     }
 
-    public static SaveData Load()
+    /// <summary>Abre o save do jogador (em AppData).</summary>
+    public static SaveData Load() => LoadFrom(FilePath);
+
+    /// <summary>Abre um save; se ele estiver corrompido (ex.: o PC desligou no meio de uma gravação), tenta a cópia
+    /// de segurança da gravação anterior antes de desistir e começar do zero.</summary>
+    public static SaveData LoadFrom(string path)
     {
-        try
+        foreach (string candidate in new[] { path, path + ".bak" })
         {
-            if (File.Exists(FilePath))
+            try
             {
-                SaveData loaded = FromJson(File.ReadAllText(FilePath));
-                if (loaded is not null)
+                if (File.Exists(candidate) && FromJson(File.ReadAllText(candidate)) is { } loaded)
                 {
                     return loaded;
                 }
             }
-        }
-        catch (IOException)
-        {
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+            }
         }
 
         return new SaveData();
@@ -205,6 +284,18 @@ public sealed class SaveData
 
     public string ToJson() => JsonSerializer.Serialize(this, SaveDataJsonContext.Default.SaveData);
 
+    /// <summary>Anota uma interação escondida descoberta nos menus. Devolve true se for nova.</summary>
+    public bool AddDiscovery(string id)
+    {
+        if (Discoveries.Contains(id))
+        {
+            return false;
+        }
+
+        Discoveries.Add(id);
+        return true;
+    }
+
     /// <summary>Garante que nenhuma coleção venha nula de um save antigo ou editado à mão, e deduz o mínimo
     /// garantido de contadores novos a partir do que já existia (quem tem recorde no Contra o Relógio jogou
     /// pelo menos uma vez), pra não zerar progresso já cumprido.</summary>
@@ -220,9 +311,24 @@ public sealed class SaveData
         CleanTracks ??= [];
         FoundTrackSecrets ??= [];
         WinsBySkinOnTrack ??= [];
+        BestLapByTrack ??= [];
+        GamesBySkin ??= [];
+        GamesBySkinOnTrack ??= [];
+        Discoveries ??= [];
         UnlockedSkinIds ??= [];
         UnlockedTrackIds ??= [];
         UnlockedAchievementIds ??= [];
+
+        if (!Enum.IsDefined(LastMode))
+        {
+            LastMode = RaceMode.Elimination;
+        }
+
+        // Skins usadas antes de existir a contagem por skin valem pelo menos uma partida.
+        foreach (string skin in SkinsUsed)
+        {
+            GamesBySkin.TryAdd(skin, 1);
+        }
 
         if (BestScoreTimeAttack is { } bestScore)
         {
@@ -232,13 +338,25 @@ public sealed class SaveData
         }
     }
 
-    public void Save()
+    public void Save() => SaveTo(FilePath);
+
+    /// <summary>Grava sem risco de corromper: escreve num arquivo temporário e só então troca pelo save de
+    /// verdade (a versão anterior vira a cópia de segurança). Se o jogo fechar no meio, sobra pelo menos um save
+    /// inteiro.</summary>
+    public void SaveTo(string path)
     {
         try
         {
-            File.WriteAllText(FilePath, ToJson());
+            string temp = path + ".tmp";
+            File.WriteAllText(temp, ToJson());
+            if (File.Exists(path))
+            {
+                File.Copy(path, path + ".bak", overwrite: true);
+            }
+
+            File.Move(temp, path, overwrite: true);
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
         }
     }

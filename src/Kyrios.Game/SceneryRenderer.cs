@@ -24,6 +24,18 @@ public enum EdgeStyle
 
     /// <summary>Tábuas/troncos de madeira.</summary>
     Planks,
+
+    /// <summary>Guard-rail de estrada: faixa de metal com postes.</summary>
+    Rail,
+
+    /// <summary>Tabela de mesa de sinuca: madeira com a borracha de feltro virada pra pista.</summary>
+    Cushion,
+
+    /// <summary>Contorno feito a lápis (duas linhas tremidas) — pista desenhada no papel.</summary>
+    Sketch,
+
+    /// <summary>Cerca de ferro com pontas.</summary>
+    Fence,
 }
 
 /// <summary>Partículas de clima: poucas, simples e recicladas (nada de milhares de objetos).</summary>
@@ -35,6 +47,18 @@ public enum AmbientKind
     Embers,
     Sand,
     Leaves,
+
+    /// <summary>Bolhas subindo (fundo do mar).</summary>
+    Bubbles,
+
+    /// <summary>Confete colorido caindo girando.</summary>
+    Confetti,
+
+    /// <summary>Moscas zanzando.</summary>
+    Flies,
+
+    /// <summary>Pontinhos de luz flutuando (vaga-lumes, esporos) — brilham por cima da escuridão.</summary>
+    Fireflies,
 }
 
 /// <summary>
@@ -73,6 +97,10 @@ public sealed class SceneryStyle
 
     /// <summary>Faróis acesos nos carros (pistas escuras).</summary>
     public bool Headlights { get; init; }
+
+    /// <summary>Filtro de cor aplicado aos carros nesta pista (ex.: a paleta de 4 verdes do mundo retrô); null =
+    /// cores normais.</summary>
+    public Func<Color, Color> CarFilter { get; init; }
 
     public Action<SceneCanvas> PaintStatic { get; init; }
     public Action<SceneCanvas> PaintAnimated { get; init; }
@@ -196,6 +224,11 @@ public sealed class SceneCanvas(SpriteBatch spriteBatch, Texture2D pixel, Textur
 public sealed class SceneryRenderer
 {
     private const int CacheSize = 4;
+
+    private static readonly Color[] ConfettiColors =
+    [
+        new(255, 90, 90), new(255, 210, 60), new(90, 200, 255), new(120, 230, 120), new(230, 120, 240), Color.White,
+    ];
     private const int GlowTextureSize = 64;
 
     private readonly GraphicsDevice _device;
@@ -206,6 +239,7 @@ public sealed class SceneryRenderer
     private readonly Dictionary<string, RenderTarget2D> _cache = new();
     private readonly LinkedList<string> _recent = new();
     private readonly Random _ambientRandom = new();
+    private float _ambientTime;
     private Vector2[] _ambient = [];
     private float[] _ambientSeed = [];
     private string _ambientThemeId;
@@ -441,6 +475,81 @@ public sealed class SceneryRenderer
                 ForEachSide(px, py, up, down, left, right, 3, (rx, ry, rw, rh) => c.Rect(rx, ry, rw, rh, style.EdgeB));
                 break;
             }
+
+            case EdgeStyle.Rail:
+            {
+                c.Rect(px, py, cell, cell, style.EdgeBase);
+                ForEachSide(px, py, up, down, left, right, 7, (rx, ry, rw, rh) => c.Rect(rx, ry, rw, rh, style.EdgeA));
+                ForEachSide(px, py, up, down, left, right, 3, (rx, ry, rw, rh) => c.Rect(rx, ry, rw, rh, style.EdgeB));
+                if (alternate)
+                {
+                    c.Rect(px + (cell / 2f) - 2f, py + (cell / 2f) - 2f, 4f, 4f, CarPainter.Darken(style.EdgeA, 0.6f));
+                }
+
+                break;
+            }
+
+            case EdgeStyle.Cushion:
+            {
+                c.Rect(px, py, cell, cell, style.EdgeBase);
+                c.Rect(px, py + (alternate ? 4f : 14f), cell, 1f, CarPainter.Darken(style.EdgeBase, 0.8f));
+                ForEachSide(px, py, up, down, left, right, 6, (rx, ry, rw, rh) => c.Rect(rx, ry, rw, rh, style.EdgeA));
+                ForEachSide(px, py, up, down, left, right, 2, (rx, ry, rw, rh) => c.Rect(rx, ry, rw, rh, style.EdgeB));
+                if ((x + y) % 4 == 0)
+                {
+                    c.Circle(px + (cell / 2f), py + (cell / 2f), 2f, new Color(235, 225, 190));
+                }
+
+                break;
+            }
+
+            case EdgeStyle.Sketch:
+            {
+                // Duas linhas de lápis meio tortas: o contorno colado no asfalto e um reforço logo atrás.
+                c.Rect(px, py, cell, cell, style.EdgeBase);
+                if (up)
+                {
+                    c.Rect(px, py + c.R(0f, 1f), cell, 2f, style.EdgeA);
+                    c.Rect(px, py + 6f + c.R(0f, 1.5f), cell, 1f, style.EdgeB);
+                }
+
+                if (down)
+                {
+                    c.Rect(px, py + cell - 2f - c.R(0f, 1f), cell, 2f, style.EdgeA);
+                    c.Rect(px, py + cell - 7f - c.R(0f, 1.5f), cell, 1f, style.EdgeB);
+                }
+
+                if (left)
+                {
+                    c.Rect(px + c.R(0f, 1f), py, 2f, cell, style.EdgeA);
+                    c.Rect(px + 6f + c.R(0f, 1.5f), py, 1f, cell, style.EdgeB);
+                }
+
+                if (right)
+                {
+                    c.Rect(px + cell - 2f - c.R(0f, 1f), py, 2f, cell, style.EdgeA);
+                    c.Rect(px + cell - 7f - c.R(0f, 1.5f), py, 1f, cell, style.EdgeB);
+                }
+
+                break;
+            }
+
+            case EdgeStyle.Fence:
+            {
+                c.Rect(px, py, cell, cell, style.EdgeBase);
+                ForEachSide(px, py, up, down, left, right, 3, (rx, ry, rw, rh) => c.Rect(rx, ry, rw, rh, style.EdgeA));
+                bool horizontal = up || down;
+                for (int i = 0; i < 3; i++)
+                {
+                    float offset = 3f + (i * 7f);
+                    float bx = horizontal ? px + offset : px + (cell / 2f) - 1f;
+                    float by = horizontal ? py + (cell / 2f) - 1f : py + offset;
+                    c.Rect(bx, by, 3f, 3f, style.EdgeB);
+                    c.Rect(horizontal ? bx + 1f : px + 2f, horizontal ? py + 2f : by + 1f, horizontal ? 1f : cell - 4f, horizontal ? cell - 4f : 1f, style.EdgeA);
+                }
+
+                break;
+            }
         }
     }
 
@@ -505,6 +614,7 @@ public sealed class SceneryRenderer
             }
         }
 
+        _ambientTime += dt;
         for (int i = 0; i < _ambient.Length; i++)
         {
             float seed = _ambientSeed[i];
@@ -515,6 +625,10 @@ public sealed class SceneryRenderer
                 AmbientKind.Embers => new Vector2(MathF.Sin((_ambient[i].Y * 0.05f) + (seed * 6f)) * 20f, -30f - (seed * 40f)),
                 AmbientKind.Sand => new Vector2(260f + (seed * 160f), 18f * MathF.Sin(seed * 10f)),
                 AmbientKind.Leaves => new Vector2(30f + (MathF.Sin((_ambient[i].Y * 0.04f) + (seed * 6f)) * 30f), 35f + (seed * 20f)),
+                AmbientKind.Bubbles => new Vector2(MathF.Sin((_ambient[i].Y * 0.05f) + (seed * 6f)) * 14f, -35f - (seed * 45f)),
+                AmbientKind.Confetti => new Vector2(MathF.Sin((_ambientTime * 2f) + (seed * 12f)) * 30f, 45f + (seed * 35f)),
+                AmbientKind.Flies => new Vector2(MathF.Sin((_ambientTime * 9f) + (seed * 40f)) * 110f, MathF.Cos((_ambientTime * 7f) + (seed * 23f)) * 110f),
+                AmbientKind.Fireflies => new Vector2(MathF.Sin((_ambientTime * 0.8f) + (seed * 30f)) * 18f, MathF.Cos((_ambientTime * 0.6f) + (seed * 17f)) * 14f),
                 _ => Vector2.Zero,
             };
 
@@ -543,10 +657,12 @@ public sealed class SceneryRenderer
 
     private float Random(float min, float max) => min + ((float)_ambientRandom.NextDouble() * (max - min));
 
-    public void DrawAmbient(TrackTheme theme, float time)
+    /// <summary>Partículas de clima. Chamada duas vezes por quadro: antes da escuridão (<paramref name="glowing"/> =
+    /// false: chuva, neve, folhas...) e depois dela (true: brasas e vaga-lumes, que brilham no escuro).</summary>
+    public void DrawAmbient(TrackTheme theme, float time, bool glowing = false)
     {
         SceneryStyle style = theme.Scenery;
-        if (_ambientThemeId != theme.Id)
+        if (_ambientThemeId != theme.Id || glowing != (style.Ambient is AmbientKind.Embers or AmbientKind.Fireflies))
         {
             return;
         }
@@ -573,6 +689,24 @@ public sealed class SceneryRenderer
                     break;
                 case AmbientKind.Leaves:
                     _spriteBatch.Draw(_pixel, p, null, seed > 0.5f ? color : CarPainter.Darken(color, 0.7f), (time * 2f) + (seed * 6f), new Vector2(0.5f), new Vector2(4f, 2f), SpriteEffects.None, 0f);
+                    break;
+                case AmbientKind.Bubbles:
+                    float bubble = 1.5f + (seed * 3f);
+                    _spriteBatch.Draw(_circle, p, null, color * 0.35f, 0f, new Vector2(_circle.Width / 2f), bubble * 2f / _circle.Width, SpriteEffects.None, 0f);
+                    _spriteBatch.Draw(_pixel, p - new Vector2(bubble * 0.4f), null, Color.White * 0.7f, 0f, Vector2.Zero, new Vector2(1f), SpriteEffects.None, 0f);
+                    break;
+                case AmbientKind.Confetti:
+                    Color confetti = ConfettiColors[(int)(seed * 97f) % ConfettiColors.Length];
+                    _spriteBatch.Draw(_pixel, p, null, confetti, (time * 4f) + (seed * 10f), new Vector2(0.5f), new Vector2(4f, 2f + (MathF.Abs(MathF.Sin((time * 6f) + (seed * 9f))) * 2f)), SpriteEffects.None, 0f);
+                    break;
+                case AmbientKind.Flies:
+                    _spriteBatch.Draw(_pixel, p, null, color, 0f, Vector2.Zero, new Vector2(2f), SpriteEffects.None, 0f);
+                    _spriteBatch.Draw(_pixel, p + new Vector2(-1f, -1f), null, Color.White * (0.4f * MathF.Abs(MathF.Sin((time * 40f) + (seed * 9f)))), 0f, Vector2.Zero, new Vector2(4f, 1f), SpriteEffects.None, 0f);
+                    break;
+                case AmbientKind.Fireflies:
+                    float pulse = (MathF.Sin((time * 3f) + (seed * 20f)) + 1f) / 2f;
+                    _spriteBatch.Draw(_glow, p, null, color * (0.25f * pulse), 0f, new Vector2(_glow.Width / 2f), 14f / _glow.Width, SpriteEffects.None, 0f);
+                    _spriteBatch.Draw(_pixel, p - Vector2.One, null, color * (0.4f + (0.6f * pulse)), 0f, Vector2.Zero, new Vector2(2f), SpriteEffects.None, 0f);
                     break;
             }
         }
