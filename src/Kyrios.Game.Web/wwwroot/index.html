@@ -245,7 +245,10 @@
                 compressed.set(chunk, offset);
                 offset += chunk.length;
             }
-            return new Response(BrotliDecode(compressed), { headers: { 'content-type': contentType } });
+            // Alguns servidores entregam o .br já descomprimido (Content-Encoding automático): aí os bytes já são o
+            // WebAssembly ("\0asm") e não há nada pra descomprimir.
+            const alreadyDecoded = length >= 4 && compressed[0] === 0 && compressed[1] === 0x61 && compressed[2] === 0x73 && compressed[3] === 0x6d;
+            return new Response(alreadyDecoded ? compressed : BrotliDecode(compressed), { headers: { 'content-type': contentType } });
         }
 
         function startGame() {

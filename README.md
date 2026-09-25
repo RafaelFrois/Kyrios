@@ -121,6 +121,9 @@ Gera `dist/web/` (pasta pronta pra servir) e `dist/MegRace-web.zip` (index.html 
 Inspector). Pra testar localmente sirva a pasta por HTTP (ex.: `cd dist/web && python3 -m http.server 8080`) —
 abrir o `index.html` direto do disco não funciona em navegador nenhum.
 
+**Vercel:** o repositório já vem configurado (`vercel.json` + `vercel-build.sh`, que instala o .NET 8 e publica
+o projeto web). Basta importar o repositório com o preset "Other" e fazer o deploy — sem mudar nenhuma opção.
+
 Na web: toque em celular/tablet (botões na corrida), save no navegador (sincronizado pela Poki), sem botão SAIR
 e com a tela cheia controlada pelo site.
 
