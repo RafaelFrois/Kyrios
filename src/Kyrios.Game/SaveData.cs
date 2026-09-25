@@ -240,34 +240,28 @@ public sealed class SaveData
     /// <summary>Idioma do jogo: "pt" (padrão) ou "en".</summary>
     public string Language { get; set; } = "pt";
 
-    private static string FilePath
-    {
-        get
-        {
-            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MegRace");
-            Directory.CreateDirectory(dir);
-            return Path.Combine(dir, "records.json");
-        }
-    }
+    /// <summary>Versão atual do formato do save. Subir quando um campo mudar de significado e escrever a migração
+    /// em <see cref="Migrate"/> (campos novos não precisam: ganham o valor padrão sozinhos).</summary>
+    public const int CurrentVersion = 1;
 
-    /// <summary>Abre o save do jogador (em AppData).</summary>
-    public static SaveData Load() => LoadFrom(FilePath);
+    /// <summary>Versão do formato em que este save foi escrito (0 = saves anteriores ao controle de versão).</summary>
+    public int SaveVersion { get; set; } = CurrentVersion;
 
-    /// <summary>Abre um save; se ele estiver corrompido (ex.: o PC desligou no meio de uma gravação), tenta a cópia
-    /// de segurança da gravação anterior antes de desistir e começar do zero.</summary>
-    public static SaveData LoadFrom(string path)
+    /// <summary>Abre o save do jogador no armazenamento da plataforma (arquivo no desktop, navegador na web).</summary>
+    public static SaveData Load() => LoadFrom(GamePlatform.Current.SaveStore);
+
+    /// <summary>Abre um save em arquivo (usado pelos testes e pela versão desktop).</summary>
+    public static SaveData LoadFrom(string path) => LoadFrom(new FileSaveStore(path));
+
+    /// <summary>Abre o primeiro save legível: se o principal estiver corrompido (ex.: o PC desligou no meio de uma
+    /// gravação), tenta a cópia de segurança antes de desistir e começar do zero.</summary>
+    public static SaveData LoadFrom(ISaveStore store)
     {
-        foreach (string candidate in new[] { path, path + ".bak" })
+        foreach (string json in store.ReadCandidates())
         {
-            try
+            if (FromJson(json) is { } loaded)
             {
-                if (File.Exists(candidate) && FromJson(File.ReadAllText(candidate)) is { } loaded)
-                {
-                    return loaded;
-                }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
+                return loaded;
             }
         }
 
@@ -280,11 +274,23 @@ public sealed class SaveData
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+
             SaveData loaded = JsonSerializer.Deserialize(json, SaveDataJsonContext.Default.SaveData);
-            loaded?.FillStatsMissingFromOldSaves();
+            if (loaded is null)
+            {
+                return null;
+            }
+
+            loaded.Migrate();
+            loaded.RemoveImpossibleValues();
+            loaded.FillStatsMissingFromOldSaves();
             return loaded;
         }
-        catch (JsonException)
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
         {
             return null;
         }
@@ -347,28 +353,81 @@ public sealed class SaveData
         }
     }
 
-    public void Save() => SaveTo(FilePath);
-
-    /// <summary>Grava sem risco de corromper: escreve num arquivo temporário e só então troca pelo save de
-    /// verdade (a versão anterior vira a cópia de segurança). Se o jogo fechar no meio, sobra pelo menos um save
-    /// inteiro.</summary>
-    public void SaveTo(string path)
+    /// <summary>Atualiza saves de formatos antigos. Versão 0 → 1: só passou a existir o campo de versão.</summary>
+    private void Migrate()
     {
-        try
+        if (SaveVersion < CurrentVersion)
         {
-            string temp = path + ".tmp";
-            File.WriteAllText(temp, ToJson());
-            if (File.Exists(path))
-            {
-                File.Copy(path, path + ".bak", overwrite: true);
-            }
-
-            File.Move(temp, path, overwrite: true);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
+            SaveVersion = CurrentVersion;
         }
     }
+
+    /// <summary>Um save editado à mão ou corrompido pela metade não pode quebrar o jogo: contadores negativos voltam
+    /// a zero, números inválidos (NaN, infinito) somem e listas perdem entradas vazias ou repetidas. Percorre os
+    /// campos pelos metadados do próprio serializador, então vale pra qualquer estatística nova sem código extra.</summary>
+    private void RemoveImpossibleValues()
+    {
+        foreach (System.Text.Json.Serialization.Metadata.JsonPropertyInfo property in SaveDataJsonContext.Default.SaveData.Properties)
+        {
+            if (property.Get is not { } get || property.Set is not { } set)
+            {
+                continue;
+            }
+
+            // float? (recordes e melhores tempos): inválido vira "sem recorde" — nunca 0, que seria um recorde perfeito.
+            if (property.PropertyType == typeof(float?))
+            {
+                if (get(this) is float optional && (!float.IsFinite(optional) || optional < 0f))
+                {
+                    set(this, null);
+                }
+
+                continue;
+            }
+
+            switch (get(this))
+            {
+                case int number when number < 0:
+                    set(this, 0);
+                    break;
+                case float number when !float.IsFinite(number) || number < 0f:
+                    set(this, 0f);
+                    break;
+                case List<string> list:
+                    List<string> clean = [.. list.Where(item => !string.IsNullOrEmpty(item)).Distinct()];
+                    if (clean.Count != list.Count)
+                    {
+                        set(this, clean);
+                    }
+
+                    break;
+                case Dictionary<string, int> counts:
+                    foreach (string key in counts.Where(pair => pair.Value < 0).Select(pair => pair.Key).ToList())
+                    {
+                        counts.Remove(key);
+                    }
+
+                    break;
+                case Dictionary<string, float> values:
+                    foreach (string key in values.Where(pair => !float.IsFinite(pair.Value) || pair.Value < 0f).Select(pair => pair.Key).ToList())
+                    {
+                        values.Remove(key);
+                    }
+
+                    break;
+            }
+        }
+
+        MusicVolume = Math.Clamp(MusicVolume, 0f, 1f);
+        SfxVolume = Math.Clamp(SfxVolume, 0f, 1f);
+    }
+
+    public void Save() => SaveTo(GamePlatform.Current.SaveStore);
+
+    /// <summary>Grava em arquivo (usado pelos testes e pela versão desktop).</summary>
+    public void SaveTo(string path) => SaveTo(new FileSaveStore(path));
+
+    public void SaveTo(ISaveStore store) => store.Write(ToJson());
 }
 
 // Gera o (de)serializador em tempo de compilação, sem reflexão — necessário porque o executável

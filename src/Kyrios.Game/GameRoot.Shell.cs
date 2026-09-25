@@ -17,6 +17,7 @@ public sealed partial class GameRoot
     private static readonly Keys[] SecretCode = [Keys.Up, Keys.Up, Keys.Down, Keys.Down, Keys.Left, Keys.Right, Keys.Left, Keys.Right, Keys.B, Keys.A];
 
     private Texture2D _logo;
+    private Point _logoSize;
     private Matrix _screenTransform;
     private State _lastState;
     private float _stateTime;
@@ -37,7 +38,9 @@ public sealed partial class GameRoot
 
     /// <summary>A logo do mascote (embutida no executável em alta resolução), já com o alfa pré-multiplicado
     /// como o SpriteBatch espera e com mipmaps feitos à mão, pra ficar nítida e sem serrilhado tanto
-    /// pequena na janela quanto grande em tela cheia.</summary>
+    /// pequena na janela quanto grande em tela cheia. A imagem vai pro canto de uma textura com lados em
+    /// potência de dois (o resto transparente): é o que o perfil gráfico mais compatível (WebGL 1 nos navegadores)
+    /// exige pra ter mipmaps.</summary>
     private Texture2D LoadLogo()
     {
         using Stream stream = typeof(GameRoot).Assembly.GetManifestResourceStream("MegRace.Logo.png");
@@ -47,16 +50,23 @@ public sealed partial class GameRoot
         }
 
         using Texture2D source = Texture2D.FromStream(GraphicsDevice, stream);
-        int width = source.Width;
-        int height = source.Height;
+        _logoSize = new Point(source.Width, source.Height);
+        var pixels = new Color[source.Width * source.Height];
+        source.GetData(pixels);
+
+        int width = NextPowerOfTwo(source.Width);
+        int height = NextPowerOfTwo(source.Height);
         var level = new Color[width * height];
-        source.GetData(level);
-        for (int i = 0; i < level.Length; i++)
+        for (int y = 0; y < source.Height; y++)
         {
-            level[i] = Color.FromNonPremultiplied(level[i].R, level[i].G, level[i].B, level[i].A);
+            for (int x = 0; x < source.Width; x++)
+            {
+                Color c = pixels[(y * source.Width) + x];
+                level[(y * width) + x] = Color.FromNonPremultiplied(c.R, c.G, c.B, c.A);
+            }
         }
 
-        var texture = new Texture2D(GraphicsDevice, width, height, mipmap: true, SurfaceFormat.Color);
+        var texture = new Texture2D(GraphicsDevice, width, height, true, SurfaceFormat.Color);
         for (int mip = 0; mip < texture.LevelCount; mip++)
         {
             texture.SetData(mip, null, level, 0, level.Length);
@@ -64,6 +74,17 @@ public sealed partial class GameRoot
         }
 
         return texture;
+    }
+
+    private static int NextPowerOfTwo(int value)
+    {
+        int result = 1;
+        while (result < value)
+        {
+            result <<= 1;
+        }
+
+        return result;
     }
 
     /// <summary>Metade da resolução pela média de cada bloco 2x2 (as bordas ímpares repetem o último pixel).</summary>
@@ -128,17 +149,62 @@ public sealed partial class GameRoot
             return;
         }
 
-        var origin = new Vector2(_logo.Width / 2f, _logo.Height / 2f);
-        float fit = scale * LogoBaseWidth / _logo.Width;
+        var origin = new Vector2(_logoSize.X / 2f, _logoSize.Y / 2f);
+        var sourceRect = new Rectangle(0, 0, _logoSize.X, _logoSize.Y);
+        float fit = scale * LogoBaseWidth / _logoSize.X;
         var size = new Vector2(fit * (1f + (squash * 0.1f)), fit * (1f - (squash * 0.12f)));
         Color color = tint ?? Color.White;
 
         _spriteBatch.End();
         _spriteBatch.Begin(samplerState: SamplerState.LinearClamp, transformMatrix: _screenTransform);
-        _spriteBatch.Draw(_logo, center + new Vector2(3f, 4f), null, Color.Black * (0.35f * (color.A / 255f)), 0f, origin, size, SpriteEffects.None, 0f);
-        _spriteBatch.Draw(_logo, center, null, color, 0f, origin, size, SpriteEffects.None, 0f);
+        _spriteBatch.Draw(_logo, center + new Vector2(3f, 4f), sourceRect, Color.Black * (0.35f * (color.A / 255f)), 0f, origin, size, SpriteEffects.None, 0f);
+        _spriteBatch.Draw(_logo, center, sourceRect, color, 0f, origin, size, SpriteEffects.None, 0f);
         _spriteBatch.End();
         _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: _screenTransform);
+    }
+
+    // ---------- Plataforma (desktop / navegador) ----------
+
+    private bool _loadingReported;
+    private bool _gameplayReported;
+
+    /// <summary>"Está jogando de fato": na pista, com o carro do jogador ainda na corrida e sem intervalo comercial.
+    /// Pausa, configurações, resultado, menus e assistir depois de eliminado não contam. A plataforma só fica
+    /// sabendo quando isso muda — nunca recebe dois "começou" ou dois "parou" seguidos.</summary>
+    private void ReportGameplayState()
+    {
+        bool playing = _state == State.Racing && _raceRequest is null && !_player.Eliminated && !_race.IsRaceOver;
+        if (playing == _gameplayReported)
+        {
+            return;
+        }
+
+        _gameplayReported = playing;
+        if (playing)
+        {
+            GamePlatform.Current.GameplayStart();
+        }
+        else
+        {
+            GamePlatform.Current.GameplayStop();
+        }
+    }
+
+    /// <summary>Na web a área de desenho acompanha o tamanho real do canvas (vezes a densidade de pixels da tela);
+    /// a cena continua na resolução lógica e é escalada com letterbox, como em tela cheia no desktop.</summary>
+    private void ApplyPlatformBackBufferSize()
+    {
+        if (GamePlatform.Current.DesiredBackBufferSize is not { } desired || desired.Width <= 0 || desired.Height <= 0)
+        {
+            return;
+        }
+
+        if (desired.Width != GraphicsDevice.PresentationParameters.BackBufferWidth || desired.Height != GraphicsDevice.PresentationParameters.BackBufferHeight)
+        {
+            _graphics.PreferredBackBufferWidth = desired.Width;
+            _graphics.PreferredBackBufferHeight = desired.Height;
+            _graphics.ApplyChanges();
+        }
     }
 
     // ---------- Abertura ----------

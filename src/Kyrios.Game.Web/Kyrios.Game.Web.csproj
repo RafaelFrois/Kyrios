@@ -1,0 +1,95 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <!--
+    Versão web (navegador / Poki) do MegRace. NÃO é outro jogo: compila exatamente os mesmos arquivos de
+    ../Kyrios.Game (menos o Program.cs do desktop) sobre o KNI, um fork do MonoGame/XNA que roda em
+    WebAssembly + WebGL. Aqui fica só a "casca" web: a página, a ponte com o navegador e com o SDK da Poki.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Kyrios.Game.Web</RootNamespace>
+    <AssemblyName>MegRace</AssemblyName>
+    <DefineConstants>$(DefineConstants);BLAZORGL</DefineConstants>
+    <KniPlatform>BlazorGL</KniPlatform>
+
+    <!-- Tamanho: o jogo só usa textos próprios (sem formatação por cultura) e pega a hora local do navegador. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <BlazorEnableTimeZoneSupport>false</BlazorEnableTimeZoneSupport>
+    <BlazorWebAssemblyLoadAllGlobalizationData>false</BlazorWebAssemblyLoadAllGlobalizationData>
+    <!-- Os arquivos são baixados já comprimidos em brotli (ver index.html); gzip não é usado. -->
+    <CompressionEnabled>true</CompressionEnabled>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Kyrios.Game\**\*.cs" Exclude="..\Kyrios.Game\Program.cs;..\Kyrios.Game\obj\**;..\Kyrios.Game\bin\**" LinkBase="Game" />
+    <EmbeddedResource Include="..\Kyrios.Game\Assets\logo.png" LogicalName="MegRace.Logo.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Kyrios.Core\Kyrios.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="nkast.Xna.Framework" Version="4.3.9001" />
+    <PackageReference Include="nkast.Xna.Framework.Content" Version="4.3.9001" />
+    <PackageReference Include="nkast.Xna.Framework.Graphics" Version="4.3.9001" />
+    <PackageReference Include="nkast.Xna.Framework.Audio" Version="4.3.9001" />
+    <PackageReference Include="nkast.Xna.Framework.Input" Version="4.3.9001" />
+    <PackageReference Include="nkast.Xna.Framework.Game" Version="4.3.9001" />
+    <PackageReference Include="nkast.Kni.Platform.Blazor.GL" Version="4.3.9001" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.29" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.29" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!--
+    Depois do publish: deixa a pasta pronta pra Poki. Os arquivos .wasm (runtime + assemblies) ficam só em brotli
+    (o index.html descomprime no navegador), os demais ficam só na versão normal, e sai tudo o que é de
+    desenvolvimento/servidor (.gz, .pdb, web.config). Grava _framework/megrace.sizes.json com o tamanho de cada
+    arquivo baixado, usado pela barra de progresso.
+  -->
+  <UsingTask TaskName="MegRacePrepareWebBuild" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Root ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Linq" />
+      <Using Namespace="System.Text" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        foreach (string gz in Directory.GetFiles(Root, "*.gz", SearchOption.AllDirectories)) File.Delete(gz);
+        foreach (string pdb in Directory.GetFiles(Root, "*.pdb", SearchOption.AllDirectories)) File.Delete(pdb);
+        string webConfig = Path.Combine(Path.GetDirectoryName(Root.TrimEnd('/', '\\')), "web.config");
+        if (File.Exists(webConfig)) File.Delete(webConfig);
+
+        string framework = Path.Combine(Root, "_framework");
+        var sizes = new StringBuilder("{");
+        bool first = true;
+        foreach (string br in Directory.GetFiles(Root, "*.br", SearchOption.AllDirectories).OrderBy(f => f))
+        {
+            string original = br.Substring(0, br.Length - 3);
+            bool downloadedCompressed = original.EndsWith(".wasm") && Path.GetDirectoryName(original) == framework;
+            if (downloadedCompressed)
+            {
+                if (File.Exists(original)) File.Delete(original);
+                sizes.Append(first ? "" : ",").Append('"').Append(Path.GetFileName(original)).Append("\":").Append(new FileInfo(br).Length);
+                first = false;
+            }
+            else
+            {
+                File.Delete(br);
+            }
+        }
+        File.WriteAllText(Path.Combine(framework, "megrace.sizes.json"), sizes.Append('}').ToString());
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="MegRacePrepareWebBuild" AfterTargets="Publish">
+    <MegRacePrepareWebBuild Root="$(PublishDir)wwwroot" />
+  </Target>
+
+</Project>

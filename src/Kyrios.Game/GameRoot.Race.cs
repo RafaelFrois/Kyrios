@@ -220,6 +220,17 @@ public sealed partial class GameRoot
 
     // ---------- Atualização da partida ----------
 
+    /// <summary>A corrida sempre avança em passos de exatamente 1/60 s, qualquer que seja a taxa de quadros da tela
+    /// (60, 120, 144 Hz, ou um celular engasgando): física, IA, tempos e pontuação saem iguais em qualquer máquina
+    /// — e iguais ao desktop, que já roda a 60 passos por segundo.</summary>
+    private const double SimulationStep = 1.0 / 60.0;
+
+    /// <summary>Depois de um engasgo longo (aba em segundo plano, celular lento) a corrida não tenta "recuperar"
+    /// mais que isso de uma vez — continua de onde parou, como o desktop fazia.</summary>
+    private const int MaxSimulationStepsPerFrame = 6;
+
+    private double _simulationClock;
+
     private void UpdateRacing(float frameSeconds)
     {
         if (_input.Pause)
@@ -228,7 +239,18 @@ public sealed partial class GameRoot
             return;
         }
 
-        float dt = Math.Min(frameSeconds, 0.1f);
+        CarInput input = _input.BuildCarInput();
+        _simulationClock = Math.Min(_simulationClock + frameSeconds, SimulationStep * MaxSimulationStepsPerFrame);
+        while (_simulationClock >= SimulationStep && _state == State.Racing)
+        {
+            _simulationClock -= SimulationStep;
+            StepRace((float)SimulationStep, input);
+        }
+    }
+
+    /// <summary>Um passo da corrida: contagem, simulação, eventos (sons, textos, eliminações) e o fim da partida.</summary>
+    private void StepRace(float dt, CarInput input)
+    {
         if (CountingDown)
         {
             UpdateCountdown(dt);
@@ -236,7 +258,6 @@ public sealed partial class GameRoot
         }
 
         _goTimer = MathF.Max(0f, _goTimer - dt);
-        CarInput input = _input.BuildCarInput();
         _race.Update(dt, input);
         _raceTracker.Observe(_race, _player, dt, input);
         UpdateRaceFeedback(dt);

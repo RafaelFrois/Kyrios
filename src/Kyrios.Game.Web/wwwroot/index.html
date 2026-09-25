@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>MegRace</title>
+    <base href="./" />
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #0b0d14;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #theCanvas {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            display: block;
+            outline: none;
+            touch-action: none;
+        }
+
+        #loader {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2.2vh;
+            background: #14161f;
+            font-family: ui-monospace, 'Courier New', monospace;
+            color: #ffc828;
+            transition: opacity 0.35s ease;
+            z-index: 10;
+        }
+
+        #loader.done {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #loader img {
+            width: min(34vw, 30vh * 1.2, 256px);
+            image-rendering: auto;
+            animation: bob 1.1s ease-in-out infinite;
+        }
+
+        @keyframes bob {
+            50% { transform: translateY(-6px); }
+        }
+
+        #loader .title {
+            font-weight: 900;
+            font-size: min(7vw, 6vh, 44px);
+            letter-spacing: 0.12em;
+            color: #ff8a1e;
+            text-shadow: 0 3px 0 #7a1f10;
+        }
+
+        #loader .bar {
+            width: min(70vw, 420px);
+            height: 14px;
+            border-radius: 7px;
+            background: #0a0b10;
+            box-shadow: inset 0 0 0 2px #2c3040;
+            overflow: hidden;
+        }
+
+        #loader .fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #ffc828, #ff8a1e);
+            transition: width 0.2s ease;
+        }
+
+        #loader .status {
+            font-size: min(3.6vw, 2.6vh, 16px);
+            color: #9aa0b4;
+            letter-spacing: 0.08em;
+        }
+
+        #fatal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 24px;
+            background: #14161f;
+            color: #e8e8f0;
+            font-family: ui-monospace, 'Courier New', monospace;
+            z-index: 20;
+        }
+
+        #fatal button {
+            margin-top: 16px;
+            padding: 10px 22px;
+            font: inherit;
+            font-weight: 700;
+            border: 0;
+            border-radius: 8px;
+            background: #ffc828;
+            color: #14161f;
+            cursor: pointer;
+        }
+
+        #blazor-error-ui {
+            display: none;
+        }
+    </style>
+
+    <!-- Os contextos de áudio criados pelo jogo são anotados para serem liberados no primeiro toque e suspensos
+         durante anúncios / com a aba oculta (ver js/megrace.js). Precisa vir antes do motor de áudio. -->
+    <script>
+        (function () {
+            window.megraceAudioContexts = [];
+            var Original = window.AudioContext || window.webkitAudioContext;
+            if (!Original) {
+                return;
+            }
+            function Tracked(options) {
+                var context = options === undefined ? new Original() : new Original(options);
+                window.megraceAudioContexts.push(context);
+                return context;
+            }
+            Tracked.prototype = Original.prototype;
+            window.AudioContext = Tracked;
+            window.webkitAudioContext = Tracked;
+        })();
+    </script>
+
+    <!-- SDK oficial da Poki (a única dependência externa, exigida pela plataforma). -->
+    <script src="https://game-cdn.poki.com/scripts/v2/poki-sdk.js"></script>
+</head>
+
+<body>
+    <canvas id="theCanvas" tabindex="0"></canvas>
+    <div id="game-host" style="display:none"></div>
+
+    <div id="loader">
+        <img src="loading-logo.webp" alt="" />
+        <div class="title">MEGRACE</div>
+        <div class="bar"><div class="fill" id="loader-fill"></div></div>
+        <div class="status" id="loader-status">CARREGANDO 0%</div>
+    </div>
+
+    <div id="fatal">
+        <div>
+            <div id="fatal-text">ALGO DEU ERRADO AO CARREGAR O JOGO.</div>
+            <button type="button" onclick="location.reload()" id="fatal-button">TENTAR DE NOVO</button>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui"><a class="reload"></a><a class="dismiss"></a></div>
+
+    <script>
+        // Idioma da tela de carregamento: o mesmo escolhido no jogo (lido do save), português por padrão.
+        (function () {
+            var english = false;
+            try {
+                var save = window.localStorage.getItem('megrace.save');
+                english = !!save && JSON.parse(save).Language === 'en';
+            } catch (e) { }
+            window.megraceText = english
+                ? { loading: 'LOADING', preparing: 'GETTING READY', error: 'SOMETHING WENT WRONG WHILE LOADING THE GAME.', retry: 'TRY AGAIN' }
+                : { loading: 'CARREGANDO', preparing: 'PREPARANDO A PISTA', error: 'ALGO DEU ERRADO AO CARREGAR O JOGO.', retry: 'TENTAR DE NOVO' };
+            document.documentElement.lang = english ? 'en' : 'pt-BR';
+            document.getElementById('loader-status').textContent = window.megraceText.loading + ' 0%';
+            document.getElementById('fatal-text').textContent = window.megraceText.error;
+            document.getElementById('fatal-button').textContent = window.megraceText.retry;
+        })();
+
+        window.megraceSetProgress = function (fraction, preparing) {
+            var percent = Math.max(0, Math.min(100, Math.round(fraction * 100)));
+            document.getElementById('loader-fill').style.width = percent + '%';
+            document.getElementById('loader-status').textContent = preparing
+                ? window.megraceText.preparing + '...'
+                : window.megraceText.loading + ' ' + percent + '%';
+        };
+
+        window.megraceHideLoader = function () {
+            window.megraceSetProgress(1, true);
+            document.getElementById('loader').classList.add('done');
+            document.getElementById('theCanvas').focus();
+        };
+
+        window.megraceShowError = function (error) {
+            console.error(error);
+            document.getElementById('loader').classList.add('done');
+            document.getElementById('fatal').style.display = 'flex';
+        };
+    </script>
+
+    <script src="_framework/blazor.webassembly.js" autostart="false"></script>
+    <script type="module">
+        import { BrotliDecode } from './js/decode.min.js';
+
+        // Os arquivos do jogo são publicados só na versão comprimida (.br) e descomprimidos aqui: o download fica
+        // ~3x menor em qualquer servidor, e o tamanho de cada arquivo (megrace.sizes.json) dá a porcentagem real.
+        let sizes = null;
+        try {
+            const response = await fetch('_framework/megrace.sizes.json', { cache: 'no-cache' });
+            if (response.ok) {
+                sizes = await response.json();
+            }
+        } catch (e) { }
+
+        const total = sizes ? Object.values(sizes).reduce((a, b) => a + b, 0) : 0;
+        let loaded = 0;
+        const progress = () => window.megraceSetProgress(total > 0 ? 0.92 * loaded / total : 0, false);
+
+        async function fetchCompressed(url, name, contentType) {
+            const response = await fetch(url + '.br');
+            if (!response.ok) {
+                throw new Error(response.status + ' ' + url);
+            }
+            const reader = response.body.getReader();
+            const chunks = [];
+            let length = 0;
+            for (; ;) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    break;
+                }
+                chunks.push(value);
+                length += value.length;
+                loaded += value.length;
+                progress();
+            }
+            const compressed = new Int8Array(length);
+            let offset = 0;
+            for (const chunk of chunks) {
+                compressed.set(chunk, offset);
+                offset += chunk.length;
+            }
+            return new Response(BrotliDecode(compressed), { headers: { 'content-type': contentType } });
+        }
+
+        function startGame() {
+            Blazor.start({
+                loadBootResource: function (type, name, defaultUri, integrity) {
+                    if (!sizes || !(name in sizes)) {
+                        return undefined;
+                    }
+                    const contentType = type === 'dotnetwasm' ? 'application/wasm' : 'application/octet-stream';
+                    return fetchCompressed(defaultUri, name, contentType);
+                }
+            }).then(function () {
+                window.megraceSetProgress(0.95, true);
+            }, window.megraceShowError);
+        }
+
+        // Fluxo oficial da Poki: init → carregar o jogo → gameLoadingFinished (chamado pelo jogo quando o primeiro
+        // quadro está pronto). Sem o SDK (bloqueado ou teste local) o jogo carrega do mesmo jeito.
+        if (window.PokiSDK) {
+            window.PokiSDK.init().then(function () {
+                window.pokiReady = true;
+                startGame();
+            }).catch(function () {
+                window.pokiReady = false;
+                startGame();
+            });
+        } else {
+            startGame();
+        }
+    </script>
+
+    <script src="js/megrace.js"></script>
+    <script src="_content/nkast.Wasm.JSInterop/js/JSObject.10.0.3.js"></script>
+    <script src="_content/nkast.Wasm.Dom/js/Window.10.0.3.js"></script>
+    <script src="_content/nkast.Wasm.Dom/js/Document.10.0.3.js"></script>
+    <script src="_content/nkast.Wasm.Dom/js/Navigator.10.0.3.js"></script>
+    <script src="_content/nkast.Wasm.Dom/js/Gamepad.10.0.3.js"></script>
+    <script src="_content/nkast.Wasm.Dom/js/Media.10.0.3.js"></script>
+    <script src="_content/nkast.Wasm.XHR/js/XHR.10.0.3.js"></script>
+    <script src="_content/nkast.Wasm.Canvas/js/Canvas.10.0.3.js"></script>
+    <script src="_content/nkast.Wasm.Canvas/js/CanvasGLContext.10.0.3.js"></script>
+    <script src="_content/nkast.Wasm.Audio/js/Audio.10.0.3.js"></script>
+</body>
+</html>

@@ -148,6 +148,14 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         // Tela cheia sem trocar o modo de vídeo (borderless) — a cena já é escalada/centralizada no Draw.
         _graphics.HardwareModeSwitch = false;
 
+        // No navegador o laço vem do requestAnimationFrame: o passo fixo do framework faria espera ativa (CPU a 100%
+        // em telas de 120/144 Hz). A simulação da corrida mantém o próprio passo fixo de 1/60 s (ver UpdateRacing).
+        IsFixedTimeStep = GamePlatform.Current.UsesFrameworkFixedTimeStep;
+        if (!IsFixedTimeStep)
+        {
+            InactiveSleepTime = TimeSpan.Zero;
+        }
+
         _saveData = SaveData.Load();
         L.Current = L.FromCode(_saveData.Language);
         Progression.Normalize(_saveData);
@@ -199,6 +207,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         _player = _race.Entrants.First(e => e.Kind == DriverKind.Human);
         _recordsProcessed = false;
         _records = default;
+        _simulationClock = 0;
         _playerWasCollidingLastTick = false;
         _lastCountdownTickSecond = int.MaxValue;
         _raceTracker.Reset(_race, SelectedTrack.SecretSpot);
@@ -226,8 +235,36 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         }
     }
 
-    /// <summary>Começa uma partida de verdade (sai dos menus pra pista), com a pista e a skin escolhidas.</summary>
+    /// <summary>O jogador pediu pra correr (menu de modos, "jogar novamente", "reiniciar"): é a parada natural em
+    /// que a plataforma pode encaixar um intervalo comercial. O jogo fica congelado até ela liberar; no desktop a
+    /// liberação é imediata e a corrida começa no mesmo quadro.</summary>
     private void BeginRace(RaceMode mode)
+    {
+        if (_raceRequest is not null)
+        {
+            return;
+        }
+
+        _raceRequest = mode;
+        _raceRequestReleased = false;
+        GamePlatform.Current.CommercialBreak(() => _raceRequestReleased = true);
+        StartRequestedRaceIfReleased();
+    }
+
+    private RaceMode? _raceRequest;
+    private bool _raceRequestReleased;
+
+    private void StartRequestedRaceIfReleased()
+    {
+        if (_raceRequest is { } mode && _raceRequestReleased)
+        {
+            _raceRequest = null;
+            StartRaceNow(mode);
+        }
+    }
+
+    /// <summary>Começa uma partida de verdade (sai dos menus pra pista), com a pista e a skin escolhidas.</summary>
+    private void StartRaceNow(RaceMode mode)
     {
         _selectedMode = mode;
         _saveData.LastMode = mode;
@@ -285,7 +322,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         _recordsProcessed = true;
 
         bool silent = _audio.MusicMuted && _audio.SfxMuted;
-        RaceReport report = _raceTracker.BuildReport(_race, _player, SelectedSkin.Id, SelectedTrack.Id, silent, DateTime.Now);
+        RaceReport report = _raceTracker.BuildReport(_race, _player, SelectedSkin.Id, SelectedTrack.Id, silent, GamePlatform.Current.LocalNow);
         _records = Progression.RecordRace(_saveData, report);
         _saveData.Save();
         CheckUnlocks();
@@ -415,7 +452,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         _audio.SetMusicMuted(_saveData.MusicMuted);
         _audio.SetSfxMuted(_saveData.SfxMuted);
 
-        if (!_saveData.Windowed)
+        if (GamePlatform.Current.ControlsFullscreen && !_saveData.Windowed)
         {
             ToggleFullscreen();
         }
@@ -430,6 +467,23 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
     protected override void Update(GameTime gameTime)
     {
         _input.Update();
+        ApplyPlatformBackBufferSize();
+        if (!_loadingReported)
+        {
+            _loadingReported = true;
+            GamePlatform.Current.LoadingFinished();
+        }
+
+        // Intervalo comercial em andamento: o jogo fica parado (sem input, sem simulação) até a plataforma liberar.
+        if (_raceRequest is not null)
+        {
+            StartRequestedRaceIfReleased();
+            if (_raceRequest is not null)
+            {
+                base.Update(gameTime);
+                return;
+            }
+        }
 
         float frameSeconds = (float)gameTime.ElapsedGameTime.TotalSeconds;
         _visualTime += frameSeconds;
@@ -439,7 +493,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         UpdateUnlockToast(frameSeconds);
 
         bool altHeld = _input.IsDown(Keys.LeftAlt) || _input.IsDown(Keys.RightAlt);
-        if (_input.WasJustPressed(Keys.F11) || (altHeld && _input.WasJustPressed(Keys.Enter)))
+        if (GamePlatform.Current.ControlsFullscreen && (_input.WasJustPressed(Keys.F11) || (altHeld && _input.WasJustPressed(Keys.Enter))))
         {
             // Trata a tela cheia à parte e sai cedo, senão o mesmo Enter também confirmaria algo neste quadro.
             ToggleFullscreen();
@@ -500,6 +554,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         }
 
         TrackStateChanges();
+        ReportGameplayState();
         base.Update(gameTime);
     }
 

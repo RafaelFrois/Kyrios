@@ -18,7 +18,8 @@ public sealed partial class GameRoot
         Quit,
     }
 
-    private static readonly MainItem[] MainItems = Enum.GetValues<MainItem>();
+    /// <summary>Itens do menu principal. No navegador não existe "fechar o jogo", então o SAIR some.</summary>
+    private readonly MainItem[] MainItems = [.. Enum.GetValues<MainItem>().Where(item => item != MainItem.Quit || GamePlatform.Current.CanQuit)];
 
     /// <summary>Onde fica a galinha de kart no menu principal (clicável...).</summary>
     private static readonly Vector2 MenuLogoCenter = new(885f, 92f);
@@ -82,7 +83,7 @@ public sealed partial class GameRoot
             return;
         }
 
-        if (_input.Back)
+        if (_input.Back && GamePlatform.Current.CanQuit)
         {
             // ESC leva o foco pro SAIR; um segundo ESC (ou ENTER) sai de verdade.
             if (MainItems[_mainFocus] == MainItem.Quit)
@@ -355,7 +356,8 @@ public sealed partial class GameRoot
     // ---------- Configurações ----------
 
     private const float SettingsPanelWidth = 480f;
-    private const float SettingsPanelHeight = 326f;
+    /// <summary>Altura do painel: uma linha a menos quando a tela cheia é do site (versão web).</summary>
+    private static float SettingsPanelHeight => GamePlatform.Current.ControlsFullscreen ? 326f : 280f;
     private const float SettingsPanelPaddingV = 26f;
     private const float SettingsHeaderSize = 3f;
     private const float SettingsRowSpacing = 46f;
@@ -365,7 +367,7 @@ public sealed partial class GameRoot
     private const float SettingsBarValueGap = 10f;
     private const float SettingsValueSlotWidth = 50f;
 
-    private static readonly SettingsRow[] SettingsRows = Enum.GetValues<SettingsRow>();
+    private readonly SettingsRow[] SettingsRows = [.. Enum.GetValues<SettingsRow>().Where(row => row != SettingsRow.Fullscreen || GamePlatform.Current.ControlsFullscreen)];
 
     /// <summary>Abre as configurações lembrando de onde vieram (menu ou pausa), pra voltar exatamente pra lá.</summary>
     private void OpenSettings(State returnState)
@@ -462,7 +464,7 @@ public sealed partial class GameRoot
         Rectangle music = ComputeVolumeBarRect(panelRect, rowY);
         Rectangle sfx = ComputeVolumeBarRect(panelRect, rowY + SettingsRowSpacing);
         var fullscreen = new Rectangle(music.X, (int)(rowY + (2f * SettingsRowSpacing)) - 3, 60, 20);
-        int languageY = (int)(rowY + (3f * SettingsRowSpacing)) - 4;
+        int languageY = (int)(rowY + ((GamePlatform.Current.ControlsFullscreen ? 3f : 2f) * SettingsRowSpacing)) - 4;
         int englishWidth = (int)PixelFont.Measure("ENGLISH", LanguageChipSize) + 18;
         int portugueseWidth = (int)PixelFont.Measure("PORTUGUES", LanguageChipSize) + 18;
         var english = new Rectangle(panelRect.Right - (int)SettingsPaddingH - englishWidth, languageY, englishWidth, 22);
@@ -494,11 +496,16 @@ public sealed partial class GameRoot
 
         DrawSettingsRow(panelRect, musicBar, L.T("TRILHA SONORA", "MUSIC"), _audio.MusicVolume, _audio.MusicMuted, _settingsSelection == SettingsRow.Music);
         DrawSettingsRow(panelRect, sfxBar, L.T("EFEITOS SONOROS", "SOUND EFFECTS"), _audio.SfxVolume, _audio.SfxMuted, _settingsSelection == SettingsRow.Sfx);
-        DrawFullscreenRow(panelRect, fullscreenSwitch, _settingsSelection == SettingsRow.Fullscreen);
+        if (GamePlatform.Current.ControlsFullscreen)
+        {
+            DrawFullscreenRow(panelRect, fullscreenSwitch, _settingsSelection == SettingsRow.Fullscreen);
+        }
+
         DrawLanguageRow(panelRect, portuguese, english, _settingsSelection == SettingsRow.Language);
 
         DrawCenteredText(panelRect, L.T("SETAS OU MOUSE: AJUSTAR    ENTER: MUDO / LIGAR", "ARROWS OR MOUSE: ADJUST    ENTER: MUTE / TOGGLE"), portuguese.Y + 42f, SmallSize, StatBadgeLabelColor);
-        DrawCenteredText(panelRect, L.T("F11: TELA CHEIA    ESC: VOLTAR", "F11: FULLSCREEN    ESC: BACK"), portuguese.Y + 62f, SmallSize, StatBadgeLabelColor);
+        string backHint = GamePlatform.Current.ControlsFullscreen ? L.T("F11: TELA CHEIA    ESC: VOLTAR", "F11: FULLSCREEN    ESC: BACK") : L.T("ESC: VOLTAR", "ESC: BACK");
+        DrawCenteredText(panelRect, backHint, portuguese.Y + 62f, SmallSize, StatBadgeLabelColor);
     }
 
     private void DrawSettingsLabel(Rectangle panel, float y, string label, bool selected)
@@ -573,7 +580,7 @@ public sealed partial class GameRoot
             return;
         }
 
-        if (MouseClicked && InflateRect(fullscreenSwitch, 6f, 6f).Contains(mousePoint))
+        if (GamePlatform.Current.ControlsFullscreen && MouseClicked && InflateRect(fullscreenSwitch, 6f, 6f).Contains(mousePoint))
         {
             _settingsSelection = SettingsRow.Fullscreen;
             ToggleFullscreenSetting();
