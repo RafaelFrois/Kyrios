@@ -207,6 +207,41 @@ public sealed partial class GameRoot
         }
     }
 
+    /// <summary>Celular/tablet em pé: o jogo é deitado (2,25:1), então pede pra girar em vez de mostrar tudo minúsculo.</summary>
+    private bool IsPortraitTouchScreen =>
+        GamePlatform.Current.IsWeb && _input.UsingTouch
+        && GraphicsDevice.PresentationParameters.BackBufferHeight > GraphicsDevice.PresentationParameters.BackBufferWidth;
+
+    private void DrawPortraitOverlay()
+    {
+        if (!IsPortraitTouchScreen)
+        {
+            return;
+        }
+
+        int width = GraphicsDevice.PresentationParameters.BackBufferWidth;
+        int height = GraphicsDevice.PresentationParameters.BackBufferHeight;
+        float unit = width / 360f;
+        _spriteBatch.Begin(samplerState: SamplerState.PointClamp);
+        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, width, height), MenuBackground);
+
+        // Um celular em pé girando pra deitar.
+        var center = new Vector2(width / 2f, height * 0.38f);
+        float turn = MathF.Min(1f, (_visualTime % 2.4f) / 1.2f);
+        float angle = MathHelper.PiOver2 * (1f - MathF.Pow(1f - turn, 3f));
+        DrawFilledRectRotated(center, 60f * unit, 110f * unit, angle, TextColor);
+        DrawFilledRectRotated(center, 50f * unit, 92f * unit, angle, MenuBackground);
+
+        float titleSize = 4f * unit;
+        string title = L.T("GIRE O APARELHO", "ROTATE YOUR DEVICE");
+        titleSize = MathF.Min(titleSize, (width * 0.9f) / MathF.Max(1f, PixelFont.Measure(title, 1f)));
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, title, new Vector2((width - PixelFont.Measure(title, titleSize)) / 2f, height * 0.62f), titleSize, AccentColor);
+        string line = L.T("O MEGRACE E JOGADO NA HORIZONTAL", "MEGRACE IS PLAYED IN LANDSCAPE");
+        float lineSize = MathF.Min(2f * unit, (width * 0.9f) / MathF.Max(1f, PixelFont.Measure(line, 1f)));
+        PixelFont.Draw(_spriteBatch, _pixel, line, new Vector2((width - PixelFont.Measure(line, lineSize)) / 2f, (height * 0.62f) + (titleSize * 12f)), lineSize, StatBadgeLabelColor);
+        _spriteBatch.End();
+    }
+
     // ---------- Abertura ----------
 
     private void UpdateSplash()

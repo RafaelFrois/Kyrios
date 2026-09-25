@@ -42,6 +42,12 @@ public class GamePlatform
     /// <summary>Tamanho desejado da área de desenho em pixels reais (null = o framework decide).</summary>
     public virtual (int Width, int Height)? DesiredBackBufferSize => null;
 
+    /// <summary>Pixels da área de desenho por pixel informado pelo mouse/toque (densidade da tela no navegador).</summary>
+    public virtual float PointerScale => 1f;
+
+    /// <summary>O aparelho é de toque (celular/tablet): o jogo já começa mostrando os controles de toque.</summary>
+    public virtual bool PrefersTouch => false;
+
     /// <summary>O jogo terminou de carregar e está pronto pra interação.</summary>
     public virtual void LoadingFinished()
     {

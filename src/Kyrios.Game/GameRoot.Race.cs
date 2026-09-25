@@ -233,13 +233,13 @@ public sealed partial class GameRoot
 
     private void UpdateRacing(float frameSeconds)
     {
-        if (_input.Pause)
+        if (_input.Pause || TouchPausePressed())
         {
             OpenPause();
             return;
         }
 
-        CarInput input = _input.BuildCarInput();
+        CarInput input = WithTouchControls(_input.BuildCarInput());
         _simulationClock = Math.Min(_simulationClock + frameSeconds, SimulationStep * MaxSimulationStepsPerFrame);
         while (_simulationClock >= SimulationStep && _state == State.Racing)
         {
@@ -277,7 +277,7 @@ public sealed partial class GameRoot
         DetectRaceEvents();
 
         // Espectador depois de eliminado: ENTER pula direto pro resultado (a colocação dele já está decidida).
-        if (_player.Eliminated && !_race.IsRaceOver && _input.Confirm)
+        if (_player.Eliminated && !_race.IsRaceOver && (_input.Confirm || MouseClicked))
         {
             for (int i = 0; i < 20000 && !_race.IsRaceOver; i++)
             {
@@ -383,7 +383,7 @@ public sealed partial class GameRoot
             if (_race.EliminationsThisTick.Contains(_player))
             {
                 TriggerScreenShake(8f);
-                ShowBanner(L.T("VOCE FOI ELIMINADO!", "YOU'VE BEEN ELIMINATED!"), DangerColor, L.T("ENTER: VER RESULTADO", "ENTER: SEE RESULTS"), seconds: 3.5f);
+                ShowBanner(L.T("VOCE FOI ELIMINADO!", "YOU'VE BEEN ELIMINATED!"), DangerColor, (ShowTouchControls ? L.T("TOQUE: VER RESULTADO", "TAP: SEE RESULTS") : L.T("ENTER: VER RESULTADO", "ENTER: SEE RESULTS")), seconds: 3.5f);
             }
             else if (!_player.Eliminated && _race.EliminationsThisTick.Count > 1)
             {
@@ -546,7 +546,10 @@ public sealed partial class GameRoot
 
         DrawBoostBar(new Vector2(14f, AreaHeight + 13f));
         string pauseHint = L.T("ESC: PAUSA", "ESC: PAUSE");
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, pauseHint, new Vector2(AreaWidth - PixelFont.Measure(pauseHint, 1.4f) - 12f, AreaHeight + 15f), 1.4f, StatBadgeLabelColor);
+        if (!ShowTouchControls)
+        {
+            PixelFont.DrawShadowed(_spriteBatch, _pixel, pauseHint, new Vector2(AreaWidth - PixelFont.Measure(pauseHint, 1.4f) - 12f, AreaHeight + 15f), 1.4f, StatBadgeLabelColor);
+        }
     }
 
     /// <summary>O HUD mora nas faixas de cenário (TrackMargin) acima e abaixo da pista, fora do asfalto.</summary>
@@ -650,7 +653,7 @@ public sealed partial class GameRoot
         DrawRoundedRect(back, HudFrameFill, 4f);
         float fraction = Math.Clamp(_player.Car.BoostFuel / _player.Car.Settings.BoostMaxFuel, 0f, 1f);
         _spriteBatch.Draw(_pixel, new Rectangle((int)position.X, (int)position.Y, (int)(width * fraction), (int)height), _player.Car.IsBoosting ? BoostActiveColor : BoostFillColor);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, L.T("TURBO (SHIFT)", "BOOST (SHIFT)"), new Vector2(position.X + width + 12f, position.Y + 1f), 1.3f, TextColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, ShowTouchControls ? "TURBO" : L.T("TURBO (SHIFT)", "BOOST (SHIFT)"), new Vector2(position.X + width + 12f, position.Y + 1f), 1.3f, TextColor);
     }
 
     /// <summary>Textos subindo a partir do carro, anéis de checkpoint e a faixa de aviso no centro da tela.</summary>

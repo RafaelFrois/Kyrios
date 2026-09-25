@@ -156,6 +156,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
             InactiveSleepTime = TimeSpan.Zero;
         }
 
+        _input.UsingTouch = GamePlatform.Current.PrefersTouch;
         _saveData = SaveData.Load();
         L.Current = L.FromCode(_saveData.Language);
         Progression.Normalize(_saveData);
@@ -468,6 +469,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
     {
         _input.Update();
         ApplyPlatformBackBufferSize();
+        _input.PointerScale = GamePlatform.Current.PointerScale;
         if (!_loadingReported)
         {
             _loadingReported = true;
@@ -515,8 +517,9 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
             _scenery.UpdateAmbient(WorldTheme, AreaWidth, AreaHeight, Math.Min(frameSeconds, 0.1f));
         }
 
-        // Janela perdeu o foco no meio da corrida (alt+tab, notificação...): pausa sozinho em vez de seguir correndo.
-        if (_state == State.Racing && !IsActive)
+        // Janela perdeu o foco no meio da corrida (alt+tab, notificação...) ou o celular virou pra retrato: pausa
+        // sozinho em vez de seguir correndo.
+        if (_state == State.Racing && (!IsActive || IsPortraitTouchScreen))
         {
             OpenPause(countAsPause: false);
         }
@@ -617,6 +620,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
             case State.Racing:
                 DrawRaceFeedback();
                 DrawLiveHud();
+                DrawTouchControls();
                 DrawCountdown();
                 break;
             case State.Paused:
@@ -638,6 +642,8 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         DrawScreenFade();
         DrawUnlockToast();
         _spriteBatch.End();
+
+        DrawPortraitOverlay();
         base.Draw(gameTime);
     }
 
@@ -649,6 +655,11 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
     /// Este método escala e centraliza essa cena no back buffer de verdade (igual em janela; em tela cheia,
     /// com letterbox), já com o tremor de câmera.
     /// </summary>
+    /// <summary>Quantos pixels de tela vale um pixel lógico (a escala do letterbox).</summary>
+    private float CurrentScreenScale => MathF.Min(
+        (float)GraphicsDevice.PresentationParameters.BackBufferWidth / _windowWidth,
+        (float)GraphicsDevice.PresentationParameters.BackBufferHeight / _windowHeight);
+
     private Matrix BuildScreenTransform()
     {
         int actualWidth = GraphicsDevice.PresentationParameters.BackBufferWidth;

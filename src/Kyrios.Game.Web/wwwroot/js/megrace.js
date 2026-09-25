@@ -13,13 +13,17 @@
 
     function setAudioRunning(running) {
         for (const context of audioContexts) {
+            if (context.state === 'closed') {
+                continue;
+            }
             try {
-                if (running && context.state !== 'running') {
-                    context.resume();
-                } else if (!running && context.state === 'running') {
-                    context.suspend();
+                const change = running
+                    ? (context.state !== 'running' ? context.resume() : null)
+                    : (context.state === 'running' ? context.suspend() : null);
+                if (change && typeof change.catch === 'function') {
+                    change.catch(() => { });
                 }
-            } catch (e) { /* contexto fechado: ignora */ }
+            } catch (e) { /* navegador sem suporte: ignora */ }
         }
     }
 
@@ -101,7 +105,17 @@
                 canvas.width = width;
                 canvas.height = height;
             }
-            return [width, height];
+            // Terceiro valor: pixels do canvas por pixel da página (×1000), pra converter mouse e toque.
+            return [width, height, Math.round(1000 * width / Math.max(1, rect.width))];
+        },
+
+        // Celular/tablet (ponteiro "grosso" e sem mouse): o jogo já abre com os controles de toque.
+        prefersTouch() {
+            try {
+                return window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(any-pointer: fine)').matches;
+            } catch (e) {
+                return 'ontouchstart' in window;
+            }
         },
 
         timezoneOffset() {

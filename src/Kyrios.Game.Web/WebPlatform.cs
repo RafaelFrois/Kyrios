@@ -41,14 +41,28 @@ public sealed class WebPlatform : GamePlatform
         }
     }
 
+    private float _pointerScale = 1f;
+
+    /// <summary>Tamanho real do canvas (página × densidade da tela). Consultado uma vez por quadro; a mesma chamada
+    /// devolve a escala do ponteiro, já que mouse e toque chegam em pixels da página.</summary>
     public override (int Width, int Height)? DesiredBackBufferSize
     {
         get
         {
             int[] size = _js.Invoke<int[]>("megrace.canvasPixelSize");
-            return size is { Length: 2 } ? (size[0], size[1]) : null;
+            if (size is not { Length: 3 })
+            {
+                return null;
+            }
+
+            _pointerScale = size[2] / 1000f;
+            return (size[0], size[1]);
         }
     }
+
+    public override float PointerScale => _pointerScale;
+
+    public override bool PrefersTouch => _js.Invoke<bool>("megrace.prefersTouch");
 
     public override void LoadingFinished() => _js.InvokeVoid("megrace.loadingFinished");
 

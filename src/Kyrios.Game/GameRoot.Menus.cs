@@ -379,7 +379,9 @@ public sealed partial class GameRoot
 
     private void UpdateSettings()
     {
-        if (_input.Back)
+        // Tocar/clicar fora do painel também fecha (no celular não existe ESC).
+        bool tappedOutside = MouseClicked && _draggingSettingsRow is null && !ComputeSettingsLayout().Panel.Contains(LogicalMousePoint());
+        if (_input.Back || tappedOutside)
         {
             _audio.PlayMenuConfirm();
             _state = _settingsReturnState;

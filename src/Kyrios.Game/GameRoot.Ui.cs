@@ -110,6 +110,18 @@ public sealed partial class GameRoot
     /// <summary>Dicas de tecla no rodapé: [TECLA] AÇÃO, centralizadas — o mesmo formato em todas as telas.</summary>
     private void DrawKeyHints(params (string Key, string Label)[] hints)
     {
+        // Na tela de toque não há teclado: as dicas de tecla só atrapalhariam.
+        if (_input.UsingTouch)
+        {
+            return;
+        }
+
+        // Sem "fechar o jogo" (navegador), a dica de sair some.
+        if (!GamePlatform.Current.CanQuit)
+        {
+            hints = [.. hints.Where(hint => hint.Label != L.T("SAIR", "QUIT"))];
+        }
+
         const float keySize = 1.4f;
         const float labelSize = SmallSize;
         const float padding = 5f;

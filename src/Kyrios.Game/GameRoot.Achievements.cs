@@ -59,6 +59,8 @@ public sealed partial class GameRoot
     private Rectangle AchievementListRect =>
         new(20, (int)AchievementListTop, (int)(AreaWidth - 56f), (int)((AchievementVisibleRows * (AchievementCardHeight + AchievementCardGap)) - AchievementCardGap));
 
+    private float _achievementDragPixels;
+
     private void UpdateAchievementsPage()
     {
         if (_input.Back || _input.WasJustPressed(Keys.C) || WasBackButtonClicked())
@@ -97,6 +99,20 @@ public sealed partial class GameRoot
         }
 
         scroll -= _input.ScrollWheelSteps;
+
+        // Arrastar a lista com o dedo (ou com o mouse pressionado) rola uma linha a cada altura de cartão.
+        _achievementDragPixels += _input.DragDeltaY / MathF.Max(0.01f, CurrentScreenScale);
+        int dragRows = (int)(_achievementDragPixels / (AchievementCardHeight + AchievementCardGap));
+        if (dragRows != 0)
+        {
+            scroll -= dragRows;
+            _achievementDragPixels -= dragRows * (AchievementCardHeight + AchievementCardGap);
+        }
+
+        if (!_input.IsMouseLeftDown)
+        {
+            _achievementDragPixels = 0f;
+        }
 
         if (MouseClicked)
         {

@@ -1,13 +1,15 @@
 using Kyrios.Core;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
+using Microsoft.Xna.Framework.Input.Touch;
 
 namespace Kyrios.Game;
 
 /// <summary>
 /// Teclado, mouse e controle (gamepad) num lugar só. As telas usam as ações de menu (<see cref="MenuUp"/>,
 /// <see cref="Confirm"/>, <see cref="Back"/>...) em vez de teclas específicas, então teclado e controle navegam
-/// igual em todo o jogo.
+/// igual em todo o jogo. Na tela de toque (celular/tablet), o dedo principal funciona como o mouse — todos os menus
+/// respondem ao toque sem código extra — e todos os dedos ficam disponíveis pros botões da corrida (<see cref="Touches"/>).
 /// </summary>
 public sealed class GameInput
 {
@@ -17,6 +19,28 @@ public sealed class GameInput
     private MouseState _previousMouse;
     private GamePadState _pad;
     private GamePadState _previousPad;
+    private readonly List<Vector2> _touches = [];
+    private readonly List<Vector2> _touchesStarted = [];
+    private bool _touchDown;
+    private bool _previousTouchDown;
+    private Point _touchPosition;
+    private int _framesSinceTouch = int.MaxValue;
+    private Point _pointerPosition;
+    private Point _previousPointerPosition;
+
+    /// <summary>Quantos pixels da área de desenho valem um pixel informado pelo mouse/toque. No navegador o mouse
+    /// vem em pixels da página e a área de desenho usa a densidade real da tela (2x, 3x no celular).</summary>
+    public float PointerScale { get; set; } = 1f;
+
+    /// <summary>O jogador está usando a tela de toque (mostra os botões da corrida e esconde as dicas de teclado).
+    /// Volta a falso quando ele usa o teclado ou mexe um mouse de verdade.</summary>
+    public bool UsingTouch { get; set; }
+
+    /// <summary>Dedos na tela, em pixels da área de desenho.</summary>
+    public IReadOnlyList<Vector2> Touches => _touches;
+
+    /// <summary>Dedos que encostaram na tela neste quadro.</summary>
+    public IReadOnlyList<Vector2> TouchesStarted => _touchesStarted;
 
     public void Update()
     {
@@ -33,25 +57,86 @@ public sealed class GameInput
         {
             _pad = default;
         }
+
+        UpdateTouches();
+
+        // Modo toque: liga com qualquer dedo na tela; desliga com o teclado ou com um mouse de verdade (alguns
+        // navegadores ainda mandam um "mouse" sintético logo depois do toque, então ele só conta um tempo depois).
+        bool realMouseMoved = _currentMouse.Position != _previousMouse.Position && _framesSinceTouch > 30;
+        if (_touchDown)
+        {
+            UsingTouch = true;
+        }
+        else if (_current.GetPressedKeyCount() > 0 || realMouseMoved)
+        {
+            UsingTouch = false;
+        }
+
+        _previousPointerPosition = _pointerPosition;
+        _pointerPosition = UsingTouch ? _touchPosition : Scale(_currentMouse.Position);
     }
 
-    /// <summary>Posição do mouse em pixels de tela (relativa à janela do jogo) — quem usa precisa converter
-    /// pro espaço de coordenadas "lógico" do jogo, já que a cena é escalada/centralizada.</summary>
-    public Point MousePosition => _currentMouse.Position;
+    private void UpdateTouches()
+    {
+        _touches.Clear();
+        _touchesStarted.Clear();
+        _previousTouchDown = _touchDown;
+        try
+        {
+            foreach (TouchLocation touch in TouchPanel.GetState())
+            {
+                if (touch.State is TouchLocationState.Pressed or TouchLocationState.Moved)
+                {
+                    Vector2 position = touch.Position * PointerScale;
+                    _touches.Add(position);
+                    if (touch.State == TouchLocationState.Pressed)
+                    {
+                        _touchesStarted.Add(position);
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Plataforma sem tela de toque: segue só com teclado/mouse.
+        }
 
-    public bool MouseMoved => _currentMouse.Position != _previousMouse.Position;
+        _touchDown = _touches.Count > 0;
+        if (_touchDown)
+        {
+            _touchPosition = _touches[0].ToPoint();
+            _framesSinceTouch = 0;
+        }
+        else if (_framesSinceTouch < int.MaxValue)
+        {
+            _framesSinceTouch++;
+        }
+    }
 
-    public bool IsMouseLeftDown => _currentMouse.LeftButton == ButtonState.Pressed;
+    private Point Scale(Point point) => PointerScale == 1f ? point : new Point((int)(point.X * PointerScale), (int)(point.Y * PointerScale));
+
+    /// <summary>Posição do ponteiro (mouse ou dedo principal) em pixels da área de desenho — quem usa precisa
+    /// converter pro espaço de coordenadas "lógico" do jogo, já que a cena é escalada/centralizada.</summary>
+    public Point MousePosition => _pointerPosition;
+
+    public bool MouseMoved => _pointerPosition != _previousPointerPosition;
+
+    public bool IsMouseLeftDown => _currentMouse.LeftButton == ButtonState.Pressed || _touchDown;
 
     public bool WasMouseLeftJustPressed =>
-        _currentMouse.LeftButton == ButtonState.Pressed && _previousMouse.LeftButton == ButtonState.Released;
+        (_currentMouse.LeftButton == ButtonState.Pressed && _previousMouse.LeftButton == ButtonState.Released)
+        || (_touchDown && !_previousTouchDown);
+
+    /// <summary>Quanto o ponteiro foi arrastado na vertical neste quadro com o botão/dedo pressionado (pixels da área
+    /// de desenho) — rolar listas com o dedo.</summary>
+    public float DragDeltaY => IsMouseLeftDown && !WasMouseLeftJustPressed ? _pointerPosition.Y - _previousPointerPosition.Y : 0f;
 
     /// <summary>Quantos "dentes" a roda do mouse girou desde o quadro anterior (positivo = pra cima).</summary>
     public int ScrollWheelSteps => (_currentMouse.ScrollWheelValue - _previousMouse.ScrollWheelValue) / 120;
 
     /// <summary>Qualquer sinal de vida do jogador neste quadro (tecla, mouse ou controle).</summary>
     public bool AnyActivity =>
-        _current.GetPressedKeyCount() > 0 || MouseMoved || IsMouseLeftDown || ScrollWheelSteps != 0
+        _current.GetPressedKeyCount() > 0 || MouseMoved || IsMouseLeftDown || ScrollWheelSteps != 0 || _touchDown
         || (_pad.IsConnected && (_pad.Buttons != _previousPad.Buttons || _pad.ThumbSticks.Left.LengthSquared() > 0.05f));
 
     /// <summary>Teclas que acabaram de ser apertadas neste quadro (pra reconhecer sequências, como um código).</summary>
