@@ -53,6 +53,10 @@ public sealed class AudioManager
     private SoundEffect _skinFanfare;
     private SoundEffect _eliminationSting;
     private SoundEffect _denyBuzz;
+    private SoundEffect _startBeep;
+    private SoundEffect _goBeep;
+    private SoundEffect _lapChime;
+    private SoundEffect _cluck;
 
     public void LoadContent()
     {
@@ -74,6 +78,10 @@ public sealed class AudioManager
             _skinFanfare = Soundtrack.BuildSkinFanfare();
             _eliminationSting = Soundtrack.BuildEliminationSting();
             _denyBuzz = Soundtrack.BuildDenyBuzz();
+            _startBeep = Soundtrack.BuildStartBeep(go: false);
+            _goBeep = Soundtrack.BuildStartBeep(go: true);
+            _lapChime = Soundtrack.BuildLapChime();
+            _cluck = Soundtrack.BuildCluck();
         }
         catch (Exception)
         {
@@ -378,6 +386,16 @@ public sealed class AudioManager
 
     public void PlayElimination() => PlayOneShot(_eliminationSting, 0.5f);
 
+    /// <summary>Bip da contagem de largada (3, 2, 1) ou o "VAI!".</summary>
+    public void PlayStartBeep(bool go) => PlayOneShot(go ? _goBeep : _startBeep, 0.45f);
+
+    public void PlayLap() => PlayOneShot(_lapChime, 0.55f);
+
+    public void PlayCluck() => PlayOneShot(_cluck, 0.6f);
+
+    /// <summary>Tique bem baixinho quando o mouse passa pra outro botão.</summary>
+    public void PlayHover() => PlayOneShot(_menuMoveBlip, 0.16f);
+
     public void PlayDeny() => PlayOneShot(_denyBuzz, 0.45f);
 
     /// <summary>Pausa (ou retoma) a música e o motor — usado pelo menu de pausa da corrida.</summary>
@@ -463,5 +481,9 @@ public sealed class AudioManager
         _skinFanfare?.Dispose();
         _eliminationSting?.Dispose();
         _denyBuzz?.Dispose();
+        _startBeep?.Dispose();
+        _goBeep?.Dispose();
+        _lapChime?.Dispose();
+        _cluck?.Dispose();
     }
 }

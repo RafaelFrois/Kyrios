@@ -4,7 +4,8 @@ using Microsoft.Xna.Framework.Input;
 
 namespace Kyrios.Game;
 
-/// <summary>Menu principal, seleção de modo, seletores de pista e skin (mesmo componente) e configurações.</summary>
+/// <summary>Menu principal, seleção de modo e configurações (a coleção de skins/pistas fica em
+/// <c>GameRoot.Collection</c>).</summary>
 public sealed partial class GameRoot
 {
     private enum MainItem
@@ -18,6 +19,10 @@ public sealed partial class GameRoot
     }
 
     private static readonly MainItem[] MainItems = Enum.GetValues<MainItem>();
+
+    /// <summary>Onde fica a galinha de kart no menu principal (clicável...).</summary>
+    private static readonly Vector2 MenuLogoCenter = new(885f, 92f);
+    private const float MenuLogoScale = 2f;
 
     private int _mainFocus;
     private int _modeFocus;
@@ -35,16 +40,21 @@ public sealed partial class GameRoot
         _ => new Rectangle(50, 184 + (((int)item - 1) * 48), 320, 40),
     };
 
-    private void UpdateMainMenu()
+    private static Rectangle MenuLogoRect => new((int)(MenuLogoCenter.X - (48f * MenuLogoScale)), (int)(MenuLogoCenter.Y - (40f * MenuLogoScale)), (int)(96f * MenuLogoScale), (int)(80f * MenuLogoScale));
+
+    private void UpdateMainMenu(float frameSeconds)
     {
+        UpdateMenuSecrets(frameSeconds, MenuLogoRect);
+
         if (_input.MouseMoved)
         {
             Point mouse = LogicalMousePoint();
             for (int i = 0; i < MainItems.Length; i++)
             {
-                if (MainButtonRect(MainItems[i]).Contains(mouse))
+                if (MainButtonRect(MainItems[i]).Contains(mouse) && _mainFocus != i)
                 {
                     _mainFocus = i;
+                    _audio.PlayHover();
                 }
             }
         }
@@ -86,7 +96,7 @@ public sealed partial class GameRoot
             return;
         }
 
-        bool clicked = _input.WasMouseLeftJustPressed && MainButtonRect(MainItems[_mainFocus]).Contains(LogicalMousePoint());
+        bool clicked = MouseClicked && MainButtonRect(MainItems[_mainFocus]).Contains(LogicalMousePoint());
         if (_input.Confirm || clicked)
         {
             ActivateMainItem(MainItems[_mainFocus]);
@@ -103,10 +113,10 @@ public sealed partial class GameRoot
                 _state = State.ModeSelect;
                 break;
             case MainItem.Skins:
-                OpenCarousel(State.SkinSelect);
+                OpenCollection(State.SkinSelect);
                 break;
             case MainItem.Tracks:
-                OpenCarousel(State.TrackSelect);
+                OpenCollection(State.TrackSelect);
                 break;
             case MainItem.Achievements:
                 OpenAchievements(State.MainMenu);
@@ -145,9 +155,14 @@ public sealed partial class GameRoot
             DrawButton(MainButtonRect(item), label, _mainFocus == i, primary: item == MainItem.Play, badge, textSize: item == MainItem.Play ? 3.2f : 2f);
         }
 
-        DrawMenuShowcase(new Rectangle(620, 112, 530, 220));
+        // O mascote: flutua de leve, pula quando é cutucado.
+        float bob = MathF.Sin(_visualTime * 2.2f) * 3f;
+        DrawCircle(MenuLogoCenter + new Vector2(0f, 64f), 80f, Color.Black * 0.12f);
+        DrawLogo(MenuLogoCenter + new Vector2(0f, bob - (_logoBounce * 14f)), MenuLogoScale, _logoBounce);
+
+        DrawMenuShowcase(new Rectangle(620, 196, 530, 226));
         DrawStudioLogo(new Vector2(20f, AreaHeight - 8f));
-        DrawKeyHints(("SETAS", "NAVEGAR"), ("ENTER", "CONFIRMAR"), ("C", "CONQUISTAS"), ("ESC", "SAIR"));
+        DrawKeyHints(("SETAS", "NAVEGAR"), ("ENTER", "CONFIRMAR"), ("C", "CONQUISTAS"), ("Q", "OPCOES"), ("ESC", "SAIR"));
     }
 
     /// <summary>Painel "pronto pra correr": a skin equipada, a pista escolhida e o último modo jogado.</summary>
@@ -156,14 +171,15 @@ public sealed partial class GameRoot
         DrawAccentPanel(panel, AccentColor);
         PixelFont.Draw(_spriteBatch, _pixel, "PRONTO PARA CORRER", new Vector2(panel.X + 20f, panel.Y + 18f), BodySize, AccentColor);
 
-        var carCenter = new Vector2(panel.X + 120f, panel.Y + 110f);
-        DrawCircle(carCenter + new Vector2(0f, 6f), 58f, AccentColor * 0.07f);
+        var carCenter = new Vector2(panel.X + 120f, panel.Y + 106f);
+        DrawCircle(carCenter + new Vector2(0f, 6f), 58f, SkinCategories.Color(SelectedSkin.Category) * 0.08f);
         _carPainter.Begin(carCenter, -0.3f + (MathF.Sin(_visualTime * 1.4f) * 0.12f), 62f, AccentColor, eliminated: false, _visualTime);
         SelectedSkin.Paint(_carPainter);
-        DrawCenteredText(new Rectangle(panel.X, 0, 240, 0), SelectedSkin.Name, panel.Y + 170f, FitTextSize(SelectedSkin.Name, 220f, 2f), TextColor, shadow: true);
-        DrawCenteredText(new Rectangle(panel.X, 0, 240, 0), "SEU CARRO", panel.Y + 192f, 1.4f, StatBadgeLabelColor);
+        var carColumn = new Rectangle(panel.X, 0, 240, 0);
+        DrawCenteredText(carColumn, SelectedSkin.Name, panel.Y + 172f, FitTextSize(SelectedSkin.Name, 220f, 2f), TextColor, shadow: true);
+        DrawCenteredText(carColumn, SkinCategories.Singular(SelectedSkin.Category), panel.Y + 196f, 1.4f, SkinCategories.Color(SelectedSkin.Category));
 
-        var tile = new Rectangle(panel.X + 270, panel.Y + 60, 64, 64);
+        var tile = new Rectangle(panel.X + 270, panel.Y + 58, 64, 64);
         DrawIconTile(tile, AchievementIcons.Art(SelectedTrack.Icon), new Color(120, 230, 130), colored: true);
         PixelFont.DrawShadowed(_spriteBatch, _pixel, SelectedTrack.Name, new Vector2(tile.Right + 14f, tile.Y + 8f), FitTextSize(SelectedTrack.Name, panel.Right - tile.Right - 30f, 2.2f), TextColor);
         PixelFont.Draw(_spriteBatch, _pixel, "PISTA", new Vector2(tile.Right + 14f, tile.Y + 34f), 1.4f, StatBadgeLabelColor);
@@ -171,6 +187,7 @@ public sealed partial class GameRoot
         PixelFont.Draw(_spriteBatch, _pixel, "ULTIMO MODO", new Vector2(panel.X + 270f, panel.Y + 140f), 1.4f, StatBadgeLabelColor);
         PixelFont.Draw(_spriteBatch, _pixel, modeName, new Vector2(panel.X + 270f, panel.Y + 156f), BodySize, TextColor);
     }
+
 
     // ---------- Seleção de modo ----------
 
@@ -207,7 +224,7 @@ public sealed partial class GameRoot
             _audio.PlayMenuMove();
         }
 
-        bool clicked = _input.WasMouseLeftJustPressed && ModeUnderMouse() == _modeFocus;
+        bool clicked = MouseClicked && ModeUnderMouse() == _modeFocus;
         if (_input.Confirm || clicked)
         {
             // A pista e a skin já vêm escolhidas do menu: escolheu o modo, a partida começa.
@@ -334,281 +351,11 @@ public sealed partial class GameRoot
         PixelFont.DrawShadowed(_spriteBatch, _pixel, bonus, center + new Vector2(66f, -10f - (rise * 40f)), 2.4f, RecordColor * (1f - rise));
     }
 
-    // ---------- Seletor de pista / skin (o mesmo componente) ----------
-
-    private bool CarouselIsTracks => _state == State.TrackSelect;
-
-    private int CarouselCount => CarouselIsTracks ? TrackThemes.All.Count : CarSkins.All.Count;
-
-    private int CarouselIndex
-    {
-        get => CarouselIsTracks ? _previewTrackIndex : _previewSkinIndex;
-        set
-        {
-            if (CarouselIsTracks)
-            {
-                _previewTrackIndex = value;
-            }
-            else
-            {
-                _previewSkinIndex = value;
-            }
-        }
-    }
-
-    private bool CarouselUnlocked(int i) => CarouselIsTracks
-        ? TrackThemes.IsUnlocked(TrackThemes.All[i], _saveData)
-        : SkinUnlocks.IsUnlocked(CarSkins.All[i], _saveData);
-
-    private bool CarouselEquipped(int i) => i == (CarouselIsTracks ? _selectedTrackIndex : _selectedSkinIndex);
-
-    private bool CarouselHidden(int i) => !CarouselIsTracks && CarSkins.All[i].IsSecret && !CarouselUnlocked(i);
-
-    private IUnlockable CarouselItem(int i) => CarouselIsTracks ? TrackThemes.All[i] : CarSkins.All[i];
-
-    private static readonly Rectangle CarouselPreview = new(344, 72, 500, 222);
-    private static readonly Rectangle CarouselLeftArrow = new(272, 153, 48, 60);
-    private static readonly Rectangle CarouselRightArrow = new(868, 153, 48, 60);
-    private static readonly Rectangle CarouselConfirmButton = new(930, 356, 220, 40);
-
-    private void OpenCarousel(State state)
-    {
-        _state = state;
-        _previewTrackIndex = _selectedTrackIndex;
-        _previewSkinIndex = _selectedSkinIndex;
-        _audio.PlayMenuConfirm();
-    }
-
-    private Rectangle ThumbnailRect(int i)
-    {
-        const int size = 30;
-        const int gap = 5;
-        int total = (CarouselCount * (size + gap)) - gap;
-        return new Rectangle((int)((AreaWidth - total) / 2f) + (i * (size + gap)), 410, size, size);
-    }
-
-    private void UpdateCarousel()
-    {
-        if (_input.Back || WasBackButtonClicked())
-        {
-            _audio.PlayMenuConfirm();
-            _state = State.MainMenu;
-            return;
-        }
-
-        Point mouse = LogicalMousePoint();
-        bool click = _input.WasMouseLeftJustPressed;
-        if (_input.MenuLeft || (click && CarouselLeftArrow.Contains(mouse)))
-        {
-            MoveCarousel(-1);
-            return;
-        }
-
-        if (_input.MenuRight || (click && CarouselRightArrow.Contains(mouse)))
-        {
-            MoveCarousel(1);
-            return;
-        }
-
-        if (click)
-        {
-            for (int i = 0; i < CarouselCount; i++)
-            {
-                if (ThumbnailRect(i).Contains(mouse))
-                {
-                    CarouselIndex = i;
-                    _audio.PlayMenuMove();
-                    return;
-                }
-            }
-        }
-
-        if (_input.Confirm || (click && (CarouselConfirmButton.Contains(mouse) || CarouselPreview.Contains(mouse))))
-        {
-            ConfirmCarousel();
-        }
-    }
-
-    private void MoveCarousel(int direction)
-    {
-        CarouselIndex = (CarouselIndex + direction + CarouselCount) % CarouselCount;
-        _audio.PlayMenuMove();
-        if (direction < 0)
-        {
-            _arrowFlashLeft = 0.15f;
-        }
-        else
-        {
-            _arrowFlashRight = 0.15f;
-        }
-    }
-
-    /// <summary>ENTER no seletor: se o item estiver liberado, equipa (e salva). Bloqueado: balança e avisa, sem
-    /// trocar nada.</summary>
-    private void ConfirmCarousel()
-    {
-        int index = CarouselIndex;
-        if (!CarouselUnlocked(index))
-        {
-            _audio.PlayDeny();
-            _denyShake = 0.35f;
-            return;
-        }
-
-        if (CarouselIsTracks)
-        {
-            _selectedTrackIndex = index;
-            _saveData.SelectedTrackId = SelectedTrack.Id;
-        }
-        else
-        {
-            _selectedSkinIndex = index;
-            _saveData.SelectedSkinId = SelectedSkin.Id;
-        }
-
-        _saveData.Save();
-        _equipFlash = 0.6f;
-        _audio.PlayMenuConfirm();
-    }
-
-    private void DrawCarousel()
-    {
-        DimScreen(CarouselIsTracks ? Color.Black * 0.55f : MenuBackgroundDim);
-        (int earned, int earnable) = CarouselIsTracks
-            ? Unlockables.Count(TrackThemes.All, _saveData.UnlockedTrackIds)
-            : Unlockables.Count(CarSkins.All, _saveData.UnlockedSkinIds);
-        string noun = CarouselIsTracks ? "PISTAS" : "SKINS";
-        DrawScreenHeader(noun, $"{earned + 1}/{earnable + 1} {noun} DESBLOQUEADAS");
-
-        int index = CarouselIndex;
-        bool unlocked = CarouselUnlocked(index);
-        bool hidden = CarouselHidden(index);
-        IUnlockable item = CarouselItem(index);
-        float shake = _denyShake > 0f ? MathF.Sin(_denyShake * 60f) * 6f * (_denyShake / 0.35f) : 0f;
-        Rectangle preview = CarouselPreview;
-        preview.X += (int)shake;
-
-        Color frame = _equipFlash > 0f ? Color.Lerp(AccentColor, Color.White, _equipFlash) : CarouselEquipped(index) ? AccentColor : unlocked ? PanelBorderColor : new Color(80, 84, 100);
-        DrawRoundedRect(InflateRect(preview, 4f, 4f), frame, 8f);
-        if (CarouselIsTracks)
-        {
-            TrackTheme track = TrackThemes.All[index];
-            _scenery.DrawPreview(track, preview, unlocked ? Color.White : new Color(70, 70, 82));
-        }
-        else
-        {
-            DrawSkinStage(preview, CarSkins.All[index], unlocked, hidden);
-        }
-
-        if (!unlocked)
-        {
-            DrawLock(preview.Center.ToVector2() + new Vector2(0f, 6f), 2.2f, AccentColor);
-        }
-
-        Point mouse = LogicalMousePoint();
-        DrawArrowButton(CarouselLeftArrow, pointRight: false, CarouselLeftArrow.Contains(mouse), _arrowFlashLeft > 0f);
-        DrawArrowButton(CarouselRightArrow, pointRight: true, CarouselRightArrow.Contains(mouse), _arrowFlashRight > 0f);
-        string counter = $"{index + 1}/{CarouselCount}";
-        PixelFont.Draw(_spriteBatch, _pixel, counter, new Vector2(preview.Right - PixelFont.Measure(counter, 1.4f), preview.Bottom + 8f), 1.4f, StatBadgeLabelColor);
-
-        var area = new Rectangle(0, 0, (int)AreaWidth, 0);
-        string name = hidden ? "SKIN SECRETA" : CarouselIsTracks ? TrackThemes.All[index].Name : CarSkins.All[index].Name;
-        DrawCenteredText(area, name, 304f, 3.2f, unlocked ? TextColor : new Color(170, 176, 192), shadow: true);
-
-        DrawStatusChip(new Vector2(AreaWidth / 2f, 342f), unlocked, CarouselEquipped(index), CarouselIsTracks ? "PISTA" : "SKIN");
-
-        if (unlocked)
-        {
-            string line = CarouselIsTracks ? TrackThemes.All[index].Tagline : CarouselEquipped(index) ? "PRONTA PARA CORRER" : "ENTER PARA EQUIPAR";
-            DrawCenteredText(area, line, 364f, 1.7f, StatBadgeLabelColor);
-        }
-        else if (hidden)
-        {
-            DrawCenteredText(area, "\"???\"", 364f, 1.7f, AccentColor);
-        }
-        else
-        {
-            DrawCenteredText(area, $"\"{item.Requirement.Description}\"", 362f, FitTextSize($"\"{item.Requirement.Description}\"", 560f, 1.7f), AccentColor);
-            if (item.Requirement.ProgressFraction(_saveData) is { } fraction)
-            {
-                var bar = new Rectangle((int)(AreaWidth / 2f) - 150, 382, 300, 8);
-                DrawProgressBar(bar, fraction, AccentColor, 4f);
-            }
-
-            if (ProgressLabel(item.Requirement) is { } progress)
-            {
-                DrawCenteredText(area, progress, 394f, 1.4f, StatBadgeLabelColor);
-            }
-        }
-
-        if (unlocked)
-        {
-            DrawButton(CarouselConfirmButton, CarouselEquipped(index) ? "EQUIPADA" : "EQUIPAR", focused: !CarouselEquipped(index));
-        }
-
-        DrawThumbnails();
-        DrawKeyHints(("SETAS", "TROCAR"), ("ENTER", "EQUIPAR"), ("ESC", "VOLTAR"));
-    }
-
-    /// <summary>Vitrine da skin: holofote, "chão" e o carro grande girando devagar. Skin secreta bloqueada não
-    /// mostra nem o vulto — só um "?".</summary>
-    private void DrawSkinStage(Rectangle rect, CarSkin skin, bool unlocked, bool hidden)
-    {
-        DrawRoundedRect(rect, new Color(18, 20, 30), 6f);
-        var center = rect.Center.ToVector2();
-        DrawCircle(center + new Vector2(0f, 30f), 90f, AccentColor * 0.05f);
-        DrawCircle(center + new Vector2(0f, 20f), 70f, (unlocked ? AccentColor : StatBadgeLabelColor) * 0.07f);
-        if (hidden)
-        {
-            PixelFont.Draw(_spriteBatch, _pixel, "?", center - new Vector2(PixelFont.Measure("?", 9f) / 2f, PixelFont.LineHeight(9f) / 2f), 9f, new Color(80, 86, 104));
-            return;
-        }
-
-        _carPainter.Begin(center, _visualTime * 0.6f, 84f, AccentColor, eliminated: false, _visualTime, silhouette: !unlocked);
-        skin.Paint(_carPainter);
-    }
-
-    /// <summary>Faixa com todos os itens do catálogo: dá pra ver de relance o que já tem e o que falta.</summary>
-    private void DrawThumbnails()
-    {
-        Point mouse = LogicalMousePoint();
-        for (int i = 0; i < CarouselCount; i++)
-        {
-            Rectangle rect = ThumbnailRect(i);
-            bool unlocked = CarouselUnlocked(i);
-            bool current = i == CarouselIndex;
-            DrawRoundedRect(InflateRect(rect, 2f, 2f), current ? AccentColor : rect.Contains(mouse) ? StatBadgeLabelColor : PanelBorderColor, 5f);
-            DrawRoundedRect(rect, unlocked ? new Color(40, 46, 64) : new Color(24, 26, 36), 4f);
-
-            if (CarouselIsTracks)
-            {
-                _iconRenderer.Draw(AchievementIcons.Art(TrackThemes.All[i].Icon), rect, colored: unlocked, _visualTime);
-            }
-            else if (!CarouselHidden(i))
-            {
-                _carPainter.Begin(rect.Center.ToVector2(), -0.5f, 17f, AccentColor, eliminated: false, _visualTime, silhouette: !unlocked);
-                CarSkins.All[i].Paint(_carPainter);
-            }
-            else
-            {
-                PixelFont.Draw(_spriteBatch, _pixel, "?", new Vector2(rect.X + 11f, rect.Y + 8f), 2f, new Color(80, 86, 104));
-            }
-
-            if (!unlocked)
-            {
-                DrawLock(new Vector2(rect.Right - 5f, rect.Bottom - 4f), 0.35f, new Color(170, 176, 192));
-            }
-
-            if (CarouselEquipped(i))
-            {
-                DrawCircle(new Vector2(rect.Right - 3f, rect.Y + 3f), 4f, RecordColor);
-            }
-        }
-    }
 
     // ---------- Configurações ----------
 
     private const float SettingsPanelWidth = 480f;
+    private const float SettingsPanelHeight = 280f;
     private const float SettingsPanelPaddingV = 26f;
     private const float SettingsHeaderSize = 3f;
     private const float SettingsRowSpacing = 46f;
@@ -617,6 +364,8 @@ public sealed partial class GameRoot
     private const float SettingsPaddingH = 30f;
     private const float SettingsBarValueGap = 10f;
     private const float SettingsValueSlotWidth = 50f;
+
+    private static readonly SettingsRow[] SettingsRows = Enum.GetValues<SettingsRow>();
 
     /// <summary>Abre as configurações lembrando de onde vieram (menu ou pausa), pra voltar exatamente pra lá.</summary>
     private void OpenSettings(State returnState)
@@ -636,36 +385,62 @@ public sealed partial class GameRoot
             return;
         }
 
-        UpdateSettingsMouseDrag();
+        UpdateSettingsMouse();
 
-        if (_input.MenuUp || _input.MenuDown)
+        int row = Array.IndexOf(SettingsRows, _settingsSelection);
+        if (_input.MenuDown)
         {
-            _settingsSelection = _settingsSelection == SettingsRow.Music ? SettingsRow.Sfx : SettingsRow.Music;
+            _settingsSelection = SettingsRows[(row + 1) % SettingsRows.Length];
             _audio.PlayMenuMove();
         }
-        else if (_input.MenuRight)
+        else if (_input.MenuUp)
         {
-            AdjustSelectedVolume(0.1f);
+            _settingsSelection = SettingsRows[(row - 1 + SettingsRows.Length) % SettingsRows.Length];
+            _audio.PlayMenuMove();
         }
-        else if (_input.MenuLeft)
+        else if (_input.MenuRight || _input.MenuLeft)
         {
-            AdjustSelectedVolume(-0.1f);
+            if (_settingsSelection == SettingsRow.Fullscreen)
+            {
+                ToggleFullscreenSetting();
+            }
+            else
+            {
+                AdjustSelectedVolume(_input.MenuRight ? 0.1f : -0.1f);
+            }
         }
 
         if (_input.Confirm)
         {
-            ToggleSelectedMute();
+            if (_settingsSelection == SettingsRow.Fullscreen)
+            {
+                ToggleFullscreenSetting();
+            }
+            else
+            {
+                ToggleSelectedMute();
+            }
         }
     }
 
-    /// <summary>Retângulos do painel e das barras de volume — usados pra desenhar e pro mouse, então os dois
-    /// lados sempre concordam sobre onde cada barra está.</summary>
-    private (Rectangle Panel, Rectangle MusicBar, Rectangle SfxBar) ComputeSettingsLayout()
+    private void ToggleFullscreenSetting()
     {
-        const float panelHeight = 230f;
-        var panelRect = new Rectangle((int)((AreaWidth - SettingsPanelWidth) / 2f), (int)((AreaHeight - panelHeight) / 2f), (int)SettingsPanelWidth, (int)panelHeight);
+        ToggleFullscreen();
+        _saveData.Fullscreen = _isFullscreen;
+        _saveData.Save();
+        _audio.PlayMenuConfirm();
+    }
+
+    /// <summary>Retângulos do painel, das barras de volume e do botão de tela cheia — usados pra desenhar e pro
+    /// mouse, então os dois lados sempre concordam sobre onde cada coisa está.</summary>
+    private (Rectangle Panel, Rectangle MusicBar, Rectangle SfxBar, Rectangle FullscreenSwitch) ComputeSettingsLayout()
+    {
+        var panelRect = new Rectangle((int)((AreaWidth - SettingsPanelWidth) / 2f), (int)((AreaHeight - SettingsPanelHeight) / 2f), (int)SettingsPanelWidth, (int)SettingsPanelHeight);
         float rowY = panelRect.Y + SettingsPanelPaddingV + PixelFont.LineHeight(SettingsHeaderSize) + 34f;
-        return (panelRect, ComputeVolumeBarRect(panelRect, rowY), ComputeVolumeBarRect(panelRect, rowY + SettingsRowSpacing));
+        Rectangle music = ComputeVolumeBarRect(panelRect, rowY);
+        Rectangle sfx = ComputeVolumeBarRect(panelRect, rowY + SettingsRowSpacing);
+        var fullscreen = new Rectangle(music.X, (int)(rowY + (2f * SettingsRowSpacing)) - 3, 60, 20);
+        return (panelRect, music, sfx, fullscreen);
     }
 
     private static Rectangle ComputeVolumeBarRect(Rectangle panel, float y)
@@ -686,27 +461,32 @@ public sealed partial class GameRoot
 
     private void DrawSettingsPopup()
     {
-        (Rectangle panelRect, Rectangle musicBar, Rectangle sfxBar) = ComputeSettingsLayout();
+        (Rectangle panelRect, Rectangle musicBar, Rectangle sfxBar, Rectangle fullscreenSwitch) = ComputeSettingsLayout();
         DrawAccentPanel(panelRect, AccentColor);
         DrawCenteredText(panelRect, "CONFIGURACOES", panelRect.Y + SettingsPanelPaddingV, SettingsHeaderSize, AccentColor, shadow: true);
 
         DrawSettingsRow(panelRect, musicBar, "TRILHA SONORA", _audio.MusicVolume, _audio.MusicMuted, _settingsSelection == SettingsRow.Music);
         DrawSettingsRow(panelRect, sfxBar, "EFEITOS SONOROS", _audio.SfxVolume, _audio.SfxMuted, _settingsSelection == SettingsRow.Sfx);
+        DrawFullscreenRow(panelRect, fullscreenSwitch, _settingsSelection == SettingsRow.Fullscreen);
 
-        DrawCenteredText(panelRect, "SETAS OU MOUSE: AJUSTAR    ENTER: MUDO", sfxBar.Y + 38f, SmallSize, StatBadgeLabelColor);
-        DrawCenteredText(panelRect, "F11: TELA CHEIA    ESC: VOLTAR", sfxBar.Y + 58f, SmallSize, StatBadgeLabelColor);
+        DrawCenteredText(panelRect, "SETAS OU MOUSE: AJUSTAR    ENTER: MUDO / LIGAR", fullscreenSwitch.Y + 40f, SmallSize, StatBadgeLabelColor);
+        DrawCenteredText(panelRect, "F11: TELA CHEIA    ESC: VOLTAR", fullscreenSwitch.Y + 60f, SmallSize, StatBadgeLabelColor);
+    }
+
+    private void DrawSettingsLabel(Rectangle panel, float y, string label, bool selected)
+    {
+        if (selected)
+        {
+            DrawTriangle(new Vector2(panel.X + SettingsPaddingH - 8f, y + 7f), pointRight: true, 5f, AccentColor);
+        }
+
+        PixelFont.Draw(_spriteBatch, _pixel, label, new Vector2(panel.X + SettingsPaddingH + 4f, y), 2f, selected ? AccentColor : TextColor);
     }
 
     /// <summary>Uma linha das configurações: rótulo + barra (com manípulo pra arrastar) + porcentagem ou "MUDO".</summary>
     private void DrawSettingsRow(Rectangle panel, Rectangle barRect, string label, float volume, bool muted, bool selected)
     {
-        Color labelColor = selected ? AccentColor : TextColor;
-        if (selected)
-        {
-            DrawTriangle(new Vector2(panel.X + SettingsPaddingH - 8f, barRect.Y + 7f), pointRight: true, 5f, AccentColor);
-        }
-
-        PixelFont.Draw(_spriteBatch, _pixel, label, new Vector2(panel.X + SettingsPaddingH + 4f, barRect.Y), 2f, labelColor);
+        DrawSettingsLabel(panel, barRect.Y, label, selected);
 
         DrawRoundedRect(InflateRect(barRect, 2f, 2f), new Color(10, 12, 18), 4f);
         float fraction = muted ? 0f : Math.Clamp(volume, 0f, 1f);
@@ -721,14 +501,34 @@ public sealed partial class GameRoot
         PixelFont.Draw(_spriteBatch, _pixel, valueText, new Vector2(panel.Right - SettingsPaddingH - valueWidth, barRect.Y), 1.75f, muted ? StatBadgeLabelColor : TextColor);
     }
 
-    /// <summary>Clicar/arrastar numa barra de volume ajusta direto pra posição apontada (e tira do mudo).</summary>
-    private void UpdateSettingsMouseDrag()
+    /// <summary>Interruptor de tela cheia (liga/desliga, com a bolinha deslizando pro lado).</summary>
+    private void DrawFullscreenRow(Rectangle panel, Rectangle toggle, bool selected)
     {
-        (Rectangle _, Rectangle musicBar, Rectangle sfxBar) = ComputeSettingsLayout();
+        DrawSettingsLabel(panel, toggle.Y + 3f, "TELA CHEIA", selected);
+        bool on = _isFullscreen;
+        DrawRoundedRect(toggle, on ? RecordColor * 0.8f : new Color(60, 64, 76), 10f);
+        DrawCircle(new Vector2(on ? toggle.Right - 10f : toggle.X + 10f, toggle.Center.Y), 8f, Color.White);
+        string valueText = on ? "LIGADA" : "DESLIGADA";
+        float valueWidth = PixelFont.Measure(valueText, 1.5f);
+        PixelFont.Draw(_spriteBatch, _pixel, valueText, new Vector2(panel.Right - SettingsPaddingH - valueWidth, toggle.Y + 4f), 1.5f, on ? RecordColor : StatBadgeLabelColor);
+    }
+
+    /// <summary>Clicar/arrastar numa barra de volume ajusta direto pra posição apontada (e tira do mudo); clicar no
+    /// interruptor liga/desliga a tela cheia.</summary>
+    private void UpdateSettingsMouse()
+    {
+        (Rectangle _, Rectangle musicBar, Rectangle sfxBar, Rectangle fullscreenSwitch) = ComputeSettingsLayout();
         Vector2 mouseLogical = ScreenToLogicalPosition(_input.MousePosition);
         var mousePoint = new Point((int)mouseLogical.X, (int)mouseLogical.Y);
 
-        if (_input.IsMouseLeftDown && _draggingSettingsRow is null)
+        if (MouseClicked && InflateRect(fullscreenSwitch, 6f, 6f).Contains(mousePoint))
+        {
+            _settingsSelection = SettingsRow.Fullscreen;
+            ToggleFullscreenSetting();
+            return;
+        }
+
+        if (_input.IsMouseLeftDown && _draggingSettingsRow is null && _stateTime > ClickGuardSeconds)
         {
             if (InflateRect(musicBar, 6f, 8f).Contains(mousePoint))
             {

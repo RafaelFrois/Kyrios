@@ -49,6 +49,14 @@ public sealed class GameInput
     /// <summary>Quantos "dentes" a roda do mouse girou desde o quadro anterior (positivo = pra cima).</summary>
     public int ScrollWheelSteps => (_currentMouse.ScrollWheelValue - _previousMouse.ScrollWheelValue) / 120;
 
+    /// <summary>Qualquer sinal de vida do jogador neste quadro (tecla, mouse ou controle).</summary>
+    public bool AnyActivity =>
+        _current.GetPressedKeyCount() > 0 || MouseMoved || IsMouseLeftDown || ScrollWheelSteps != 0
+        || (_pad.IsConnected && (_pad.Buttons != _previousPad.Buttons || _pad.ThumbSticks.Left.LengthSquared() > 0.05f));
+
+    /// <summary>Teclas que acabaram de ser apertadas neste quadro (pra reconhecer sequências, como um código).</summary>
+    public IEnumerable<Keys> JustPressedKeys => _current.GetPressedKeys().Where(key => !_previous.IsKeyDown(key));
+
     public bool IsDown(Keys key) => _current.IsKeyDown(key);
 
     public bool WasJustPressed(Keys key) => _current.IsKeyDown(key) && !_previous.IsKeyDown(key);

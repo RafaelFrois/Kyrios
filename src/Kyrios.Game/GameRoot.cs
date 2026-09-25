@@ -19,6 +19,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
 
     private enum State
     {
+        Splash,
         MainMenu,
         ModeSelect,
         TrackSelect,
@@ -34,6 +35,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
     {
         Music,
         Sfx,
+        Fullscreen,
     }
 
     // Paleta da interface (menus, painéis, HUD) — a mesma em todas as telas.
@@ -116,7 +118,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
 
     private RaceSimulation _race = null!;
     private RaceEntrant _player = null!;
-    private State _state = State.MainMenu;
+    private State _state = State.Splash;
     private RaceMode _selectedMode;
     private SaveData _saveData = null!;
     private bool _recordsProcessed;
@@ -180,7 +182,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
     private TrackTheme WorldTheme => _state == State.TrackSelect ? TrackThemes.All[_previewTrackIndex] : SelectedTrack;
 
     private static bool IsMenuState(State state) =>
-        state is State.MainMenu or State.ModeSelect or State.TrackSelect or State.SkinSelect or State.Achievements or State.Settings;
+        state is State.Splash or State.MainMenu or State.ModeSelect or State.TrackSelect or State.SkinSelect or State.Achievements or State.Settings;
 
     private float AreaWidth => _windowWidth - (2f * TrackMargin);
 
@@ -281,7 +283,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         _recordsProcessed = true;
 
         bool silent = _audio.MusicMuted && _audio.SfxMuted;
-        RaceReport report = _raceTracker.BuildReport(_race, _player, SelectedSkin.Id, SelectedTrack.Id, silent);
+        RaceReport report = _raceTracker.BuildReport(_race, _player, SelectedSkin.Id, SelectedTrack.Id, silent, DateTime.Now);
         _records = Progression.RecordRace(_saveData, report);
         _saveData.Save();
         CheckUnlocks();
@@ -403,12 +405,18 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         _iconRenderer = new AchievementIconRenderer(_spriteBatch, _pixel, _carPainter);
         _scenery = new SceneryRenderer(GraphicsDevice, _spriteBatch, _pixel, _circle);
 
+        _logo = LoadLogo();
         _audio = new AudioManager();
         _audio.LoadContent();
         _audio.SetMusicVolume(_saveData.MusicVolume);
         _audio.SetSfxVolume(_saveData.SfxVolume);
         _audio.SetMusicMuted(_saveData.MusicMuted);
         _audio.SetSfxMuted(_saveData.SfxMuted);
+
+        if (_saveData.Fullscreen)
+        {
+            ToggleFullscreen();
+        }
     }
 
     protected override void UnloadContent()
@@ -423,6 +431,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
 
         float frameSeconds = (float)gameTime.ElapsedGameTime.TotalSeconds;
         _visualTime += frameSeconds;
+        _stateTime += frameSeconds;
         DecayScreenShake(frameSeconds);
         UpdateUiAnimations(frameSeconds);
         UpdateUnlockToast(frameSeconds);
@@ -450,17 +459,26 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
             _scenery.UpdateAmbient(WorldTheme, AreaWidth, AreaHeight, Math.Min(frameSeconds, 0.1f));
         }
 
+        // Janela perdeu o foco no meio da corrida (alt+tab, notificação...): pausa sozinho em vez de seguir correndo.
+        if (_state == State.Racing && !IsActive)
+        {
+            OpenPause(countAsPause: false);
+        }
+
         switch (_state)
         {
+            case State.Splash:
+                UpdateSplash();
+                break;
             case State.MainMenu:
-                UpdateMainMenu();
+                UpdateMainMenu(frameSeconds);
                 break;
             case State.ModeSelect:
                 UpdateModeSelect();
                 break;
             case State.TrackSelect:
             case State.SkinSelect:
-                UpdateCarousel();
+                UpdateCollection();
                 break;
             case State.Racing:
                 UpdateRacing(frameSeconds);
@@ -479,6 +497,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
                 break;
         }
 
+        TrackStateChanges();
         base.Update(gameTime);
     }
 
@@ -524,6 +543,9 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: transform);
         switch (_state)
         {
+            case State.Splash:
+                DrawSplash();
+                break;
             case State.MainMenu:
                 DrawMainMenu();
                 break;
@@ -532,11 +554,12 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
                 break;
             case State.TrackSelect:
             case State.SkinSelect:
-                DrawCarousel();
+                DrawCollection();
                 break;
             case State.Racing:
                 DrawRaceFeedback();
                 DrawLiveHud();
+                DrawCountdown();
                 break;
             case State.Paused:
                 DrawLiveHud();
@@ -554,6 +577,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
                 break;
         }
 
+        DrawScreenFade();
         DrawUnlockToast();
         _spriteBatch.End();
         base.Draw(gameTime);

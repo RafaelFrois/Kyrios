@@ -1,5 +1,6 @@
 using Kyrios.Core;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 
 namespace Kyrios.Game;
@@ -37,6 +38,25 @@ public sealed partial class GameRoot
     private int _lastPlayerLaps;
     private bool _recordBannerShown;
 
+    // Contagem de largada (3, 2, 1, VAI!): a corrida só começa a andar quando ela termina.
+    private const float CountdownSeconds = 3f;
+    private const float GoSeconds = 0.8f;
+    private float _countdown;
+    private float _goTimer;
+    private int _lastCountdownBeep;
+
+    private sealed class Confetti
+    {
+        public Vector2 Position;
+        public Vector2 Velocity;
+        public Color Color;
+        public float Spin;
+        public float Life;
+    }
+
+    private readonly List<Confetti> _confetti = [];
+    private readonly Random _confettiRandom = new();
+
     private enum PauseItem
     {
         Resume,
@@ -59,14 +79,127 @@ public sealed partial class GameRoot
     private float _resultsTime;
 
     private const float BannerSeconds = 1.8f;
+    private const float ResultsInputDelay = 0.7f;
 
     private void ResetRaceFeedback()
     {
         _floatingTexts.Clear();
         _ringFlashes.Clear();
+        _confetti.Clear();
         _bannerTimer = 0f;
         _lastPlayerLaps = 0;
         _recordBannerShown = false;
+        _countdown = CountdownSeconds;
+        _goTimer = 0f;
+        _lastCountdownBeep = (int)CountdownSeconds + 1;
+    }
+
+    private bool CountingDown => _countdown > 0f;
+
+    /// <summary>3, 2, 1 com um bip em cada número e o "VAI!" no fim. O motor já ronca (e responde ao acelerador)
+    /// enquanto isso, mas nenhum carro sai do lugar.</summary>
+    private void UpdateCountdown(float dt)
+    {
+        _countdown -= dt;
+        if (_countdown <= 0f)
+        {
+            _countdown = 0f;
+            _goTimer = GoSeconds;
+            _audio.PlayStartBeep(go: true);
+            return;
+        }
+
+        int shown = (int)MathF.Ceiling(_countdown);
+        if (shown < _lastCountdownBeep)
+        {
+            _lastCountdownBeep = shown;
+            _audio.PlayStartBeep(go: false);
+        }
+
+        float rev = Math.Max(0f, _input.BuildCarInput().Throttle);
+        _audio.UpdateEngine(rev * _player.Car.Settings.MaxForwardSpeed * 0.6f, _player.Car.Settings.MaxForwardSpeed, false);
+        UpdateRaceFeedback(dt);
+    }
+
+    private void DrawCountdown()
+    {
+        var center = new Vector2(AreaWidth / 2f, (AreaHeight / 2f) - 10f);
+        if (CountingDown)
+        {
+            int shown = (int)MathF.Ceiling(_countdown);
+            float local = Math.Clamp(shown - _countdown, 0f, 1f);
+            float pop = 1f + ((1f - local) * (1f - local) * 0.6f);
+            DimScreen(Color.Black * 0.22f);
+            DrawCircle(center, 62f * MathF.Min(pop, 1.2f), HudFrameFill);
+            DrawRingDots(center, 62f * MathF.Min(pop, 1.2f), AccentColor * 0.9f, (1f - local) * MathF.Tau);
+            string text = shown.ToString();
+            float size = 8f * pop;
+            PixelFont.DrawShadowed(_spriteBatch, _pixel, text, center - new Vector2(PixelFont.Measure(text, size) / 2f, PixelFont.LineHeight(size) / 2f), size, Color.Lerp(AccentColor, Color.White, local * 0.5f));
+            DrawCenteredText(new Rectangle(0, 0, (int)AreaWidth, 0), "PREPARE-SE", center.Y + 76f, 2f, TextColor, shadow: true);
+        }
+        else if (_goTimer > 0f)
+        {
+            float t = 1f - (_goTimer / GoSeconds);
+            float size = 8f * (1f + (t * 0.35f));
+            float alpha = 1f - (t * t);
+            PixelFont.DrawShadowed(_spriteBatch, _pixel, "VAI!", center - new Vector2(PixelFont.Measure("VAI!", size) / 2f, PixelFont.LineHeight(size) / 2f), size, RecordColor * alpha, Color.Black * (0.6f * alpha));
+        }
+    }
+
+    /// <summary>Contorno pontilhado de um círculo (a volta que o relógio da contagem vai "gastando").</summary>
+    private void DrawRingDots(Vector2 center, float radius, Color color, float sweep)
+    {
+        const int dots = 36;
+        for (int i = 0; i < dots; i++)
+        {
+            float a = (i * MathF.Tau / dots) - (MathF.PI / 2f);
+            if (a + (MathF.PI / 2f) <= sweep)
+            {
+                DrawCircle(center + (new Vector2(MathF.Cos(a), MathF.Sin(a)) * radius), 2.5f, color);
+            }
+        }
+    }
+
+    /// <summary>Chuva de confete na tela de resultado de uma vitória ou recorde.</summary>
+    private void SpawnConfetti()
+    {
+        Color[] colors = [AccentColor, RecordColor, BoostFillColor, DangerColor, new Color(230, 120, 240), Color.White];
+        for (int i = 0; i < 90; i++)
+        {
+            _confetti.Add(new Confetti
+            {
+                Position = new Vector2((float)_confettiRandom.NextDouble() * AreaWidth, -20f - ((float)_confettiRandom.NextDouble() * 200f)),
+                Velocity = new Vector2(((float)_confettiRandom.NextDouble() - 0.5f) * 60f, 90f + ((float)_confettiRandom.NextDouble() * 90f)),
+                Color = colors[i % colors.Length],
+                Spin = (float)_confettiRandom.NextDouble() * 6f,
+                Life = 3.5f,
+            });
+        }
+    }
+
+    private void UpdateConfetti(float dt)
+    {
+        for (int i = _confetti.Count - 1; i >= 0; i--)
+        {
+            Confetti piece = _confetti[i];
+            piece.Life -= dt;
+            piece.Position += piece.Velocity * dt;
+            piece.Velocity.X += MathF.Sin((piece.Life * 3f) + piece.Spin) * 20f * dt;
+            if (piece.Life <= 0f || piece.Position.Y > AreaHeight + 20f)
+            {
+                _confetti.RemoveAt(i);
+            }
+        }
+    }
+
+    private void DrawConfetti()
+    {
+        foreach (Confetti piece in _confetti)
+        {
+            float alpha = Math.Clamp(piece.Life / 0.6f, 0f, 1f);
+            float flip = MathF.Abs(MathF.Sin((piece.Life * 8f) + piece.Spin));
+            _spriteBatch.Draw(_pixel, piece.Position, null, piece.Color * alpha, piece.Spin + piece.Life, new Vector2(0.5f), new Vector2(6f, 3f * flip + 1f), SpriteEffects.None, 0f);
+        }
     }
 
     private void ShowBanner(string text, Color color, string subtext = null, float seconds = BannerSeconds)
@@ -96,8 +229,16 @@ public sealed partial class GameRoot
         }
 
         float dt = Math.Min(frameSeconds, 0.1f);
-        _race.Update(dt, _input.BuildCarInput());
-        _raceTracker.Observe(_race, _player, dt);
+        if (CountingDown)
+        {
+            UpdateCountdown(dt);
+            return;
+        }
+
+        _goTimer = MathF.Max(0f, _goTimer - dt);
+        CarInput input = _input.BuildCarInput();
+        _race.Update(dt, input);
+        _raceTracker.Observe(_race, _player, dt, input);
         UpdateRaceFeedback(dt);
 
         _audio.UpdateEngine(_player.Car.Speed, _player.Car.Settings.MaxForwardSpeed, _player.Car.IsBoosting);
@@ -120,7 +261,7 @@ public sealed partial class GameRoot
             for (int i = 0; i < 20000 && !_race.IsRaceOver; i++)
             {
                 _race.Update(0.05f, CarInput.None);
-                _raceTracker.Observe(_race, _player, 0.05f);
+                _raceTracker.Observe(_race, _player, 0.05f, CarInput.None);
             }
         }
 
@@ -129,7 +270,13 @@ public sealed partial class GameRoot
             _audio.StopMusic();
             _audio.StopEngine();
             ProcessRaceEndRecords();
-            _audio.PlayResultJingle(DetermineOutcome());
+            RaceOutcome outcome = DetermineOutcome();
+            _audio.PlayResultJingle(outcome);
+            if (outcome == RaceOutcome.Victory)
+            {
+                SpawnConfetti();
+            }
+
             _resultFocus = 0;
             _resultsTime = 0f;
             _state = State.Results;
@@ -142,10 +289,19 @@ public sealed partial class GameRoot
         Car car = _player.Car;
         Vector2 playerPos = PlayerWorldPosition;
 
-        if (car.CheckpointCrossedThisTick || car.LapsCompleted > _lastPlayerLaps)
+        bool lapCompleted = car.LapsCompleted > _lastPlayerLaps;
+        if (car.CheckpointCrossedThisTick || lapCompleted)
         {
-            _audio.PlayCheckpoint();
-            _ringFlashes.Add(new RingFlash { Position = playerPos, Color = WorldTheme.Scenery.Checkpoint, Life = 0.5f });
+            if (lapCompleted)
+            {
+                _audio.PlayLap();
+            }
+            else
+            {
+                _audio.PlayCheckpoint();
+            }
+
+            _ringFlashes.Add(new RingFlash { Position = playerPos, Color = WorldTheme.Scenery.Checkpoint, Life = lapCompleted ? 0.8f : 0.5f });
         }
 
         if (_race.Mode == RaceMode.TimeAttack)
@@ -189,18 +345,32 @@ public sealed partial class GameRoot
 
         _lastPlayerLaps = car.LapsCompleted;
 
-        if (_race.EliminatedThisTick is { } eliminated)
+        if (_race.EliminationsThisTick.Count > 0)
         {
             _audio.PlayElimination();
-            if (ReferenceEquals(eliminated, _player))
+            foreach (RaceEntrant eliminated in _race.EliminationsThisTick)
+            {
+                var at = new Vector2(eliminated.Car.Position.X * CellSize, eliminated.Car.Position.Y * CellSize);
+                for (int i = 0; i < 10; i++)
+                {
+                    _particles.Spawn(at, RandomSpread(70f), life: 0.7f, size: 5f, new Color(90, 90, 100, 200));
+                }
+            }
+
+            RaceEntrant last = _race.EliminationsThisTick[^1];
+            int left = _race.Entrants.Count(e => !e.Eliminated);
+            if (_race.EliminationsThisTick.Contains(_player))
             {
                 TriggerScreenShake(8f);
                 ShowBanner("VOCE FOI ELIMINADO!", DangerColor, "ENTER: VER RESULTADO", seconds: 3.5f);
             }
+            else if (!_player.Eliminated && _race.EliminationsThisTick.Count > 1)
+            {
+                ShowBanner($"{_race.EliminationsThisTick.Count} ELIMINADOS!", DangerColor, left > 1 ? $"RESTAM {left}" : null);
+            }
             else if (!_player.Eliminated)
             {
-                int left = _race.Entrants.Count(e => !e.Eliminated);
-                ShowBanner($"{_carNames[eliminated]} ELIMINADO!", _carColors[eliminated], left > 1 ? $"RESTAM {left}" : null);
+                ShowBanner($"{_carNames[last]} ELIMINADO!", _carColors[last], left > 1 ? $"RESTAM {left}" : null);
             }
         }
 
@@ -243,9 +413,13 @@ public sealed partial class GameRoot
 
     private Rectangle PauseButtonRect(int i) => new((int)(AreaWidth / 2f) - 140, 176 + (i * 50), 280, 40);
 
-    private void OpenPause()
+    private void OpenPause(bool countAsPause = true)
     {
-        _raceTracker.RegisterPause();
+        if (countAsPause)
+        {
+            _raceTracker.RegisterPause();
+        }
+
         _audio.SetPaused(true);
         _audio.PlayMenuConfirm();
         _pauseFocus = 0;
@@ -289,7 +463,7 @@ public sealed partial class GameRoot
             _audio.PlayMenuMove();
         }
 
-        bool clicked = _input.WasMouseLeftJustPressed && PauseButtonRect(_pauseFocus).Contains(mouse);
+        bool clicked = MouseClicked && PauseButtonRect(_pauseFocus).Contains(mouse);
         if (!_input.Confirm && !clicked)
         {
             return;
@@ -500,6 +674,14 @@ public sealed partial class GameRoot
     {
         _resultsTime += frameSeconds;
         _bannerTimer = 0f;
+        UpdateConfetti(frameSeconds);
+
+        // Um instante pra ver o resultado: ENTER apertado repetidamente no fim da corrida não pula direto pra outra.
+        if (_resultsTime < ResultsInputDelay)
+        {
+            return;
+        }
+
 
         Point mouse = LogicalMousePoint();
         if (_input.MouseMoved)
@@ -531,7 +713,7 @@ public sealed partial class GameRoot
             return;
         }
 
-        bool clicked = _input.WasMouseLeftJustPressed && ResultButtonRect(_resultFocus).Contains(mouse);
+        bool clicked = MouseClicked && ResultButtonRect(_resultFocus).Contains(mouse);
         if (!_input.Confirm && !clicked)
         {
             return;
@@ -581,6 +763,9 @@ public sealed partial class GameRoot
         {
             DrawButton(ResultButtonRect(i), labels[i], _resultFocus == i, primary: i == 0, textSize: 1.8f);
         }
+
+        DrawKeyHints(("ENTER", "CONFIRMAR"), ("R", "JOGAR DE NOVO"), ("ESC", "MENU"));
+        DrawConfetti();
     }
 
     private List<(string Label, string Value, bool Highlight)> BuildResultRows()

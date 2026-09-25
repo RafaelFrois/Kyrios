@@ -255,6 +255,29 @@ public static class Soundtrack
     public static SoundEffect BuildCountdownTick() =>
         ToSoundEffect(Synth.GenerateTone(1200f, 0.05f, Waveform.Square, 0.3f, attack: 0.001f, release: 0.02f));
 
+    /// <summary>Bip da contagem de largada: grave e curto no 3-2-1, agudo e longo no "VAI!".</summary>
+    public static SoundEffect BuildStartBeep(bool go) => go
+        ? ToSoundEffect(Synth.GenerateTone(1318f, 0.38f, Waveform.Square, 0.3f, attack: 0.002f, release: 0.12f))
+        : ToSoundEffect(Synth.GenerateTone(659f, 0.14f, Waveform.Square, 0.28f, attack: 0.002f, release: 0.04f));
+
+    /// <summary>Duas notas subindo (triângulo) — volta completada, diferente do "plim" de checkpoint.</summary>
+    public static SoundEffect BuildLapChime()
+    {
+        const float root = 659f;
+        (int Semitone, float Duration)[] notes = [(0, 0.07f), (7, 0.07f), (12, 0.16f)];
+        return ToSoundEffect(RenderJingle(root, notes, Waveform.Triangle, 0.34f));
+    }
+
+    /// <summary>"Cocoricó" do mascote: três piados quadrados que sobem e caem, com um chiado por baixo.</summary>
+    public static SoundEffect BuildCluck()
+    {
+        const float root = 700f;
+        (int Semitone, float Duration)[] notes = [(0, 0.05f), (5, 0.04f), (12, 0.09f), (7, 0.06f)];
+        float[] voice = RenderJingle(root, notes, Waveform.Pulse25, 0.22f);
+        float[] breath = Synth.GenerateTone(1f, voice.Length / (float)Synth.SampleRate, Waveform.Noise, 0.04f, attack: 0.002f, release: 0.05f);
+        return ToSoundEffect(Synth.Mix(voice, breath));
+    }
+
     /// <summary>Concatena uma sequência curta de notas (com sua própria duração cada) num único buffer —
     /// usado pelos jingles/bips, que não precisam do BPM/loop de <see cref="Synth.RenderVoice"/>.</summary>
     private static float[] RenderJingle(float rootFrequency, (int Semitone, float Duration)[] notes, Waveform waveform, float volume)

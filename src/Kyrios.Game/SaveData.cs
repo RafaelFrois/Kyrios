@@ -232,6 +232,9 @@ public sealed class SaveData
     public bool MusicMuted { get; set; }
     public bool SfxMuted { get; set; }
 
+    // ----- Vídeo -----
+    public bool Fullscreen { get; set; }
+
     private static string FilePath
     {
         get

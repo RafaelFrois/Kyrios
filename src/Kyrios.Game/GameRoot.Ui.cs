@@ -234,16 +234,16 @@ public sealed partial class GameRoot
     }
 
     /// <summary>Título do jogo com contorno e gradiente.</summary>
-    private void DrawGameTitle(Vector2 position, float size)
+    private void DrawGameTitle(Vector2 position, float size, float alpha = 1f)
     {
         const string title = "MEGRACE";
         Vector2[] outline = [new(-1, -1), new(0, -1), new(1, -1), new(-1, 0), new(1, 0), new(-1, 1), new(0, 1), new(1, 1)];
         foreach (Vector2 offset in outline)
         {
-            PixelFont.Draw(_spriteBatch, _pixel, title, position + (offset * 1.5f), size, TitleOutline);
+            PixelFont.Draw(_spriteBatch, _pixel, title, position + (offset * 1.5f), size, TitleOutline * alpha);
         }
 
-        PixelFont.DrawGradient(_spriteBatch, _pixel, title, position, size, TitleGradient);
+        PixelFont.DrawGradient(_spriteBatch, _pixel, title, position, size, [.. TitleGradient.Select(color => color * alpha)]);
     }
 
     /// <summary>Selo pixel-art da Domus Arcis (espada + nome do estúdio).</summary>

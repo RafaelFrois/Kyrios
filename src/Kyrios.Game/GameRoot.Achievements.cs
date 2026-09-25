@@ -93,7 +93,7 @@ public sealed partial class GameRoot
 
         scroll -= _input.ScrollWheelSteps;
 
-        if (_input.WasMouseLeftJustPressed)
+        if (MouseClicked)
         {
             Point mouse = LogicalMousePoint();
             for (int i = 0; i < AchievementTabCount; i++)
@@ -278,7 +278,8 @@ public sealed partial class GameRoot
 
     private void UpdateUnlockToast(float frameSeconds)
     {
-        if (_activeUnlockToast is null && _pendingUnlockToasts.Count > 0)
+        // Na abertura os avisos esperam: aparecem quando o menu surgir.
+        if (_activeUnlockToast is null && _pendingUnlockToasts.Count > 0 && _state != State.Splash)
         {
             _activeUnlockToast = _pendingUnlockToasts.Dequeue();
             _unlockToastDuration = _pendingUnlockToasts.Count >= 2 ? QuickToastDuration : ToastDuration;

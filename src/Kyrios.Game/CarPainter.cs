@@ -50,7 +50,7 @@ public sealed class CarPainter
         _center = center;
         _angle = angle;
         _unit = unit;
-        _shade = silhouette ? 0.18f : eliminated ? 0.4f : 1f;
+        _shade = silhouette ? 0.26f : eliminated ? 0.4f : 1f;
         _monochrome = monochrome;
         BodyColor = bodyColor;
         Eliminated = eliminated;

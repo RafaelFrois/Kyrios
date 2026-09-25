@@ -37,6 +37,9 @@ public static class SkinCategories
         _ => "COISAS ABSURDAS",
     };
 
+    /// <summary>Rótulo curto pra legendas apertadas (a grade da coleção).</summary>
+    public static string ShortPlural(SkinCategory category) => category == Absurd ? "ABSURDOS" : Plural(category);
+
     public static string Article(SkinCategory category) => category is Food or Absurd ? "UMA" : "UM";
 
     public static Color Color(SkinCategory category) => category switch
