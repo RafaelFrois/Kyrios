@@ -297,6 +297,8 @@ public sealed partial class GameRoot
     }
 
     /// <summary>A galinha de kart entra quicando, o título aparece embaixo e tudo esmaece pro menu.</summary>
+    private float? _loadingDoneAt;
+
     private void DrawSplash()
     {
         float t = _stateTime;
@@ -321,9 +323,11 @@ public sealed partial class GameRoot
         DrawCenteredText(new Rectangle(0, 0, (int)AreaWidth, 0), L.T("UM JOGO DOMUS ARCIS", "A DOMUS ARCIS GAME"), 378f, MobileUi ? 2f : 1.6f, StatBadgeLabelColor * credit);
 
         // Celular: a abertura também é a tela de carregamento (a barra só aparece enquanto falta alguma coisa).
-        if (GamePlatform.Current.ShowsLoadingScreen && (StillLoading || _stateTime < SplashSeconds))
+        if (GamePlatform.Current.ShowsLoadingScreen)
         {
-            float barAlpha = StillLoading ? 1f : Math.Clamp((SplashSeconds - t) / 0.4f, 0f, 1f);
+            // Terminou de carregar: a barra some logo (ou junto com a abertura, se ela já estiver acabando).
+            _loadingDoneAt ??= StillLoading ? null : t;
+            float barAlpha = StillLoading ? 1f : Math.Clamp(1f - ((t - (_loadingDoneAt ?? t) - 0.4f) / 0.3f), 0f, 1f);
             var bar = new Rectangle((int)(AreaWidth / 2f) - 180, 430, 360, 12);
             DrawProgressBar(bar, LoadingProgress, AccentColor * barAlpha, 6f);
             string label = L.T($"CARREGANDO {(int)(LoadingProgress * 100f)}%", $"LOADING {(int)(LoadingProgress * 100f)}%");

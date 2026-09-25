@@ -18,6 +18,12 @@ roda a mesma lógica.
 - `src/Kyrios.Game` — **jogo gráfico** (MonoGame): menus, pistas/cenários,
   skins, conquistas, progressão e salvamento; pode ser publicado como
   executável standalone.
+- `src/Kyrios.Game.Web` — casca web (navegador / Poki) que compila os mesmos
+  fontes de `Kyrios.Game`.
+- `src/Kyrios.Game.Android` — casca Android (Play Store) que compila os mesmos
+  fontes de `Kyrios.Game` sobre o MonoGame para Android.
+- `tools/Kyrios.MobilePreview` — simulador de celular pra desenvolvimento (o
+  mesmo jogo, em aparelhos de referência, com roteiro de toques e capturas).
 - `src/Kyrios.ConsoleGame` — versão de terminal (ASCII), útil quando não dá
   pra abrir uma janela (ex: SSH sem X11) ou pra rodar em CI.
 - `tests/` — testes automatizados (xUnit) da lógica (`Kyrios.Core.Tests`) e da
@@ -126,6 +132,30 @@ o projeto web). Basta importar o repositório com o preset "Other" e fazer o dep
 
 Na web: toque em celular/tablet (botões na corrida), save no navegador (sincronizado pela Poki), sem botão SAIR
 e com a tela cheia controlada pelo site.
+
+### Versão Android (celular / tablet — Play Store)
+
+O mesmo jogo, com telas de toque (botões grandes, área segura, controles BOTÕES / JOYSTICK / INCLINAR), vibração,
+qualidade gráfica automática e o ciclo de vida do celular. Análise, decisões, testes e o checklist da Play Store em
+[`docs/MOBILE_PORT.md`](docs/MOBILE_PORT.md).
+
+Requisitos: SDK .NET 10 com o workload Android (`dotnet workload install android`), Android SDK (plataforma 36) e
+JDK 17 ou 21 — o Visual Studio 2026 com ".NET Multi-platform App UI" instala tudo.
+
+```bash
+./build-android.sh          # Linux/macOS
+./build-android.ps1         # Windows (PowerShell)
+```
+
+Gera `dist/android/MegRace.aab` (pra Play Store) e `dist/android/MegRace.apk` (pra instalar direto no celular).
+Pra assinar com a chave de upload da Play Store, defina `MEGRACE_KEYSTORE`, `MEGRACE_KEY_ALIAS` e
+`MEGRACE_KEYSTORE_PASSWORD` antes (sem elas sai com a chave de debug, que serve só pra testar).
+
+Simulador de celular (valida as telas em várias proporções sem aparelho):
+
+```bash
+dotnet run --project tools/Kyrios.MobilePreview -- --device phone-20x9 --script roteiro.txt --out capturas
+```
 
 ### Versão de terminal (ASCII)
 
