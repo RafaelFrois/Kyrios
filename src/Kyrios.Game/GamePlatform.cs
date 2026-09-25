@@ -48,6 +48,10 @@ public class GamePlatform
     /// <summary>O aparelho é de toque (celular/tablet): o jogo já começa mostrando os controles de toque.</summary>
     public virtual bool PrefersTouch => false;
 
+    /// <summary>A logo já decodificada pela plataforma (null = o jogo decodifica o PNG embutido). No navegador o
+    /// decodificador nativo é dezenas de vezes mais rápido que decodificar em C# dentro do WebAssembly.</summary>
+    public virtual DecodedImage DecodedLogo => null;
+
     /// <summary>O jogo terminou de carregar e está pronto pra interação.</summary>
     public virtual void LoadingFinished()
     {
@@ -67,6 +71,10 @@ public class GamePlatform
     /// mostra algo; <paramref name="onFinished"/> é chamado exatamente uma vez quando o jogo pode seguir.</summary>
     public virtual void CommercialBreak(Action onFinished) => onFinished();
 }
+
+/// <summary>Imagem pronta pra virar textura: tamanho original, tamanho da textura (potência de dois, o resto
+/// transparente) e todos os níveis de mipmap em RGBA com alfa pré-multiplicado, um depois do outro.</summary>
+public sealed record DecodedImage(int Width, int Height, int TextureWidth, int TextureHeight, byte[] MipChain);
 
 /// <summary>Save em arquivo (desktop): gravação atômica num temporário + cópia de segurança da versão anterior.</summary>
 public sealed class FileSaveStore(string path) : ISaveStore

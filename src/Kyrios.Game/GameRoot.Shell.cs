@@ -43,6 +43,11 @@ public sealed partial class GameRoot
     /// exige pra ter mipmaps.</summary>
     private Texture2D LoadLogo()
     {
+        if (GamePlatform.Current.DecodedLogo is { } decoded)
+        {
+            return CreateLogoTexture(decoded);
+        }
+
         using Stream stream = typeof(GameRoot).Assembly.GetManifestResourceStream("MegRace.Logo.png");
         if (stream is null)
         {
@@ -51,29 +56,66 @@ public sealed partial class GameRoot
 
         using Texture2D source = Texture2D.FromStream(GraphicsDevice, stream);
         _logoSize = new Point(source.Width, source.Height);
-        var pixels = new Color[source.Width * source.Height];
+        var pixels = new uint[source.Width * source.Height];
         source.GetData(pixels);
 
+        // Contas com inteiros sobre os pixels empacotados (RGBA em um uint): no navegador o código roda
+        // interpretado e isso é várias vezes mais rápido que mexer em Color canal por canal.
         int width = NextPowerOfTwo(source.Width);
         int height = NextPowerOfTwo(source.Height);
-        var level = new Color[width * height];
+        var level = new uint[width * height];
         for (int y = 0; y < source.Height; y++)
         {
+            int from = y * source.Width;
+            int to = y * width;
             for (int x = 0; x < source.Width; x++)
             {
-                Color c = pixels[(y * source.Width) + x];
-                level[(y * width) + x] = Color.FromNonPremultiplied(c.R, c.G, c.B, c.A);
+                level[to + x] = Premultiply(pixels[from + x]);
             }
         }
 
         var texture = new Texture2D(GraphicsDevice, width, height, true, SurfaceFormat.Color);
         for (int mip = 0; mip < texture.LevelCount; mip++)
         {
-            texture.SetData(mip, null, level, 0, level.Length);
+            texture.SetData(mip, null, level, 0, width * height);
             (level, width, height) = HalveImage(level, width, height);
         }
 
         return texture;
+    }
+
+    /// <summary>Textura da logo a partir dos níveis já prontos (decodificados e reduzidos pela plataforma).</summary>
+    private Texture2D CreateLogoTexture(DecodedImage image)
+    {
+        _logoSize = new Point(image.Width, image.Height);
+        var texture = new Texture2D(GraphicsDevice, image.TextureWidth, image.TextureHeight, true, SurfaceFormat.Color);
+        int width = image.TextureWidth;
+        int height = image.TextureHeight;
+        int offset = 0;
+        for (int mip = 0; mip < texture.LevelCount; mip++)
+        {
+            int bytes = width * height * 4;
+            texture.SetData(mip, null, image.MipChain, offset, bytes);
+            offset += bytes;
+            width = Math.Max(1, width / 2);
+            height = Math.Max(1, height / 2);
+        }
+
+        return texture;
+    }
+
+    private static uint Premultiply(uint packed)
+    {
+        uint a = packed >> 24;
+        if (a == 255)
+        {
+            return packed;
+        }
+
+        uint r = ((packed & 0xFF) * a + 127) / 255;
+        uint g = (((packed >> 8) & 0xFF) * a + 127) / 255;
+        uint b = (((packed >> 16) & 0xFF) * a + 127) / 255;
+        return r | (g << 8) | (b << 16) | (a << 24);
     }
 
     private static int NextPowerOfTwo(int value)
@@ -87,30 +129,30 @@ public sealed partial class GameRoot
         return result;
     }
 
-    /// <summary>Metade da resolução pela média de cada bloco 2x2 (as bordas ímpares repetem o último pixel).</summary>
-    private static (Color[] Pixels, int Width, int Height) HalveImage(Color[] pixels, int width, int height)
+    /// <summary>Metade da resolução (lados em potência de dois) pela média de cada bloco 2x2, canal a canal.</summary>
+    private static (uint[] Pixels, int Width, int Height) HalveImage(uint[] pixels, int width, int height)
     {
         int halfWidth = Math.Max(1, width / 2);
         int halfHeight = Math.Max(1, height / 2);
-        var result = new Color[halfWidth * halfHeight];
+        var result = new uint[halfWidth * halfHeight];
+        int stepX = width > 1 ? 1 : 0;
+        int stepY = height > 1 ? width : 0;
         for (int y = 0; y < halfHeight; y++)
         {
+            int row = y * 2 * width;
             for (int x = 0; x < halfWidth; x++)
             {
-                int r = 0, g = 0, b = 0, a = 0;
-                for (int dy = 0; dy < 2; dy++)
-                {
-                    for (int dx = 0; dx < 2; dx++)
-                    {
-                        Color c = pixels[(Math.Min((y * 2) + dy, height - 1) * width) + Math.Min((x * 2) + dx, width - 1)];
-                        r += c.R;
-                        g += c.G;
-                        b += c.B;
-                        a += c.A;
-                    }
-                }
+                int i = row + (x * 2);
+                uint p0 = pixels[i];
+                uint p1 = pixels[i + stepX];
+                uint p2 = pixels[i + stepY];
+                uint p3 = pixels[i + stepY + stepX];
 
-                result[(y * halfWidth) + x] = new Color(r / 4, g / 4, b / 4, a / 4);
+                // Dois canais por conta: R e B (depois G e A) ficam em faixas de 16 bits do mesmo uint, e a soma
+                // de quatro pixels (até 1020) cabe na faixa sem invadir o canal vizinho.
+                uint rb = (p0 & 0x00FF00FF) + (p1 & 0x00FF00FF) + (p2 & 0x00FF00FF) + (p3 & 0x00FF00FF);
+                uint ga = ((p0 >> 8) & 0x00FF00FF) + ((p1 >> 8) & 0x00FF00FF) + ((p2 >> 8) & 0x00FF00FF) + ((p3 >> 8) & 0x00FF00FF);
+                result[(y * halfWidth) + x] = ((rb >> 2) & 0x00FF00FF) | (((ga >> 2) & 0x00FF00FF) << 8);
             }
         }
 

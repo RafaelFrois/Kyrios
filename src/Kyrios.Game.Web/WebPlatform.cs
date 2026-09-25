@@ -64,6 +64,23 @@ public sealed class WebPlatform : GamePlatform
 
     public override bool PrefersTouch => _js.Invoke<bool>("megrace.prefersTouch");
 
+    /// <summary>A logo decodificada pelo navegador durante o carregamento (ver megrace.js); null se falhar, e aí o
+    /// jogo segue sem ela em vez de travar.</summary>
+    public override DecodedImage DecodedLogo
+    {
+        get
+        {
+            int[] info = _js.Invoke<int[]>("megrace.logoInfo");
+            if (info is not { Length: 4 })
+            {
+                return null;
+            }
+
+            byte[] mips = _js.Invoke<byte[]>("megrace.logoMips");
+            return mips is { Length: > 0 } ? new DecodedImage(info[0], info[1], info[2], info[3], mips) : null;
+        }
+    }
+
     public override void LoadingFinished() => _js.InvokeVoid("megrace.loadingFinished");
 
     public override void GameplayStart() => _js.InvokeVoid("megrace.gameplayStart");

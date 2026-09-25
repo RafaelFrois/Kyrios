@@ -53,6 +53,94 @@
     window.addEventListener('wheel', (event) => event.preventDefault(), { passive: false });
     document.addEventListener('contextmenu', (event) => event.preventDefault());
 
+    // ---------- Logo ----------
+    // Decodificada pelo navegador enquanto o runtime .NET ainda carrega: textura com lados em potência de dois,
+    // alfa pré-multiplicado e todos os níveis de mipmap prontos (o jogo só copia pra GPU).
+    let logoInfo = null;
+    let logoMips = null;
+
+    function nextPowerOfTwo(value) {
+        let result = 1;
+        while (result < value) {
+            result *= 2;
+        }
+        return result;
+    }
+
+    async function decodeImage(url) {
+        const blob = await (await fetch(url)).blob();
+        let source;
+        if (typeof createImageBitmap === 'function') {
+            source = await createImageBitmap(blob);
+        } else {
+            source = await new Promise((resolve, reject) => {
+                const image = new Image();
+                image.onload = () => resolve(image);
+                image.onerror = reject;
+                image.src = URL.createObjectURL(blob);
+            });
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = source.width;
+        canvas.height = source.height;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        context.drawImage(source, 0, 0);
+        return { width: source.width, height: source.height, rgba: context.getImageData(0, 0, source.width, source.height).data };
+    }
+
+    const logoReady = (async () => {
+        try {
+            const { width, height, rgba } = await decodeImage('logo.png');
+            let w = nextPowerOfTwo(width);
+            let h = nextPowerOfTwo(height);
+            const textureWidth = w;
+            const textureHeight = h;
+            let level = new Uint32Array(w * h);
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const i = (y * width + x) * 4;
+                    const a = rgba[i + 3];
+                    const r = Math.round(rgba[i] * a / 255);
+                    const g = Math.round(rgba[i + 1] * a / 255);
+                    const b = Math.round(rgba[i + 2] * a / 255);
+                    level[y * w + x] = (r | (g << 8) | (b << 16) | (a << 24)) >>> 0;
+                }
+            }
+            const levels = [level];
+            while (w > 1 || h > 1) {
+                const hw = Math.max(1, w >> 1);
+                const hh = Math.max(1, h >> 1);
+                const stepX = w > 1 ? 1 : 0;
+                const stepY = h > 1 ? w : 0;
+                const next = new Uint32Array(hw * hh);
+                for (let y = 0; y < hh; y++) {
+                    for (let x = 0; x < hw; x++) {
+                        const i = y * 2 * w + x * 2;
+                        const p0 = level[i], p1 = level[i + stepX], p2 = level[i + stepY], p3 = level[i + stepY + stepX];
+                        const rb = (p0 & 0x00FF00FF) + (p1 & 0x00FF00FF) + (p2 & 0x00FF00FF) + (p3 & 0x00FF00FF);
+                        const ga = ((p0 >>> 8) & 0x00FF00FF) + ((p1 >>> 8) & 0x00FF00FF) + ((p2 >>> 8) & 0x00FF00FF) + ((p3 >>> 8) & 0x00FF00FF);
+                        next[y * hw + x] = (((rb >>> 2) & 0x00FF00FF) | (((ga >>> 2) & 0x00FF00FF) << 8)) >>> 0;
+                    }
+                }
+                levels.push(next);
+                level = next;
+                w = hw;
+                h = hh;
+            }
+            const total = levels.reduce((sum, l) => sum + l.length, 0);
+            const chain = new Uint32Array(total);
+            let offset = 0;
+            for (const l of levels) {
+                chain.set(l, offset);
+                offset += l.length;
+            }
+            logoMips = new Uint8Array(chain.buffer);
+            logoInfo = [width, height, textureWidth, textureHeight];
+        } catch (e) {
+            console.warn('logo', e);
+        }
+    })();
+
     // ---------- SDK da Poki ----------
     function sdk() {
         return window.PokiSDK && window.pokiReady ? window.PokiSDK : null;
@@ -86,7 +174,17 @@
                 window.requestAnimationFrame(tick);
             };
             canvas.focus();
-            window.requestAnimationFrame(tick);
+            // Espera a logo ficar pronta (no máximo 3 s — sem ela o jogo segue do mesmo jeito).
+            Promise.race([logoReady, new Promise((resolve) => setTimeout(resolve, 3000))])
+                .then(() => window.requestAnimationFrame(tick));
+        },
+
+        logoInfo() {
+            return logoInfo;
+        },
+
+        logoMips() {
+            return logoMips;
         },
 
         // Tamanho em pixels reais do canvas (tamanho na página × densidade da tela), com teto pra não pesar em

@@ -26,7 +26,8 @@
 
   <ItemGroup>
     <Compile Include="..\Kyrios.Game\**\*.cs" Exclude="..\Kyrios.Game\Program.cs;..\Kyrios.Game\obj\**;..\Kyrios.Game\bin\**" LinkBase="Game" />
-    <EmbeddedResource Include="..\Kyrios.Game\Assets\logo.png" LogicalName="MegRace.Logo.png" />
+    <!-- Na web a logo é um arquivo à parte, decodificado pelo navegador (bem mais rápido que dentro do WebAssembly). -->
+    <Content Include="..\Kyrios.Game\Assets\logo.png" Link="wwwroot\logo.png" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -61,6 +62,10 @@
       <Using Namespace="System.Text" />
       <Code Type="Fragment" Language="cs"><![CDATA[
         foreach (string gz in Directory.GetFiles(Root, "*.gz", SearchOption.AllDirectories)) File.Delete(gz);
+        // Scripts do framework que a página nunca carrega (realidade virtual, canvas 2D).
+        string xr = Path.Combine(Root, "_content", "nkast.Wasm.XR");
+        if (Directory.Exists(xr)) Directory.Delete(xr, true);
+        foreach (string unused in Directory.GetFiles(Root, "Canvas2dContext.*.js*", SearchOption.AllDirectories)) File.Delete(unused);
         foreach (string pdb in Directory.GetFiles(Root, "*.pdb", SearchOption.AllDirectories)) File.Delete(pdb);
         string webConfig = Path.Combine(Path.GetDirectoryName(Root.TrimEnd('/', '\\')), "web.config");
         if (File.Exists(webConfig)) File.Delete(webConfig);
