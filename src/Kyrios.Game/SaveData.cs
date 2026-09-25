@@ -233,7 +233,9 @@ public sealed class SaveData
     public bool SfxMuted { get; set; }
 
     // ----- Vídeo -----
-    public bool Fullscreen { get; set; }
+    /// <summary>O jogo abre em tela cheia; só fica em janela se o jogador desligar nas configurações.
+    /// (Campo novo de propósito: o antigo "Fullscreen" salvo como falso nos saves velhos é ignorado.)</summary>
+    public bool Windowed { get; set; }
 
     private static string FilePath
     {

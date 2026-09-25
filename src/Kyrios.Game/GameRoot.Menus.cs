@@ -426,7 +426,7 @@ public sealed partial class GameRoot
     private void ToggleFullscreenSetting()
     {
         ToggleFullscreen();
-        _saveData.Fullscreen = _isFullscreen;
+        _saveData.Windowed = !_isFullscreen;
         _saveData.Save();
         _audio.PlayMenuConfirm();
     }

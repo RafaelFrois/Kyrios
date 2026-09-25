@@ -39,13 +39,13 @@ Controles (teclado ou controle):
 - `Shift` — turbo (controle: RB ou B)
 - `Espaço` — freio de mão (controle: A)
 - `Esc` / `P` — pausar (controle: START)
-- `F11` — tela cheia
+- `F11` — alterna tela cheia / janela (o jogo já abre em tela cheia)
 
 No menu, escolha e equipe o carro em **SKINS** e o cenário em **PISTAS** (as
 duas telas mostram a coleção inteira numa grade, com o que falta pra liberar
 cada item); depois é só ir em **JOGAR**, escolher o modo e a partida começa
 depois da contagem 3-2-1. Também dá pra acompanhar as **CONQUISTAS** e ajustar
-som e tela cheia em **CONFIGURAÇÕES**. Conquistas, skins e pistas liberadas
+som e tela cheia (ligada por padrão) em **CONFIGURAÇÕES**. Conquistas, skins e pistas liberadas
 aparecem num aviso no topo da tela.
 
 Modos:

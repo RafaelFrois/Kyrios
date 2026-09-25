@@ -478,6 +478,14 @@ public class PersistenceTests : IDisposable
     }
 
     [Fact]
+    public void Fullscreen_IsTheDefault_EvenForOldSavesThatStoredItAsOff()
+    {
+        Assert.False(new SaveData().Windowed);
+        Assert.False(SaveData.FromJson("""{"Fullscreen":false,"GamesPlayed":3}""").Windowed);
+        Assert.True(SaveData.FromJson(new SaveData { Windowed = true }.ToJson()).Windowed);
+    }
+
+    [Fact]
     public void InvalidLastMode_FromAHandEditedSave_FallsBackToTheDeathRace()
     {
         SaveData save = SaveData.FromJson("""{"LastMode":7}""");

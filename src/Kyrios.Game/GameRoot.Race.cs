@@ -510,7 +510,8 @@ public sealed partial class GameRoot
 
     // ---------- HUD ----------
 
-    /// <summary>HUD enxuto: só o que importa no modo atual, com a informação principal maior.</summary>
+    /// <summary>HUD enxuto: só o que importa no modo atual, numa faixa fina acima da pista (e o turbo na faixa de
+    /// baixo) — nada fica por cima do asfalto tapando os carros.</summary>
     private void DrawLiveHud()
     {
         if (_race.Mode == RaceMode.TimeAttack)
@@ -522,14 +523,18 @@ public sealed partial class GameRoot
             DrawDeathRaceHud();
         }
 
-        DrawBoostBar(new Vector2(14f, AreaHeight - 40f));
+        DrawBoostBar(new Vector2(14f, AreaHeight + 13f));
         const string pauseHint = "ESC: PAUSA";
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, pauseHint, new Vector2(AreaWidth - PixelFont.Measure(pauseHint, 1.4f) - 12f, AreaHeight - 18f), 1.4f, StatBadgeLabelColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, pauseHint, new Vector2(AreaWidth - PixelFont.Measure(pauseHint, 1.4f) - 12f, AreaHeight + 15f), 1.4f, StatBadgeLabelColor);
     }
+
+    /// <summary>O HUD mora nas faixas de cenário (TrackMargin) acima e abaixo da pista, fora do asfalto.</summary>
+    private const int HudTop = -TrackMargin + 4;
+    private const int HudPanelHeight = 32;
 
     private void DrawHudPanel(Rectangle rect)
     {
-        DrawRoundedRect(rect, HudFrameFill, 8f);
+        DrawRoundedRect(rect, HudFrameFill, 7f);
         _spriteBatch.Draw(_pixel, new Rectangle(rect.X + 6, rect.Bottom - 3, rect.Width - 12, 2), AccentColor * 0.8f);
     }
 
@@ -539,39 +544,43 @@ public sealed partial class GameRoot
         int position = standings.ToList().IndexOf(_player) + 1;
         int remaining = _race.Entrants.Count(e => !e.Eliminated);
 
-        var panel = new Rectangle(10, 8, 290, 62);
+        var panel = new Rectangle(10, HudTop, 330, HudPanelHeight);
         DrawHudPanel(panel);
         bool isOut = _player.Eliminated;
         Color placeColor = isOut ? DangerColor : position == 1 ? AccentColor : TextColor;
         string place = isOut ? "X" : position.ToString();
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, place, new Vector2(panel.X + 14f, panel.Y + 12f), 5f, placeColor);
-        float afterNumber = panel.X + 14f + PixelFont.Measure(place, 5f) + 3f;
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, place, new Vector2(panel.X + 12f, panel.Y + 6f), 2.8f, placeColor);
+        float afterNumber = panel.X + 12f + PixelFont.Measure(place, 2.8f) + 2f;
         if (!isOut)
         {
-            PixelFont.Draw(_spriteBatch, _pixel, "º", new Vector2(afterNumber, panel.Y + 12f), 2f, placeColor);
+            PixelFont.Draw(_spriteBatch, _pixel, "º", new Vector2(afterNumber, panel.Y + 6f), 1.4f, placeColor);
         }
 
-        PixelFont.Draw(_spriteBatch, _pixel, $"DE {_race.Entrants.Count}", new Vector2(afterNumber, panel.Y + 32f), 1.5f, StatBadgeLabelColor);
-        PixelFont.Draw(_spriteBatch, _pixel, isOut ? "ELIMINADO" : $"VOLTA {_player.Car.LapsCompleted + 1}", new Vector2(panel.X + 144f, panel.Y + 14f), 2f, isOut ? DangerColor : TextColor);
-        PixelFont.Draw(_spriteBatch, _pixel, $"RESTAM {remaining} CARROS", new Vector2(panel.X + 144f, panel.Y + 38f), 1.5f, StatBadgeLabelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, $"DE {_race.Entrants.Count}", new Vector2(afterNumber, panel.Y + 18f), 1.2f, StatBadgeLabelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, isOut ? "ELIMINADO" : $"VOLTA {_player.Car.LapsCompleted + 1}", new Vector2(panel.X + 104f, panel.Y + 9f), 1.8f, isOut ? DangerColor : TextColor);
+        PixelFont.Draw(_spriteBatch, _pixel, $"RESTAM {remaining}", new Vector2(panel.X + 222f, panel.Y + 11f), 1.4f, StatBadgeLabelColor);
 
         // Próxima eliminação: acontece quando o líder completar a volta — a barra mostra o quanto falta.
+        // Quando o jogador é o último, o próprio painel pisca em vermelho com o aviso.
         RaceEntrant leader = standings.FirstOrDefault(e => !e.Eliminated && !e.Finished);
         if (leader is not null && remaining > 1)
         {
-            var bar = new Rectangle((int)(AreaWidth / 2f) - 130, 14, 260, 8);
-            string label = "PROXIMA ELIMINACAO";
-            DrawCenteredText(new Rectangle(bar.X, 0, bar.Width, 0), label, 26f, 1.4f, StatBadgeLabelColor);
-            DrawProgressBar(bar, LapFraction(leader), DangerColor * 0.9f, 4f);
-
             bool inDanger = !_player.Eliminated && ReferenceEquals(standings.Where(e => !e.Eliminated && !e.Finished).LastOrDefault(), _player) && _race.ElapsedTime > 3f;
+            var box = new Rectangle((int)(AreaWidth / 2f) - 150, HudTop, 300, HudPanelHeight);
             if (inDanger)
             {
                 float blink = (MathF.Sin(_visualTime * 10f) + 1f) / 2f;
-                var warn = new Rectangle((int)(AreaWidth / 2f) - 120, 42, 240, 24);
-                DrawRoundedRect(warn, DangerColor * (0.55f + (0.35f * blink)), 6f);
-                DrawCenteredText(warn, "VOCE ESTA EM ULTIMO!", warn.Y + 6f, 1.8f, Color.White);
+                DrawRoundedRect(box, DangerColor * (0.6f + (0.3f * blink)), 7f);
             }
+            else
+            {
+                DrawHudPanel(box);
+            }
+
+            string label = inDanger ? "VOCE ESTA EM ULTIMO!" : "PROXIMA ELIMINACAO";
+            DrawCenteredText(box, label, box.Y + 5f, 1.3f, inDanger ? Color.White : StatBadgeLabelColor);
+            var bar = new Rectangle(box.X + 20, box.Y + 18, box.Width - 40, 7);
+            DrawProgressBar(bar, LapFraction(leader), inDanger ? Color.White : DangerColor * 0.9f, 3f);
         }
     }
 
@@ -594,20 +603,22 @@ public sealed partial class GameRoot
         bool low = time <= 5f;
         float pulse = low ? (MathF.Sin(_visualTime * 12f) + 1f) / 2f : 0f;
 
-        var timer = new Rectangle((int)(AreaWidth / 2f) - 90, 6, 180, 62);
+        var timer = new Rectangle((int)(AreaWidth / 2f) - 120, HudTop, 240, HudPanelHeight);
         DrawHudPanel(timer);
         string timeText = $"{time:0.0}";
         Color timeColor = low ? Color.Lerp(DangerColor, Color.White, pulse * 0.4f) : TextColor;
-        DrawCenteredText(timer, timeText, timer.Y + 8f, 4.5f + (pulse * 0.4f), timeColor, shadow: true);
-        DrawCenteredText(timer, $"BONUS DE TEMPO {_race.TimeBonusFactor * 100f:0}%", timer.Y + 46f, 1.3f, StatBadgeLabelColor);
+        float timeSize = 3f + (pulse * 0.2f);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, timeText, new Vector2(timer.X + 14f, timer.Y + 16f - (3.5f * timeSize)), timeSize, timeColor);
+        PixelFont.Draw(_spriteBatch, _pixel, "BONUS", new Vector2(timer.X + 128f, timer.Y + 6f), 1.2f, StatBadgeLabelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, $"{_race.TimeBonusFactor * 100f:0}%", new Vector2(timer.X + 128f, timer.Y + 17f), 1.4f, TextColor);
 
-        var score = new Rectangle(10, 8, 220, 62);
+        var score = new Rectangle(10, HudTop, 340, HudPanelHeight);
         DrawHudPanel(score);
-        PixelFont.Draw(_spriteBatch, _pixel, "PONTOS", new Vector2(score.X + 14f, score.Y + 10f), 1.4f, StatBadgeLabelColor);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, $"{_player.Score:0}", new Vector2(score.X + 14f, score.Y + 24f), 3.2f, AccentColor);
+        PixelFont.Draw(_spriteBatch, _pixel, "PONTOS", new Vector2(score.X + 12f, score.Y + 6f), 1.2f, StatBadgeLabelColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, $"{_player.Score:0}", new Vector2(score.X + 64f, score.Y + 7f), 2.4f, AccentColor);
         string record = _saveData.BestScoreTimeAttack is > 0f and { } best ? $"RECORDE {best:0}" : "SEM RECORDE";
-        PixelFont.Draw(_spriteBatch, _pixel, record, new Vector2(score.X + 118f, score.Y + 12f), 1.4f, _recordBannerShown ? RecordColor : StatBadgeLabelColor);
-        PixelFont.Draw(_spriteBatch, _pixel, $"VOLTA {_player.Car.LapsCompleted + 1}", new Vector2(score.X + 118f, score.Y + 34f), 1.6f, TextColor);
+        PixelFont.Draw(_spriteBatch, _pixel, record, new Vector2(score.X + 170f, score.Y + 6f), 1.2f, _recordBannerShown ? RecordColor : StatBadgeLabelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, $"VOLTA {_player.Car.LapsCompleted + 1}", new Vector2(score.X + 170f, score.Y + 17f), 1.4f, TextColor);
     }
 
     private void DrawBoostBar(Vector2 position)
@@ -618,7 +629,7 @@ public sealed partial class GameRoot
         DrawRoundedRect(back, HudFrameFill, 4f);
         float fraction = Math.Clamp(_player.Car.BoostFuel / _player.Car.Settings.BoostMaxFuel, 0f, 1f);
         _spriteBatch.Draw(_pixel, new Rectangle((int)position.X, (int)position.Y, (int)(width * fraction), (int)height), _player.Car.IsBoosting ? BoostActiveColor : BoostFillColor);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, "TURBO (SHIFT)", new Vector2(position.X, position.Y + height + 5f), 1.3f, TextColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, "TURBO (SHIFT)", new Vector2(position.X + width + 12f, position.Y + 1f), 1.3f, TextColor);
     }
 
     /// <summary>Textos subindo a partir do carro, anéis de checkpoint e a faixa de aviso no centro da tela.</summary>

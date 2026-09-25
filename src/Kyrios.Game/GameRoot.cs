@@ -413,7 +413,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         _audio.SetMusicMuted(_saveData.MusicMuted);
         _audio.SetSfxMuted(_saveData.SfxMuted);
 
-        if (_saveData.Fullscreen)
+        if (!_saveData.Windowed)
         {
             ToggleFullscreen();
         }
