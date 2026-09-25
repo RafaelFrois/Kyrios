@@ -41,10 +41,12 @@ Controles (teclado ou controle):
 - `Esc` / `P` — pausar (controle: START)
 - `F11` — tela cheia
 
-No menu, escolha e equipe o carro em **SKINS** e o cenário em **PISTAS**;
-depois é só ir em **JOGAR**, escolher o modo e a partida começa. Também dá pra
-acompanhar as **CONQUISTAS** e ajustar o som em **CONFIGURAÇÕES**. Conquistas,
-skins e pistas liberadas aparecem num aviso no topo da tela.
+No menu, escolha e equipe o carro em **SKINS** e o cenário em **PISTAS** (as
+duas telas mostram a coleção inteira numa grade, com o que falta pra liberar
+cada item); depois é só ir em **JOGAR**, escolher o modo e a partida começa
+depois da contagem 3-2-1. Também dá pra acompanhar as **CONQUISTAS** e ajustar
+som e tela cheia em **CONFIGURAÇÕES**. Conquistas, skins e pistas liberadas
+aparecem num aviso no topo da tela.
 
 Modos:
 
@@ -53,19 +55,30 @@ Modos:
 - **Contra o Relógio** — o relógio só desce; checkpoints dão tempo e pontos,
   batidas tiram tempo. Acaba quando o tempo zera.
 
-Pistas: todas usam **exatamente o mesmo circuito** (curvas, checkpoints,
-largada e colisões iguais) — muda só o cenário: Autódromo, Praia, Floresta,
-Cidade à Noite, Deserto, Neve, Supermercado, Cidade Neon, Vulcão, Mesa da
-Cozinha e Quarto de Criança. Cada uma esconde um detalhe secreto na pista.
+Pistas (29): todas usam **exatamente o mesmo circuito** (curvas, checkpoints,
+largada e colisões iguais) — muda só o mundo em volta: Autódromo, Praia,
+Floresta, Montanha, Estádio, Cidade à Noite, Deserto, Neve, Supermercado, Fundo
+do Mar, Sala de Estar, Escritório, Parque de Diversões, Cidade Neon, Vulcão,
+Mesa da Cozinha, Setup Gamer, Lixão, Fábrica, Quarto de Criança, Planeta
+Alienígena, Acima das Nuvens, Estação Espacial, Placa-Mãe, Caderno, Mesa de
+Sinuca, Bolo de Aniversário, Noite Assombrada — e uma secreta. Cada uma esconde
+um detalhe na pista.
 
-Progressão: skins, pistas e conquistas (fáceis, médias, difíceis, raras,
-idiotas e secretas) são liberadas pelo que você faz nos dois modos. Tudo fica
-salvo localmente (`%AppData%/MegRace/records.json` no Windows).
+Skins (74): veículos, animais, comidas, objetos e coisas absurdas — da galinha
+e do vaso sanitário ao buraco negro e à galinha de kart do logo.
+
+Progressão de longo prazo: as primeiras skins e pistas saem rápido; o resto pede
+habilidade (voltas rápidas, vitórias sem bater, de virada, de ponta a ponta...),
+exploração (segredos das pistas, combinações de skin + pista), sequências,
+combinações de metas e algumas descobertas escondidas. São 220 conquistas
+(fáceis, médias, difíceis, muito difíceis, raras, idiotas e secretas). Tudo fica
+salvo localmente (`%AppData%/MegRace/records.json` no Windows, com uma cópia de
+segurança `records.json.bak` da gravação anterior).
 
 Para adicionar conteúdo, basta uma linha no catálogo correspondente:
-`CarSkins.cs` (skins), `TrackThemes.cs` + `TrackSceneries*.cs` (pistas) e
-`Achievements.cs` (conquistas); os requisitos prontos ficam em
-`UnlockRequirements.cs`.
+`CarSkins.cs` + `CarSkins.*.cs` (skins e seus desenhos), `TrackThemes.cs` +
+`TrackSceneries*.cs` (pistas) e `Achievements.cs` (conquistas); os requisitos
+prontos ficam em `UnlockRequirements.cs`.
 
 ### Gerar um executável (sem precisar do .NET instalado)
 

@@ -445,9 +445,10 @@ public sealed partial class GameRoot
         {
             for (int i = 0; i < PauseItems.Length; i++)
             {
-                if (PauseButtonRect(i).Contains(mouse))
+                if (PauseButtonRect(i).Contains(mouse) && _pauseFocus != i)
                 {
                     _pauseFocus = i;
+                    _audio.PlayHover();
                 }
             }
         }
@@ -688,9 +689,10 @@ public sealed partial class GameRoot
         {
             for (int i = 0; i < ResultItems.Length; i++)
             {
-                if (ResultButtonRect(i).Contains(mouse))
+                if (ResultButtonRect(i).Contains(mouse) && _resultFocus != i)
                 {
                     _resultFocus = i;
+                    _audio.PlayHover();
                 }
             }
         }

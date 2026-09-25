@@ -425,22 +425,6 @@ public static class AchievementIcons
         "............",
     ];
 
-    public static readonly string[] Lantern =
-    [
-        ".....EE.....",
-        "....E..E....",
-        "...EEEEEE...",
-        "...EYYYYE...",
-        "..OEYWWYEO..",
-        "..OEYWWYEO..",
-        "...EYYYYE...",
-        "...EYYYYE...",
-        "...EEEEEE...",
-        "....EEEE....",
-        "............",
-        "............",
-    ];
-
     public static readonly string[] BrokenHeart =
     [
         "............",

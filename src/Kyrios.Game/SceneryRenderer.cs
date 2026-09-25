@@ -83,6 +83,10 @@ public sealed class SceneryStyle
     public Color EdgeA { get; init; }
     public Color EdgeB { get; init; }
 
+    /// <summary>As duas cores do quadriculado da linha de chegada.</summary>
+    public Color FinishLight { get; init; } = Color.White;
+    public Color FinishDark { get; init; } = new(20, 20, 24);
+
     /// <summary>Cor do brilho dos checkpoints nesta pista.</summary>
     public Color Checkpoint { get; init; } = new(255, 215, 0);
 
@@ -291,8 +295,19 @@ public sealed class SceneryRenderer
 
         int width = (track.Width * SceneCanvas.Cell) + (2 * SceneCanvas.Margin);
         int height = (track.Height * SceneCanvas.Cell) + (2 * SceneCanvas.Margin);
-        RenderTarget2D target = cached is { IsDisposed: false } ? cached
-            : new RenderTarget2D(_device, width, height, false, SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
+
+        // Cache cheio: reaproveita a textura da pista usada há mais tempo em vez de destruir uma e criar outra
+        // (passar rápido pelas pistas no seletor não fica alocando memória de vídeo).
+        RenderTarget2D target = cached is { IsDisposed: false } ? cached : null;
+        if (target is null && _recent.Count >= CacheSize)
+        {
+            string oldest = _recent.Last!.Value;
+            _recent.RemoveLast();
+            target = _cache[oldest];
+            _cache.Remove(oldest);
+        }
+
+        target ??= new RenderTarget2D(_device, width, height, false, SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
 
         _device.SetRenderTarget(target);
         _device.Clear(theme.Scenery.Background);
@@ -304,13 +319,6 @@ public sealed class SceneryRenderer
         _cache[theme.Id] = target;
         _recent.Remove(theme.Id);
         _recent.AddFirst(theme.Id);
-        while (_recent.Count > CacheSize)
-        {
-            string oldest = _recent.Last!.Value;
-            _recent.RemoveLast();
-            _cache[oldest].Dispose();
-            _cache.Remove(oldest);
-        }
     }
 
     private static void PaintStaticLayer(TrackTheme theme, SceneCanvas c)
@@ -354,10 +362,10 @@ public sealed class SceneryRenderer
                 if (kind == 'S')
                 {
                     const int half = cell / 2;
-                    c.Rect(px, py, half, half, Color.White);
-                    c.Rect(px + half, py + half, half, half, Color.White);
-                    c.Rect(px + half, py, half, half, new Color(20, 20, 24));
-                    c.Rect(px, py + half, half, half, new Color(20, 20, 24));
+                    c.Rect(px, py, half, half, style.FinishLight);
+                    c.Rect(px + half, py + half, half, half, style.FinishLight);
+                    c.Rect(px + half, py, half, half, style.FinishDark);
+                    c.Rect(px, py + half, half, half, style.FinishDark);
                 }
             }
         }

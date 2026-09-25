@@ -34,9 +34,14 @@ public sealed partial class GameRoot
 
     private static int AchievementTabCount => ProgressionStyle.CategoryOrder.Length + 1;
 
-    private static List<Achievement> AchievementsInTab(int tab) => tab == 0
-        ? [.. Achievements.All]
-        : [.. Achievements.All.Where(achievement => achievement.Category == ProgressionStyle.CategoryOrder[tab - 1])];
+    /// <summary>A lista de cada aba, montada uma vez só (o catálogo não muda durante o jogo).</summary>
+    private static readonly List<Achievement>[] TabContents =
+    [
+        [.. Achievements.All],
+        .. ProgressionStyle.CategoryOrder.Select(category => Achievements.All.Where(achievement => achievement.Category == category).ToList()),
+    ];
+
+    private static List<Achievement> AchievementsInTab(int tab) => TabContents[tab];
 
     private static int MaxAchievementScroll(int tab)
     {
@@ -120,13 +125,23 @@ public sealed partial class GameRoot
         }
     }
 
+    /// <summary>Conquistas liberadas como conjunto — a página confere centenas de itens por quadro.</summary>
+    private HashSet<string> _unlockedAchievementSet = [];
+
+    private bool IsAchievementUnlocked(Achievement achievement) => _unlockedAchievementSet.Contains(achievement.Id);
+
     private void DrawAchievementsPage()
     {
+        if (_unlockedAchievementSet.Count != _saveData.UnlockedAchievementIds.Count)
+        {
+            _unlockedAchievementSet = [.. _saveData.UnlockedAchievementIds];
+        }
+
         DimScreen(MenuBackgroundDim);
 
         int unlockedCount = Achievements.UnlockedCount(_saveData);
         int totalCount = Achievements.All.Count;
-        int secretsLeft = Achievements.All.Count(a => a.IsSecret && !Achievements.IsUnlocked(a, _saveData));
+        int secretsLeft = Achievements.All.Count(a => a.IsSecret && !IsAchievementUnlocked(a));
         DrawScreenHeader("CONQUISTAS", secretsLeft > 0 ? $"{secretsLeft} CONQUISTAS SECRETAS AINDA ESCONDIDAS" : "TODAS AS SECRETAS REVELADAS!");
 
         float fraction = totalCount == 0 ? 0f : unlockedCount / (float)totalCount;
@@ -180,7 +195,7 @@ public sealed partial class GameRoot
         List<Achievement> items = AchievementsInTab(tab);
         string label = tab == 0 ? "TODAS" : ProgressionStyle.CategoryName(ProgressionStyle.CategoryOrder[tab - 1]);
         Color color = tab == 0 ? AllTabColor : ProgressionStyle.CategoryColor(ProgressionStyle.CategoryOrder[tab - 1]);
-        string count = $"{items.Count(achievement => Achievements.IsUnlocked(achievement, _saveData))}/{items.Count}";
+        string count = $"{items.Count(IsAchievementUnlocked)}/{items.Count}";
 
         if (selected)
         {
@@ -201,7 +216,7 @@ public sealed partial class GameRoot
     /// bloqueada: ícone "?", "CONQUISTA SECRETA" e "???".</summary>
     private void DrawAchievementCard(Achievement achievement, Rectangle rect)
     {
-        bool unlocked = Achievements.IsUnlocked(achievement, _saveData);
+        bool unlocked = IsAchievementUnlocked(achievement);
         bool hiddenSecret = achievement.IsSecret && !unlocked;
         Color categoryColor = ProgressionStyle.CategoryColor(achievement.Category);
 

@@ -450,10 +450,15 @@ public static class Achievements
         Art(track.Icon, "?"),
         IsSecret: true);
 
-    public static Achievement Find(string id) => All.FirstOrDefault(achievement => achievement.Id == id);
+    private static Dictionary<string, Achievement> _byId;
+
+    private static Dictionary<string, Achievement> ById => _byId ??= All.ToDictionary(achievement => achievement.Id);
+
+    public static Achievement Find(string id) => id is not null && ById.TryGetValue(id, out Achievement achievement) ? achievement : null;
 
     public static bool IsUnlocked(Achievement achievement, SaveData progress) =>
         progress.UnlockedAchievementIds.Contains(achievement.Id);
 
-    public static int UnlockedCount(SaveData progress) => All.Count(achievement => IsUnlocked(achievement, progress));
+    /// <summary>Quantas conquistas (que existem de verdade no catálogo) já foram liberadas.</summary>
+    public static int UnlockedCount(SaveData progress) => progress.UnlockedAchievementIds.Distinct().Count(id => ById.ContainsKey(id));
 }

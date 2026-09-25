@@ -3,9 +3,9 @@ using Microsoft.Xna.Framework;
 namespace Kyrios.Game;
 
 /// <summary>
-/// Componentes visuais compartilhados por todas as telas — painel, botão, cabeçalho, dicas de tecla, etapas,
-/// barra de progresso, selo de dificuldade, cadeado... Toda tela usa os mesmos, então o jogo inteiro tem a
-/// mesma cara (mesmas bordas arredondadas, mesmas cores, mesmos tamanhos de texto).
+/// Componentes visuais compartilhados por todas as telas — painel, botão, cabeçalho, dicas de tecla, barra de
+/// progresso, cadeado, selo de "feito"... Toda tela usa os mesmos, então o jogo inteiro tem a mesma cara (mesmas
+/// bordas arredondadas, mesmas cores, mesmos tamanhos de texto).
 /// </summary>
 public sealed partial class GameRoot
 {
@@ -16,15 +16,11 @@ public sealed partial class GameRoot
 
     private static readonly Rectangle BackButtonRect = new(20, 14, 34, 34);
 
-    private float _arrowFlashLeft;
-    private float _arrowFlashRight;
     private float _denyShake;
     private float _equipFlash;
 
     private void UpdateUiAnimations(float dt)
     {
-        _arrowFlashLeft = MathF.Max(0f, _arrowFlashLeft - dt);
-        _arrowFlashRight = MathF.Max(0f, _arrowFlashRight - dt);
         _denyShake = MathF.Max(0f, _denyShake - dt);
         _equipFlash = MathF.Max(0f, _equipFlash - dt);
     }
@@ -181,19 +177,6 @@ public sealed partial class GameRoot
         _spriteBatch.Draw(_pixel, new Rectangle(x - Px(7), y - Px(13) - lift, Px(14), Px(3)), color);
         _spriteBatch.Draw(_pixel, new Rectangle(x - Px(9), y - Px(3), Px(18), Px(13)), color);
         _spriteBatch.Draw(_pixel, new Rectangle(x - Px(1), y + Px(1), Px(2), Px(5)), new Color(40, 30, 10));
-    }
-
-    /// <summary>Selo de estado: cadeado aberto + "DESBLOQUEADA", fechado + "BLOQUEADA", ou estrela de equipado.</summary>
-    private void DrawStatusChip(Vector2 center, bool unlocked, bool equipped, string noun)
-    {
-        string text = equipped ? $"{noun} EQUIPADA" : unlocked ? "DESBLOQUEADA" : "BLOQUEADA";
-        Color color = equipped ? AccentColor : unlocked ? RecordColor : new Color(170, 176, 192);
-        const float size = 1.6f;
-        float width = PixelFont.Measure(text, size) + 34f;
-        var rect = new Rectangle((int)(center.X - (width / 2f)), (int)center.Y - 10, (int)width, 20);
-        DrawRoundedRect(rect, color * 0.25f, 6f);
-        DrawLock(new Vector2(rect.X + 13f, rect.Y + 12f), 0.5f, color, open: unlocked);
-        PixelFont.Draw(_spriteBatch, _pixel, text, new Vector2(rect.X + 26f, rect.Y + 5f), size, color);
     }
 
     /// <summary>Bolinha verde com "check" — marca de conquista obtida / item equipado.</summary>

@@ -750,6 +750,8 @@ public static partial class TrackSceneries
         EdgeA = Retro2,
         EdgeB = Retro1,
         Checkpoint = Retro3,
+        FinishLight = Retro3,
+        FinishDark = Retro0,
         CarFilter = RetroFilter,
         PaintStatic = c =>
         {

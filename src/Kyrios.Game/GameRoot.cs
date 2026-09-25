@@ -613,7 +613,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
     {
         _scenery.DrawBase(theme, _race.Track, _visualTime);
         DrawCheckpoints(theme);
-        DrawHazards();
+        DrawHazards(theme);
         DrawParticles();
         DrawCars(theme);
         _scenery.DrawAmbient(theme, _visualTime);
@@ -676,16 +676,17 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         }
     }
 
-    private void DrawHazards()
+    private void DrawHazards(TrackTheme theme)
     {
+        Func<Color, Color> filter = theme.Scenery.CarFilter ?? (color => color);
         foreach (Hazard hazard in _race.Hazards)
         {
             var center = new Vector2(hazard.Position.X * CellSize, hazard.Position.Y * CellSize);
             float radius = hazard.Radius * CellSize;
 
             DrawCircle(center + new Vector2(2f, 3f), radius, ShadowColor);
-            DrawCircle(center, radius, HazardColor);
-            DrawCircle(center, radius * 0.5f, HazardCapColor);
+            DrawCircle(center, radius, filter(HazardColor));
+            DrawCircle(center, radius * 0.5f, filter(HazardCapColor));
         }
     }
 
@@ -700,9 +701,10 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
 
             if (!eliminated && car.IsBoosting)
             {
+                Func<Color, Color> filter = theme.Scenery.CarFilter ?? (color => color);
                 Vector2 flamePos = center + Rotate(new Vector2(-CellSize * 0.7f, 0f), car.Angle);
-                DrawCircle(flamePos, CellSize * 0.34f, new Color(255, 140, 30, 220));
-                DrawCircle(flamePos, CellSize * 0.2f, new Color(255, 230, 90, 230));
+                DrawCircle(flamePos, CellSize * 0.34f, filter(new Color(255, 140, 30, 220)));
+                DrawCircle(flamePos, CellSize * 0.2f, filter(new Color(255, 230, 90, 230)));
             }
 
             // Só o jogador usa a skin escolhida; os rivais usam o carro de corrida padrão, cada um na sua cor.

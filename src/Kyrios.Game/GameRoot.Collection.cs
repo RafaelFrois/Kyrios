@@ -108,19 +108,19 @@ public sealed partial class GameRoot
         int count = CollectionCount;
         if (_input.MenuLeft)
         {
-            MoveCollection((CollectionIndex - 1 + count) % count, left: true);
+            MoveCollection((CollectionIndex - 1 + count) % count);
         }
         else if (_input.MenuRight)
         {
-            MoveCollection((CollectionIndex + 1) % count, left: false);
+            MoveCollection((CollectionIndex + 1) % count);
         }
         else if (_input.MenuUp && CollectionIndex - columns >= 0)
         {
-            MoveCollection(CollectionIndex - columns, left: true);
+            MoveCollection(CollectionIndex - columns);
         }
         else if (_input.MenuDown && CollectionIndex < count - 1)
         {
-            MoveCollection(Math.Min(count - 1, CollectionIndex + columns), left: false);
+            MoveCollection(Math.Min(count - 1, CollectionIndex + columns));
         }
 
         if (MouseClicked)
@@ -153,18 +153,10 @@ public sealed partial class GameRoot
         }
     }
 
-    private void MoveCollection(int index, bool left)
+    private void MoveCollection(int index)
     {
         CollectionIndex = index;
         _audio.PlayMenuMove();
-        if (left)
-        {
-            _arrowFlashLeft = 0.15f;
-        }
-        else
-        {
-            _arrowFlashRight = 0.15f;
-        }
     }
 
     /// <summary>Equipa o item olhado (e salva). Bloqueado: balança, avisa e conta a tentativa (tem conquista pra
