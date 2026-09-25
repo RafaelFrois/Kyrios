@@ -80,6 +80,12 @@ public sealed partial class GameRoot
 
     private void UpdateCollection()
     {
+        if (MobileUi)
+        {
+            UpdateMobileCollection();
+            return;
+        }
+
         if (_input.Back || WasBackButtonClicked())
         {
             _audio.PlayMenuConfirm();
@@ -196,10 +202,17 @@ public sealed partial class GameRoot
         CheckUnlocks();
         _equipFlash = 0.6f;
         _audio.PlayMenuConfirm();
+        Haptic(Game.Haptic.Tap);
     }
 
     private void DrawCollection()
     {
+        if (MobileUi)
+        {
+            DrawMobileCollection();
+            return;
+        }
+
         DimScreen(CollectionIsTracks ? Color.Black * 0.5f : MenuBackgroundDim);
         (int earned, int earnable) = CollectionIsTracks
             ? Unlockables.Count(TrackThemes.All, _saveData.UnlockedTrackIds)
@@ -281,7 +294,8 @@ public sealed partial class GameRoot
     /// <summary>Selos do item: a categoria (skins) e o estado (bloqueada / desbloqueada / equipada).</summary>
     private void DrawCollectionChips(Vector2 center, int index, bool unlocked, bool equipped, bool hidden)
     {
-        const float size = 1.6f;
+        float size = MobileUi ? 2f : 1.6f;
+        int chipHeight = MobileUi ? 28 : 20;
         string status = equipped ? L.T("EQUIPADA", "EQUIPPED") : unlocked ? L.T("DESBLOQUEADA", "UNLOCKED") : L.T("BLOQUEADA", "LOCKED");
         Color statusColor = equipped ? AccentColor : unlocked ? RecordColor : MutedLabelColor;
         float statusWidth = PixelFont.Measure(status, size) + 34f;
@@ -302,51 +316,55 @@ public sealed partial class GameRoot
         float x = center.X - (total / 2f);
         if (category is not null)
         {
-            var chip = new Rectangle((int)x, (int)center.Y - 10, (int)categoryWidth, 20);
+            var chip = new Rectangle((int)x, (int)center.Y - (chipHeight / 2), (int)categoryWidth, chipHeight);
             DrawRoundedRect(chip, categoryColor * 0.25f, 6f);
-            PixelFont.Draw(_spriteBatch, _pixel, category, new Vector2(chip.X + 10f, chip.Y + 5f), size, categoryColor);
+            PixelFont.Draw(_spriteBatch, _pixel, category, new Vector2(chip.X + 10f, chip.Y + ((chipHeight - PixelFont.LineHeight(size)) / 2f)), size, categoryColor);
             x += categoryWidth + gap;
         }
 
-        var statusChip = new Rectangle((int)x, (int)center.Y - 10, (int)statusWidth, 20);
+        var statusChip = new Rectangle((int)x, (int)center.Y - (chipHeight / 2), (int)statusWidth, chipHeight);
         DrawRoundedRect(statusChip, statusColor * 0.25f, 6f);
-        DrawLock(new Vector2(statusChip.X + 13f, statusChip.Y + 12f), 0.5f, statusColor, open: unlocked);
-        PixelFont.Draw(_spriteBatch, _pixel, status, new Vector2(statusChip.X + 26f, statusChip.Y + 5f), size, statusColor);
+        DrawLock(new Vector2(statusChip.X + 13f, statusChip.Center.Y + 2f), MobileUi ? 0.65f : 0.5f, statusColor, open: unlocked);
+        PixelFont.Draw(_spriteBatch, _pixel, status, new Vector2(statusChip.X + 26f, statusChip.Y + ((chipHeight - PixelFont.LineHeight(size)) / 2f)), size, statusColor);
     }
 
     /// <summary>O que falta pra liberar. Requisito simples: a frase, a barra e "x/y - faltam N". Combinação: uma
     /// linha por parte, cada uma com o seu "check" ou o seu progresso — dá pra ver exatamente o que já foi feito.</summary>
     private void DrawRequirementChecklist(Rectangle area, UnlockRequirement requirement)
     {
+        // No celular tudo um pouco maior (mesma lógica).
+        float k = MobileUi ? 1.25f : 1f;
         if (requirement is not AllOfRequirement { Parts.Count: > 1 } combination)
         {
             string text = $"\"{requirement.Description}\"";
-            List<string> lines = WrapText(text, area.Width, 1.7f, maxLines: 2);
+            float textSize = 1.7f * k;
+            List<string> lines = WrapText(text, area.Width, textSize, maxLines: MobileUi ? 3 : 2);
             float y = area.Y + 4f;
             foreach (string line in lines)
             {
-                DrawCenteredText(area, line, y, 1.7f, AccentColor);
-                y += PixelFont.LineHeight(1.7f) + 4f;
+                DrawCenteredText(area, line, y, textSize, AccentColor);
+                y += PixelFont.LineHeight(textSize) + 4f;
             }
 
             if (requirement.ProgressFraction(_saveData) is { } fraction)
             {
-                DrawProgressBar(new Rectangle(area.Center.X - 150, (int)y + 6, 300, 8), fraction, AccentColor, 4f);
-                y += 20f;
+                int barWidth = MobileUi ? (int)(area.Width * 0.8f) : 300;
+                DrawProgressBar(new Rectangle(area.Center.X - (barWidth / 2), (int)y + 6, barWidth, (int)(8 * k)), fraction, AccentColor, 4f);
+                y += 20f * k;
             }
 
             if (ProgressLabel(requirement) is { } progress)
             {
-                DrawCenteredText(area, progress, y + 2f, 1.4f, StatBadgeLabelColor);
+                DrawCenteredText(area, progress, y + 2f, 1.4f * k, StatBadgeLabelColor);
             }
 
             return;
         }
 
         int done = combination.Parts.Count(part => part.IsMet(_saveData));
-        DrawCenteredText(area, L.T($"COMPLETE TUDO ({done}/{combination.Parts.Count}):", $"COMPLETE ALL ({done}/{combination.Parts.Count}):"), area.Y, 1.5f, AccentColor);
-        float rowY = area.Y + 18f;
-        float rowHeight = MathF.Min(20f, (area.Height - 18f) / combination.Parts.Count);
+        DrawCenteredText(area, L.T($"COMPLETE TUDO ({done}/{combination.Parts.Count}):", $"COMPLETE ALL ({done}/{combination.Parts.Count}):"), area.Y, 1.5f * k, AccentColor);
+        float rowY = area.Y + (18f * k);
+        float rowHeight = MathF.Min(20f * k, (area.Height - (18f * k)) / combination.Parts.Count);
         foreach (UnlockRequirement part in combination.Parts)
         {
             bool met = part.IsMet(_saveData);
@@ -362,13 +380,13 @@ public sealed partial class GameRoot
             }
 
             string progress = met ? null : part.ProgressText(_saveData);
-            float progressWidth = progress is null ? 0f : PixelFont.Measure(progress, 1.4f) + 10f;
+            float progressWidth = progress is null ? 0f : PixelFont.Measure(progress, 1.4f * k) + 10f;
             float textWidth = row.Width - 22f - progressWidth;
             string description = part.Description;
-            PixelFont.Draw(_spriteBatch, _pixel, description, new Vector2(row.X + 20f, row.Y + 3f), FitTextSize(description, textWidth, 1.45f), met ? RecordColor : TextColor);
+            PixelFont.Draw(_spriteBatch, _pixel, description, new Vector2(row.X + 20f, row.Y + 3f), FitTextSize(description, textWidth, 1.45f * k), met ? RecordColor : TextColor);
             if (progress is not null)
             {
-                PixelFont.Draw(_spriteBatch, _pixel, progress, new Vector2(row.Right - progressWidth + 10f, row.Y + 3f), 1.4f, StatBadgeLabelColor);
+                PixelFont.Draw(_spriteBatch, _pixel, progress, new Vector2(row.Right - progressWidth + 10f, row.Y + 3f), 1.4f * k, StatBadgeLabelColor);
             }
 
             rowY += rowHeight;
@@ -403,45 +421,50 @@ public sealed partial class GameRoot
 
         for (int i = 0; i < CollectionCount; i++)
         {
-            Rectangle rect = CollectionTileRect(i);
-            bool unlocked = CollectionUnlocked(i);
-            bool current = i == CollectionIndex;
-            bool hidden = CollectionHidden(i);
-            float pulse = current ? (MathF.Sin(_visualTime * 6f) + 1f) / 2f : 0f;
-            Color border = current ? Color.Lerp(AccentColor, Color.White, pulse * 0.4f) : i == _collectionHover ? StatBadgeLabelColor : PanelBorderColor;
-            DrawRoundedRect(InflateRect(rect, current ? 3f : 2f, current ? 3f : 2f), border, 6f);
-            DrawRoundedRect(rect, unlocked ? UnlockedTileFill : LockedTileFill, 5f);
-
-            if (hidden)
-            {
-                const float size = 2.4f;
-                PixelFont.Draw(_spriteBatch, _pixel, "?", rect.Center.ToVector2() - new Vector2(PixelFont.Measure("?", size) / 2f, PixelFont.LineHeight(size) / 2f), size, new Color(90, 96, 116));
-            }
-            else if (CollectionIsTracks)
-            {
-                var inner = new Rectangle(rect.X + 8, rect.Y + 8, rect.Width - 16, rect.Height - 16);
-                _iconRenderer.Draw(AchievementIcons.Art(TrackThemes.All[i].Icon), inner, colored: unlocked, _visualTime);
-            }
-            else
-            {
-                CarSkin skin = CarSkins.All[i];
-                _carPainter.Begin(rect.Center.ToVector2(), -0.5f + (current ? MathF.Sin(_visualTime * 2f) * 0.2f : 0f), rect.Width * 0.36f, AccentColor, eliminated: false, _visualTime, silhouette: !unlocked);
-                skin.Paint(_carPainter);
-                _spriteBatch.Draw(_pixel, new Rectangle(rect.X + 4, rect.Bottom - 4, rect.Width - 8, 2), SkinCategories.Color(skin.Category) * (unlocked ? 0.8f : 0.3f));
-            }
-
-            if (!unlocked)
-            {
-                DrawLock(new Vector2(rect.Right - 7f, rect.Bottom - 7f), 0.4f, MutedLabelColor);
-            }
-
-            if (CollectionEquipped(i))
-            {
-                DrawCheckBadge(new Vector2(rect.Right - 3f, rect.Y + 3f));
-            }
+            DrawCollectionTile(i, CollectionTileRect(i), i == CollectionIndex, i == _collectionHover);
         }
 
         DrawCollectionLegend(new Rectangle(area.X, area.Bottom - 22, area.Width, 18));
+    }
+
+    /// <summary>Um quadrado da coleção: liberado colorido, bloqueado em vulto com cadeado, secreto com "?", o equipado
+    /// com a bolinha verde e o olhado com a borda de destaque.</summary>
+    private void DrawCollectionTile(int i, Rectangle rect, bool current, bool hovered)
+    {
+        bool unlocked = CollectionUnlocked(i);
+        bool hidden = CollectionHidden(i);
+        float pulse = current ? (MathF.Sin(_visualTime * 6f) + 1f) / 2f : 0f;
+        Color border = current ? Color.Lerp(AccentColor, Color.White, pulse * 0.4f) : hovered ? StatBadgeLabelColor : PanelBorderColor;
+        DrawRoundedRect(InflateRect(rect, current ? 3f : 2f, current ? 3f : 2f), border, 6f);
+        DrawRoundedRect(rect, unlocked ? UnlockedTileFill : LockedTileFill, 5f);
+
+        if (hidden)
+        {
+            const float size = 2.4f;
+            PixelFont.Draw(_spriteBatch, _pixel, "?", rect.Center.ToVector2() - new Vector2(PixelFont.Measure("?", size) / 2f, PixelFont.LineHeight(size) / 2f), size, new Color(90, 96, 116));
+        }
+        else if (CollectionIsTracks)
+        {
+            var inner = new Rectangle(rect.X + 8, rect.Y + 8, rect.Width - 16, rect.Height - 16);
+            _iconRenderer.Draw(AchievementIcons.Art(TrackThemes.All[i].Icon), inner, colored: unlocked, _visualTime);
+        }
+        else
+        {
+            CarSkin skin = CarSkins.All[i];
+            _carPainter.Begin(rect.Center.ToVector2(), -0.5f + (current ? MathF.Sin(_visualTime * 2f) * 0.2f : 0f), rect.Width * 0.36f, AccentColor, eliminated: false, _visualTime, silhouette: !unlocked);
+            skin.Paint(_carPainter);
+            _spriteBatch.Draw(_pixel, new Rectangle(rect.X + 4, rect.Bottom - 4, rect.Width - 8, 2), SkinCategories.Color(skin.Category) * (unlocked ? 0.8f : 0.3f));
+        }
+
+        if (!unlocked)
+        {
+            DrawLock(new Vector2(rect.Right - 7f, rect.Bottom - 7f), 0.4f, MutedLabelColor);
+        }
+
+        if (CollectionEquipped(i))
+        {
+            DrawCheckBadge(new Vector2(rect.Right - 3f, rect.Y + 3f));
+        }
     }
 
     /// <summary>Rodapé da grade: quanto já tem de cada categoria (skins) ou de cada tipo de desbloqueio (pistas).</summary>

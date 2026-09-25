@@ -25,6 +25,9 @@ public sealed class GameInput
     private bool _systemBack;
     private bool _touchDown;
     private bool _previousTouchDown;
+    private bool _touchStartedThisFrame;
+    private bool _primaryTouchChanged;
+    private int? _primaryTouchId;
     private Point _touchPosition;
     private int _framesSinceTouch = int.MaxValue;
     private Point _pointerPosition;
@@ -33,6 +36,10 @@ public sealed class GameInput
     /// <summary>Quantos pixels da área de desenho valem um pixel informado pelo mouse/toque. No navegador o mouse
     /// vem em pixels da página e a área de desenho usa a densidade real da tela (2x, 3x no celular).</summary>
     public float PointerScale { get; set; } = 1f;
+
+    /// <summary>Mexer um mouse de verdade tira do modo toque (desktop/web). No celular só teclado ou controle tiram —
+    /// o sistema pode mandar movimentos de "mouse" sem ninguém ter mouse.</summary>
+    public bool MouseEndsTouchMode { get; set; } = true;
 
     /// <summary>O jogador está usando a tela de toque (mostra os botões da corrida e esconde as dicas de teclado).
     /// Volta a falso quando ele usa o teclado ou mexe um mouse de verdade.</summary>
@@ -68,12 +75,12 @@ public sealed class GameInput
 
         // Modo toque: liga com qualquer dedo na tela; desliga com o teclado ou com um mouse de verdade (alguns
         // navegadores ainda mandam um "mouse" sintético logo depois do toque, então ele só conta um tempo depois).
-        bool realMouseMoved = _currentMouse.Position != _previousMouse.Position && _framesSinceTouch > 30;
+        bool realMouseMoved = MouseEndsTouchMode && _currentMouse.Position != _previousMouse.Position && _framesSinceTouch > 30;
         if (_touchDown)
         {
             UsingTouch = true;
         }
-        else if (_current.GetPressedKeyCount() > 0 || realMouseMoved)
+        else if (_current.GetPressedKeyCount() > 0 || realMouseMoved || PadActive)
         {
             UsingTouch = false;
         }
@@ -110,17 +117,57 @@ public sealed class GameInput
             }
         }
 
-        _touchDown = _touches.Count > 0;
+        // O dedo "principal" (o que funciona como mouse nos menus) é o que encostou por último: tocar num botão com
+        // outro dedo já apoiado na tela (ex.: segurando o acelerador) também vale.
+        _touchDown = _touchPoints.Count > 0;
+        _touchStartedThisFrame = false;
+        _primaryTouchChanged = false;
+        foreach (TouchPoint touch in _touchPoints)
+        {
+            if (touch.JustPressed)
+            {
+                _primaryTouchId = touch.Id;
+                _touchStartedThisFrame = true;
+            }
+        }
+
         if (_touchDown)
         {
-            _touchPosition = _touches[0].ToPoint();
+            TouchPoint primary = _touchPoints[0];
+            bool found = false;
+            foreach (TouchPoint touch in _touchPoints)
+            {
+                if (touch.Id == _primaryTouchId)
+                {
+                    primary = touch;
+                    found = true;
+                }
+            }
+
+            _primaryTouchId = primary.Id;
+            if (!found)
+            {
+                // O dedo principal saiu e outro continua na tela: o ponteiro pula pra ele sem contar como arrasto.
+                _touchStartedThisFrame |= !_previousTouchDown;
+                _primaryTouchChanged = true;
+            }
+
+            _touchPosition = primary.Position.ToPoint();
             _framesSinceTouch = 0;
         }
-        else if (_framesSinceTouch < int.MaxValue)
+        else
         {
-            _framesSinceTouch++;
+            _primaryTouchId = null;
+            if (_framesSinceTouch < int.MaxValue)
+            {
+                _framesSinceTouch++;
+            }
         }
     }
+
+    /// <summary>O controle (gamepad) está sendo usado: botão novo apertado ou analógico/gatilho mexido.</summary>
+    private bool PadActive =>
+        _pad.IsConnected && (_pad.Buttons != _previousPad.Buttons || _pad.ThumbSticks.Left.LengthSquared() > 0.1f || _pad.Triggers.Right > 0.2f || _pad.Triggers.Left > 0.2f);
 
     private Point Scale(Point point) => PointerScale == 1f ? point : new Point((int)(point.X * PointerScale), (int)(point.Y * PointerScale));
 
@@ -132,13 +179,20 @@ public sealed class GameInput
 
     public bool IsMouseLeftDown => _currentMouse.LeftButton == ButtonState.Pressed || _touchDown;
 
+    /// <summary>O botão/dedo principal acabou de soltar neste quadro.</summary>
+    public bool WasMouseLeftJustReleased =>
+        !IsMouseLeftDown && (_previousMouse.LeftButton == ButtonState.Pressed || _previousTouchDown);
+
+    /// <summary>Quanto o ponteiro foi arrastado na horizontal neste quadro (pixels da área de desenho).</summary>
+    public float DragDeltaX => IsMouseLeftDown && !WasMouseLeftJustPressed && !_primaryTouchChanged ? _pointerPosition.X - _previousPointerPosition.X : 0f;
+
     public bool WasMouseLeftJustPressed =>
         (_currentMouse.LeftButton == ButtonState.Pressed && _previousMouse.LeftButton == ButtonState.Released)
-        || (_touchDown && !_previousTouchDown);
+        || _touchStartedThisFrame;
 
     /// <summary>Quanto o ponteiro foi arrastado na vertical neste quadro com o botão/dedo pressionado (pixels da área
     /// de desenho) — rolar listas com o dedo.</summary>
-    public float DragDeltaY => IsMouseLeftDown && !WasMouseLeftJustPressed ? _pointerPosition.Y - _previousPointerPosition.Y : 0f;
+    public float DragDeltaY => IsMouseLeftDown && !WasMouseLeftJustPressed && !_primaryTouchChanged ? _pointerPosition.Y - _previousPointerPosition.Y : 0f;
 
     /// <summary>Quantos "dentes" a roda do mouse girou desde o quadro anterior (positivo = pra cima).</summary>
     public int ScrollWheelSteps => (_currentMouse.ScrollWheelValue - _previousMouse.ScrollWheelValue) / 120;

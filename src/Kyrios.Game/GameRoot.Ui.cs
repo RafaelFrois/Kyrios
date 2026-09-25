@@ -14,7 +14,18 @@ public sealed partial class GameRoot
     private const float BodySize = 1.8f;
     private const float SmallSize = 1.5f;
 
-    private static readonly Rectangle BackButtonRect = new(20, 14, 34, 34);
+    /// <summary>Celular/tablet: as telas usam alvos de toque de 44 dp ou mais e texto maior (1 pixel lógico ≈ 0,73 dp
+    /// num celular deitado). Desktop e web continuam com os tamanhos de sempre.</summary>
+    private static bool MobileUi => GamePlatform.Current.IsMobile;
+
+    /// <summary>Texto de leitura, texto secundário e título de tela — maiores no celular.</summary>
+    private static float TextBody => MobileUi ? 2.4f : BodySize;
+
+    private static float TextSmall => MobileUi ? 2f : SmallSize;
+
+    private static float TextTitle => MobileUi ? 4f : TitleSize;
+
+    private static Rectangle BackButtonRect => MobileUi ? new Rectangle(12, 4, 76, 58) : new Rectangle(20, 14, 34, 34);
 
     private float _denyShake;
     private float _equipFlash;
@@ -45,14 +56,17 @@ public sealed partial class GameRoot
     private void DrawScreenHeader(string title, string subtitle)
     {
         DrawArrowButton(BackButtonRect, pointRight: false, BackButtonRect.Contains(LogicalMousePoint()), flashing: false);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, title, new Vector2(66f, 15f), TitleSize, AccentColor);
+        float x = BackButtonRect.Right + 12f;
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, title, new Vector2(x, MobileUi ? 8f : 15f), TextTitle, AccentColor);
         if (subtitle is not null)
         {
-            PixelFont.Draw(_spriteBatch, _pixel, subtitle, new Vector2(68f, 44f), SmallSize, StatBadgeLabelColor);
+            PixelFont.Draw(_spriteBatch, _pixel, subtitle, new Vector2(x + 2f, MobileUi ? 44f : 44f), TextSmall, StatBadgeLabelColor);
         }
     }
 
-    private bool WasBackButtonClicked() => _input.WasMouseLeftJustPressed && BackButtonRect.Contains(LogicalMousePoint());
+    /// <summary>Toque na seta de voltar (no celular a área de toque passa um pouco do desenho).</summary>
+    private bool WasBackButtonClicked() =>
+        _input.WasMouseLeftJustPressed && InflateRect(BackButtonRect, MobileUi ? 10f : 0f, MobileUi ? 10f : 0f).Contains(LogicalMousePoint());
 
     /// <summary>Botão padrão. Principal = preenchido na cor de destaque (a ação mais importante da tela);
     /// focado = borda de destaque pulsando + marcador; desativado = apagado.</summary>

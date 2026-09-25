@@ -240,9 +240,25 @@ public sealed class SaveData
     /// <summary>Idioma do jogo: "pt" (padrão) ou "en".</summary>
     public string Language { get; set; } = "pt";
 
+    // ----- Celular / tablet (versão 2) -----
+    /// <summary>Esquema de controle de toque: "buttons" (padrão), "joystick" ou "tilt".</summary>
+    public string ControlScheme { get; set; } = "buttons";
+
+    /// <summary>Tamanho dos botões de toque: "small", "medium" (padrão) ou "large".</summary>
+    public string ControlSize { get; set; } = "medium";
+
+    /// <summary>Acelera sozinho (só é preciso virar e frear) — opção de acessibilidade.</summary>
+    public bool AutoAccelerate { get; set; }
+
+    /// <summary>Vibração ligada (padrão) ou desligada.</summary>
+    public bool Vibration { get; set; } = true;
+
+    /// <summary>Qualidade gráfica: "auto" (padrão: decide pelo aparelho e pelo desempenho), "low", "medium" ou "high".</summary>
+    public string GraphicsQuality { get; set; } = "auto";
+
     /// <summary>Versão atual do formato do save. Subir quando um campo mudar de significado e escrever a migração
     /// em <see cref="Migrate"/> (campos novos não precisam: ganham o valor padrão sozinhos).</summary>
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     /// <summary>Versão do formato em que este save foi escrito (0 = saves anteriores ao controle de versão).</summary>
     public int SaveVersion { get; set; } = CurrentVersion;
@@ -316,6 +332,9 @@ public sealed class SaveData
     public void FillStatsMissingFromOldSaves()
     {
         Language = L.Code(L.FromCode(Language));
+        ControlScheme = MobileSettings.Code(MobileSettings.Scheme(ControlScheme));
+        ControlSize = MobileSettings.Code(MobileSettings.Size(ControlSize));
+        GraphicsQuality = MobileSettings.Code(MobileSettings.Quality(GraphicsQuality));
         WinsBySkin ??= [];
         RecordsBySkin ??= [];
         BestScoreBySkin ??= [];
@@ -353,7 +372,10 @@ public sealed class SaveData
         }
     }
 
-    /// <summary>Atualiza saves de formatos antigos. Versão 0 → 1: só passou a existir o campo de versão.</summary>
+    /// <summary>Atualiza saves de formatos antigos. Versão 0 → 1: só passou a existir o campo de versão.
+    /// 1 → 2: preferências do celular (controles, vibração, qualidade) — começam no padrão, o progresso fica igual.
+    /// Um save de uma versão MAIS NOVA (ex.: voltou pra um APK antigo) abre com o que esta versão conhece e mantém
+    /// o número, pra não fingir que é antigo.</summary>
     private void Migrate()
     {
         if (SaveVersion < CurrentVersion)

@@ -51,9 +51,11 @@ public sealed partial class GameRoot
 
     private Rectangle AchievementTabRect(int i)
     {
-        const float gap = 6f;
+        float gap = MobileUi ? 8f : 6f;
         float width = (AreaWidth - 40f - ((AchievementTabCount - 1) * gap)) / AchievementTabCount;
-        return new Rectangle((int)(20f + (i * (width + gap))), 60, (int)width, 34);
+        return MobileUi
+            ? new Rectangle((int)(20f + (i * (width + gap))), 66, (int)width, 52)
+            : new Rectangle((int)(20f + (i * (width + gap))), 60, (int)width, 34);
     }
 
     private Rectangle AchievementListRect =>
@@ -63,6 +65,12 @@ public sealed partial class GameRoot
 
     private void UpdateAchievementsPage()
     {
+        if (MobileUi)
+        {
+            UpdateMobileAchievementsPage();
+            return;
+        }
+
         if (_input.Back || _input.WasJustPressed(Keys.C) || WasBackButtonClicked())
         {
             _audio.PlayMenuConfirm();
@@ -153,6 +161,12 @@ public sealed partial class GameRoot
             _unlockedAchievementSet = [.. _saveData.UnlockedAchievementIds];
         }
 
+        if (MobileUi)
+        {
+            DrawMobileAchievementsPage();
+            return;
+        }
+
         DimScreen(MenuBackgroundDim);
 
         int unlockedCount = Achievements.UnlockedCount(_saveData);
@@ -223,8 +237,10 @@ public sealed partial class GameRoot
             DrawRoundedRect(new Rectangle(rect.X + 2, rect.Y + 2, rect.Width - 4, rect.Height - 4), PanelFillColor, 6f);
         }
 
-        DrawCenteredText(rect, label, rect.Y + 6f, 1.6f, selected ? MenuBackground : color);
-        DrawCenteredText(rect, count, rect.Y + 21f, 1.3f, selected ? MenuBackground * 0.75f : StatBadgeLabelColor);
+        float labelSize = FitTextSize(label, rect.Width - 12f, MobileUi ? 2.2f : 1.6f);
+        float countSize = MobileUi ? 1.8f : 1.3f;
+        DrawCenteredText(rect, label, rect.Y + (MobileUi ? 9f : 6f), labelSize, selected ? MenuBackground : color);
+        DrawCenteredText(rect, count, rect.Y + (MobileUi ? 30f : 21f), countSize, selected ? MenuBackground * 0.75f : StatBadgeLabelColor);
     }
 
     /// <summary>Cartão de uma conquista. Desbloqueada: ícone colorido, borda na cor da categoria e um "check".
@@ -239,7 +255,8 @@ public sealed partial class GameRoot
         DrawRoundedRect(rect, unlocked ? categoryColor : LockedCardBorder, 8f);
         DrawRoundedRect(new Rectangle(rect.X + 2, rect.Y + 2, rect.Width - 4, rect.Height - 4), unlocked ? Color.Lerp(PanelFillColor, categoryColor, 0.12f) : LockedCardFill, 7f);
 
-        var tile = new Rectangle(rect.X + 7, rect.Y + 6, 48, 48);
+        int tileSize = MobileUi ? 72 : 48;
+        var tile = new Rectangle(rect.X + 8, rect.Y + ((rect.Height - tileSize) / 2), tileSize, tileSize);
         AchievementIcon icon = hiddenSecret ? AchievementIcons.Secret : unlocked ? achievement.Icon : achievement.LockedIcon ?? achievement.Icon;
         DrawIconTile(tile, icon, categoryColor, colored: unlocked);
         if (unlocked)
@@ -251,26 +268,26 @@ public sealed partial class GameRoot
             DrawLock(new Vector2(tile.Right - 4f, tile.Y + 7f), 0.45f, hiddenSecret ? AccentColor : LockedTextColor);
         }
 
-        float textX = rect.X + 64f;
+        float textX = tile.Right + (MobileUi ? 14f : 9f);
         float textRight = rect.Right - 10f;
 
         string name = hiddenSecret ? L.T("CONQUISTA SECRETA", "SECRET ACHIEVEMENT") : achievement.Name;
-        float nameSize = FitTextSize(name, textRight - textX, 1.9f);
+        float nameSize = FitTextSize(name, textRight - textX, MobileUi ? 2.5f : 1.9f);
         Color nameColor = unlocked ? TextColor : hiddenSecret ? AccentColor * 0.85f : LockedTextColor;
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, name, new Vector2(textX, rect.Y + 8f), nameSize, nameColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, name, new Vector2(textX, rect.Y + (MobileUi ? 12f : 8f)), nameSize, nameColor);
 
         string description = hiddenSecret ? "???" : achievement.Description;
-        const float descriptionSize = 1.4f;
-        float y = rect.Y + 26f;
+        float descriptionSize = MobileUi ? 1.9f : 1.4f;
+        float y = rect.Y + (MobileUi ? 38f : 26f);
         foreach (string line in WrapText(description, textRight - textX, descriptionSize, maxLines: 2))
         {
             PixelFont.Draw(_spriteBatch, _pixel, line, new Vector2(textX, y), descriptionSize, unlocked ? MutedTextColor : LockedTextColor);
-            y += PixelFont.LineHeight(descriptionSize) + 3f;
+            y += PixelFont.LineHeight(descriptionSize) + (MobileUi ? 6f : 3f);
         }
 
         if (!unlocked && !hiddenSecret && achievement.Condition.ProgressFraction(_saveData) is { } progress && progress > 0f)
         {
-            DrawProgressBar(new Rectangle((int)textX, rect.Bottom - 7, (int)(textRight - textX), 3), progress, categoryColor * 0.8f, 1f);
+            DrawProgressBar(new Rectangle((int)textX, rect.Bottom - (MobileUi ? 11 : 7), (int)(textRight - textX), MobileUi ? 5 : 3), progress, categoryColor * 0.8f, 1f);
         }
     }
 
@@ -313,9 +330,12 @@ public sealed partial class GameRoot
         if (_activeUnlockToast is null && _pendingUnlockToasts.Count > 0 && _state != State.Splash)
         {
             _activeUnlockToast = _pendingUnlockToasts.Dequeue();
-            _unlockToastDuration = _pendingUnlockToasts.Count >= 2 ? QuickToastDuration : ToastDuration;
+            // No celular o aviso é mais curto: aparece, dá o recado e sai da frente.
+            float speed = MobileUi ? 0.78f : 1f;
+            _unlockToastDuration = (_pendingUnlockToasts.Count >= 2 ? QuickToastDuration : ToastDuration) * speed;
             _unlockToastTimer = _unlockToastDuration;
             _audio?.PlayUnlock(isSkin: _activeUnlockToast.Notice?.Achievement is null);
+            Haptic(_activeUnlockToast.Notice?.Achievement is null ? Game.Haptic.Unlock : Game.Haptic.Achievement);
         }
 
         if (_activeUnlockToast is null)
@@ -340,8 +360,11 @@ public sealed partial class GameRoot
             return;
         }
 
-        const float width = 540f;
-        const float height = 92f;
+        float width = MobileUi ? 640f : 540f;
+        float height = MobileUi ? 100f : 92f;
+        float titleSize = MobileUi ? 2.2f : 1.9f;
+        float nameSize = MobileUi ? 2.8f : 2.4f;
+        float detailSize = MobileUi ? 2f : 1.6f;
         float elapsed = _unlockToastDuration - _unlockToastTimer;
         float slide = MathF.Min(1f, MathF.Min(elapsed, _unlockToastTimer) / ToastSlideSeconds);
         float eased = 1f - ((1f - slide) * (1f - slide));
@@ -413,9 +436,9 @@ public sealed partial class GameRoot
                 break;
         }
 
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, title, new Vector2(textX, rect.Y + 16f), 1.9f, accent);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, name, new Vector2(textX, rect.Y + 38f), FitTextSize(name, textWidth, 2.4f), TextColor);
-        PixelFont.Draw(_spriteBatch, _pixel, detail, new Vector2(textX, rect.Y + 64f), FitTextSize(detail, textWidth, 1.6f), detailColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, title, new Vector2(textX, rect.Y + 16f), FitTextSize(title, textWidth, titleSize), accent);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, name, new Vector2(textX, rect.Y + (MobileUi ? 40f : 38f)), FitTextSize(name, textWidth, nameSize), TextColor);
+        PixelFont.Draw(_spriteBatch, _pixel, detail, new Vector2(textX, rect.Y + (MobileUi ? 70f : 64f)), FitTextSize(detail, textWidth, detailSize), detailColor);
     }
 
     /// <summary>Estrelinhas de 4 pontas girando em volta do item recém-liberado, piscando defasadas.</summary>

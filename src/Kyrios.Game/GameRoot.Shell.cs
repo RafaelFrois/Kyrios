@@ -249,9 +249,10 @@ public sealed partial class GameRoot
         }
     }
 
-    /// <summary>Celular/tablet em pé: o jogo é deitado (2,25:1), então pede pra girar em vez de mostrar tudo minúsculo.</summary>
+    /// <summary>Celular/tablet em pé (no app: tela dividida, janela solta): o jogo é deitado (2,25:1), então pede pra
+    /// girar em vez de mostrar tudo minúsculo.</summary>
     private bool IsPortraitTouchScreen =>
-        GamePlatform.Current.IsWeb && _input.UsingTouch
+        (GamePlatform.Current.IsMobile || (GamePlatform.Current.IsWeb && _input.UsingTouch))
         && GraphicsDevice.PresentationParameters.BackBufferHeight > GraphicsDevice.PresentationParameters.BackBufferWidth;
 
     private void DrawPortraitOverlay()
@@ -275,7 +276,7 @@ public sealed partial class GameRoot
         DrawFilledRectRotated(center, 50f * unit, 92f * unit, angle, MenuBackground);
 
         float titleSize = 4f * unit;
-        string title = L.T("GIRE O APARELHO", "ROTATE YOUR DEVICE");
+        string title = L.T("GIRE O DISPOSITIVO", "ROTATE YOUR DEVICE");
         titleSize = MathF.Min(titleSize, (width * 0.9f) / MathF.Max(1f, PixelFont.Measure(title, 1f)));
         PixelFont.DrawShadowed(_spriteBatch, _pixel, title, new Vector2((width - PixelFont.Measure(title, titleSize)) / 2f, height * 0.62f), titleSize, AccentColor);
         string line = L.T("O MEGRACE E JOGADO NA HORIZONTAL", "MEGRACE IS PLAYED IN LANDSCAPE");
@@ -289,7 +290,7 @@ public sealed partial class GameRoot
     private void UpdateSplash()
     {
         bool skip = _stateTime > 0.35f && (_input.Confirm || _input.Back || MouseClicked || _input.JustPressedKeys.Any());
-        if (_stateTime >= SplashSeconds || skip)
+        if ((_stateTime >= SplashSeconds || skip) && !StillLoading)
         {
             _state = State.MainMenu;
         }
@@ -299,7 +300,7 @@ public sealed partial class GameRoot
     private void DrawSplash()
     {
         float t = _stateTime;
-        float alpha = Math.Clamp(MathF.Min(t / 0.35f, (SplashSeconds - t) / 0.4f), 0f, 1f);
+        float alpha = Math.Clamp(MathF.Min(t / 0.35f, StillLoading ? 1f : (SplashSeconds - t) / 0.4f), 0f, 1f);
         DimScreen(MenuBackground);
 
         float drop = MathF.Max(0f, 1f - (t / 0.45f));
@@ -317,7 +318,17 @@ public sealed partial class GameRoot
         }
 
         float credit = Math.Clamp((t - 1.1f) / 0.4f, 0f, 1f) * alpha;
-        DrawCenteredText(new Rectangle(0, 0, (int)AreaWidth, 0), L.T("UM JOGO DOMUS ARCIS", "A DOMUS ARCIS GAME"), 378f, 1.6f, StatBadgeLabelColor * credit);
+        DrawCenteredText(new Rectangle(0, 0, (int)AreaWidth, 0), L.T("UM JOGO DOMUS ARCIS", "A DOMUS ARCIS GAME"), 378f, MobileUi ? 2f : 1.6f, StatBadgeLabelColor * credit);
+
+        // Celular: a abertura também é a tela de carregamento (a barra só aparece enquanto falta alguma coisa).
+        if (GamePlatform.Current.ShowsLoadingScreen && (StillLoading || _stateTime < SplashSeconds))
+        {
+            float barAlpha = StillLoading ? 1f : Math.Clamp((SplashSeconds - t) / 0.4f, 0f, 1f);
+            var bar = new Rectangle((int)(AreaWidth / 2f) - 180, 430, 360, 12);
+            DrawProgressBar(bar, LoadingProgress, AccentColor * barAlpha, 6f);
+            string label = L.T($"CARREGANDO {(int)(LoadingProgress * 100f)}%", $"LOADING {(int)(LoadingProgress * 100f)}%");
+            DrawCenteredText(new Rectangle(0, 0, (int)AreaWidth, 0), label, 450f, 1.8f, StatBadgeLabelColor * barAlpha);
+        }
     }
 
     // ---------- Segredos do menu principal ----------

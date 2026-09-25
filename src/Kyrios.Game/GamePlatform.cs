@@ -81,8 +81,9 @@ public class GamePlatform
     /// barras do sistema), em pixels da área de desenho. A cena inteira fica dentro do que sobra.</summary>
     public virtual SafeInsets SafeInsets => SafeInsets.None;
 
-    /// <summary>Pixels da área de desenho por dp (densidade da tela) — pra medir botões em tamanho físico.</summary>
-    public virtual float PixelsPerDp => 1f;
+    /// <summary>Pixels da área de desenho por dp (densidade da tela) — pra medir botões em tamanho físico. No navegador
+    /// é a mesma escala do ponteiro (pixel da página ≈ dp).</summary>
+    public virtual float PixelsPerDp => PointerScale;
 
     /// <summary>Lê os dedos na tela (em pixels informados pela plataforma, antes do <see cref="PointerScale"/>).
     /// O padrão é o painel de toque do framework; o simulador de celular injeta toques daqui.</summary>

@@ -98,7 +98,7 @@ public sealed partial class GameRoot
 
     /// <summary>3, 2, 1 com um bip em cada número e o "VAI!" no fim. O motor já ronca (e responde ao acelerador)
     /// enquanto isso, mas nenhum carro sai do lugar.</summary>
-    private void UpdateCountdown(float dt)
+    private void UpdateCountdown(float dt, CarInput input)
     {
         _countdown -= dt;
         if (_countdown <= 0f)
@@ -116,7 +116,7 @@ public sealed partial class GameRoot
             _audio.PlayStartBeep(go: false);
         }
 
-        float rev = Math.Max(0f, _input.BuildCarInput().Throttle);
+        float rev = Math.Max(0f, input.Throttle);
         _audio.UpdateEngine(rev * _player.Car.Settings.MaxForwardSpeed * 0.6f, _player.Car.Settings.MaxForwardSpeed, false);
         UpdateRaceFeedback(dt);
     }
@@ -135,7 +135,7 @@ public sealed partial class GameRoot
             string text = shown.ToString();
             float size = 8f * pop;
             PixelFont.DrawShadowed(_spriteBatch, _pixel, text, center - new Vector2(PixelFont.Measure(text, size) / 2f, PixelFont.LineHeight(size) / 2f), size, Color.Lerp(AccentColor, Color.White, local * 0.5f));
-            DrawCenteredText(new Rectangle(0, 0, (int)AreaWidth, 0), L.T("PREPARE-SE", "GET READY"), center.Y + 76f, 2f, TextColor, shadow: true);
+            DrawCenteredText(new Rectangle(0, 0, (int)AreaWidth, 0), L.T("PREPARE-SE", "GET READY"), center.Y + 76f, MobileUi ? 2.8f : 2f, TextColor, shadow: true);
         }
         else if (_goTimer > 0f)
         {
@@ -164,7 +164,8 @@ public sealed partial class GameRoot
     private void SpawnConfetti()
     {
         Color[] colors = [AccentColor, RecordColor, BoostFillColor, DangerColor, new Color(230, 120, 240), Color.White];
-        for (int i = 0; i < 90; i++)
+        int pieces = (int)(90 * EffectsDensity);
+        for (int i = 0; i < pieces; i++)
         {
             _confetti.Add(new Confetti
             {
@@ -213,7 +214,7 @@ public sealed partial class GameRoot
 
     private void AddFloatingText(string text, Vector2 position, Color color, float size = 2f)
     {
-        _floatingTexts.Add(new FloatingText { Text = text, Position = position, Color = color, Size = size, Life = 1.1f, MaxLife = 1.1f });
+        _floatingTexts.Add(new FloatingText { Text = text, Position = position, Color = color, Size = MobileUi ? size * 1.3f : size, Life = 1.1f, MaxLife = 1.1f });
     }
 
     private Vector2 PlayerWorldPosition => new(_player.Car.Position.X * CellSize, _player.Car.Position.Y * CellSize);
@@ -229,7 +230,7 @@ public sealed partial class GameRoot
     /// mais que isso de uma vez — continua de onde parou, como o desktop fazia.</summary>
     private const int MaxSimulationStepsPerFrame = 6;
 
-    private double _simulationClock;
+    private readonly FixedStepClock _simulationClock = new(SimulationStep, MaxSimulationStepsPerFrame);
 
     private void UpdateRacing(float frameSeconds)
     {
@@ -239,11 +240,10 @@ public sealed partial class GameRoot
             return;
         }
 
-        CarInput input = WithTouchControls(_input.BuildCarInput());
-        _simulationClock = Math.Min(_simulationClock + frameSeconds, SimulationStep * MaxSimulationStepsPerFrame);
-        while (_simulationClock >= SimulationStep && _state == State.Racing)
+        CarInput input = ReadCarInput();
+        int steps = _simulationClock.Advance(frameSeconds);
+        for (int i = 0; i < steps && _state == State.Racing; i++)
         {
-            _simulationClock -= SimulationStep;
             StepRace((float)SimulationStep, input);
         }
     }
@@ -253,7 +253,7 @@ public sealed partial class GameRoot
     {
         if (CountingDown)
         {
-            UpdateCountdown(dt);
+            UpdateCountdown(dt, input);
             return;
         }
 
@@ -270,6 +270,7 @@ public sealed partial class GameRoot
         if (collidingNow && !_playerWasCollidingLastTick)
         {
             _audio.PlayCollision();
+            Haptic(Game.Haptic.Collision);
             TriggerScreenShake(_player.Car.HadHeadOnCollisionThisTick ? 6f : 3.5f);
         }
 
@@ -296,6 +297,7 @@ public sealed partial class GameRoot
             if (outcome == RaceOutcome.Victory)
             {
                 SpawnConfetti();
+                Haptic(Game.Haptic.Victory);
             }
 
             _resultFocus = 0;
@@ -322,6 +324,8 @@ public sealed partial class GameRoot
                 _audio.PlayCheckpoint();
             }
 
+            Haptic(Game.Haptic.Checkpoint);
+
             _ringFlashes.Add(new RingFlash { Position = playerPos, Color = WorldTheme.Scenery.Checkpoint, Life = lapCompleted ? 0.8f : 0.5f });
         }
 
@@ -347,6 +351,7 @@ public sealed partial class GameRoot
                 _recordBannerShown = true;
                 ShowBanner(L.T("NOVO RECORDE!", "NEW RECORD!"), RecordColor, L.T("CONTINUE PONTUANDO", "KEEP SCORING"));
                 _audio.PlayUnlock(isSkin: false);
+                Haptic(Game.Haptic.Achievement);
             }
 
             if (_race.TimeRemaining is { } timeRemaining && timeRemaining <= 3f)
@@ -380,6 +385,16 @@ public sealed partial class GameRoot
 
             RaceEntrant last = _race.EliminationsThisTick[^1];
             int left = _race.Entrants.Count(e => !e.Eliminated);
+            // Assistindo depois de eliminado, as quedas dos outros não vibram mais.
+            if (_race.EliminationsThisTick.Contains(_player))
+            {
+                Haptic(Game.Haptic.PlayerEliminated);
+            }
+            else if (!_player.Eliminated)
+            {
+                Haptic(Game.Haptic.Elimination);
+            }
+
             if (_race.EliminationsThisTick.Contains(_player))
             {
                 TriggerScreenShake(8f);
@@ -398,6 +413,7 @@ public sealed partial class GameRoot
         if (_raceTracker.SecretFoundThisTick)
         {
             _audio.PlayUnlock(isSkin: false);
+            Haptic(Game.Haptic.Unlock);
             ShowBanner(L.T("SEGREDO ENCONTRADO!", "SECRET FOUND!"), new Color(215, 125, 235), SelectedTrack.SecretName);
             for (int i = 0; i < 12; i++)
             {
@@ -432,7 +448,9 @@ public sealed partial class GameRoot
 
     // ---------- Pausa ----------
 
-    private Rectangle PauseButtonRect(int i) => new((int)(AreaWidth / 2f) - 140, 176 + (i * 50), 280, 40);
+    private Rectangle PauseButtonRect(int i) => MobileUi
+        ? new Rectangle((int)(AreaWidth / 2f) - 220, 104 + (i * 86), 440, 72)
+        : new Rectangle((int)(AreaWidth / 2f) - 140, 176 + (i * 50), 280, 40);
 
     private void OpenPause(bool countAsPause = true)
     {
@@ -443,6 +461,11 @@ public sealed partial class GameRoot
 
         _audio.SetPaused(true);
         _audio.PlayMenuConfirm();
+        if (countAsPause)
+        {
+            Haptic(Game.Haptic.Tap);
+        }
+
         _pauseFocus = 0;
         _state = State.Paused;
     }
@@ -517,13 +540,15 @@ public sealed partial class GameRoot
     private void DrawPauseMenu()
     {
         DimScreen(OverlayDimColor);
-        var panel = new Rectangle((int)(AreaWidth / 2f) - 180, 96, 360, 310);
+        Rectangle panel = MobileUi
+            ? new Rectangle((int)(AreaWidth / 2f) - 260, 12, 520, 454)
+            : new Rectangle((int)(AreaWidth / 2f) - 180, 96, 360, 310);
         DrawAccentPanel(panel, AccentColor);
-        DrawCenteredText(panel, L.T("PAUSADO", "PAUSED"), panel.Y + 24f, TitleSize, AccentColor, shadow: true);
+        DrawCenteredText(panel, L.T("PAUSADO", "PAUSED"), panel.Y + (MobileUi ? 30f : 24f), MobileUi ? 5f : TitleSize, AccentColor, shadow: true);
         string[] labels = [L.T("CONTINUAR", "RESUME"), L.T("REINICIAR", "RESTART"), L.T("CONFIGURACOES", "SETTINGS"), L.T("SAIR PARA O MENU", "QUIT TO MENU")];
         for (int i = 0; i < labels.Length; i++)
         {
-            DrawButton(PauseButtonRect(i), labels[i], _pauseFocus == i, primary: i == 0);
+            DrawButton(PauseButtonRect(i), labels[i], _pauseFocus == i, primary: i == 0, textSize: MobileUi ? 3f : 2f);
         }
 
         DrawKeyHints((L.T("SETAS", "ARROWS"), L.T("NAVEGAR", "NAVIGATE")), ("ENTER", L.T("CONFIRMAR", "CONFIRM")), ("ESC", L.T("CONTINUAR", "RESUME")));
@@ -535,7 +560,18 @@ public sealed partial class GameRoot
     /// baixo) — nada fica por cima do asfalto tapando os carros.</summary>
     private void DrawLiveHud()
     {
-        if (_race.Mode == RaceMode.TimeAttack)
+        if (MobileUi)
+        {
+            if (_race.Mode == RaceMode.TimeAttack)
+            {
+                DrawMobileTimeAttackHud();
+            }
+            else
+            {
+                DrawMobileDeathRaceHud();
+            }
+        }
+        else if (_race.Mode == RaceMode.TimeAttack)
         {
             DrawTimeAttackHud();
         }
@@ -544,12 +580,88 @@ public sealed partial class GameRoot
             DrawDeathRaceHud();
         }
 
+        // Com os controles de toque o combustível aparece no anel do botão TURBO.
+        if (ShowTouchControls)
+        {
+            return;
+        }
+
         DrawBoostBar(new Vector2(14f, AreaHeight + 13f));
         string pauseHint = L.T("ESC: PAUSA", "ESC: PAUSE");
-        if (!ShowTouchControls)
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, pauseHint, new Vector2(AreaWidth - PixelFont.Measure(pauseHint, 1.4f) - 12f, AreaHeight + 15f), 1.4f, StatBadgeLabelColor);
+    }
+
+    // ----- HUD do celular: os mesmos dados, em painéis mais altos e texto maior (a faixa de cima tem 40 px lógicos) -----
+
+    private const int MobileHudTop = -39;
+    private const int MobileHudHeight = 42;
+
+    /// <summary>Corrida Mortal: posição, volta e carros restantes à esquerda; a próxima eliminação no meio.</summary>
+    private void DrawMobileDeathRaceHud()
+    {
+        IReadOnlyList<RaceEntrant> standings = _race.GetStandings();
+        int position = standings.ToList().IndexOf(_player) + 1;
+        int remaining = _race.Entrants.Count(e => !e.Eliminated);
+        bool isOut = _player.Eliminated;
+
+        var panel = new Rectangle(8, MobileHudTop, 430, MobileHudHeight);
+        DrawHudPanel(panel);
+        Color placeColor = isOut ? DangerColor : position == 1 ? AccentColor : TextColor;
+        string place = isOut ? "X" : L.T($"{position}º", L.Ordinal(position));
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, place, new Vector2(panel.X + 12f, panel.Y + 8f), 3.4f, placeColor);
+        float x = panel.X + 16f + PixelFont.Measure(place, 3.4f);
+        PixelFont.Draw(_spriteBatch, _pixel, $"/{_race.Entrants.Count}", new Vector2(x, panel.Y + 18f), 2f, StatBadgeLabelColor);
+        string lap = isOut ? L.T("ELIMINADO", "ELIMINATED") : L.T($"VOLTA {_player.Car.LapsCompleted + 1}", $"LAP {_player.Car.LapsCompleted + 1}");
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, lap, new Vector2(panel.X + 132f, panel.Y + 12f), 2.6f, isOut ? DangerColor : TextColor);
+        string left = L.T($"RESTAM {remaining}", $"{remaining} LEFT");
+        PixelFont.Draw(_spriteBatch, _pixel, left, new Vector2(panel.Right - 14f - PixelFont.Measure(left, 2.1f), panel.Y + 14f), 2.1f, StatBadgeLabelColor);
+
+        RaceEntrant leader = standings.FirstOrDefault(e => !e.Eliminated && !e.Finished);
+        if (leader is null || remaining <= 1)
         {
-            PixelFont.DrawShadowed(_spriteBatch, _pixel, pauseHint, new Vector2(AreaWidth - PixelFont.Measure(pauseHint, 1.4f) - 12f, AreaHeight + 15f), 1.4f, StatBadgeLabelColor);
+            return;
         }
+
+        bool inDanger = !isOut && ReferenceEquals(standings.Where(e => !e.Eliminated && !e.Finished).LastOrDefault(), _player) && _race.ElapsedTime > 3f;
+        var box = new Rectangle((int)(AreaWidth / 2f) - 150, MobileHudTop, 340, MobileHudHeight);
+        if (inDanger)
+        {
+            float blink = (MathF.Sin(_visualTime * 10f) + 1f) / 2f;
+            DrawRoundedRect(box, DangerColor * (0.6f + (0.3f * blink)), 7f);
+        }
+        else
+        {
+            DrawHudPanel(box);
+        }
+
+        string label = inDanger ? L.T("VOCE ESTA EM ULTIMO!", "YOU'RE IN LAST PLACE!") : L.T("PROXIMA ELIMINACAO", "NEXT ELIMINATION");
+        DrawCenteredText(box, label, box.Y + 6f, FitTextSize(label, box.Width - 24f, 2f), inDanger ? Color.White : StatBadgeLabelColor);
+        DrawProgressBar(new Rectangle(box.X + 18, box.Y + 26, box.Width - 36, 9), LapFraction(leader), inDanger ? Color.White : DangerColor * 0.9f, 4f);
+    }
+
+    /// <summary>Contra o Relógio: o tempo grande no meio (com quanto o próximo checkpoint dá), pontos e recorde à esquerda.</summary>
+    private void DrawMobileTimeAttackHud()
+    {
+        float time = _race.TimeRemaining ?? 0f;
+        bool low = time <= 5f;
+        float pulse = low ? (MathF.Sin(_visualTime * 12f) + 1f) / 2f : 0f;
+
+        var timer = new Rectangle((int)(AreaWidth / 2f) - 150, MobileHudTop, 330, MobileHudHeight);
+        DrawHudPanel(timer);
+        string timeText = $"{time:0.0}";
+        float timeSize = 4f + (pulse * 0.25f);
+        Color timeColor = low ? Color.Lerp(DangerColor, Color.White, pulse * 0.4f) : TextColor;
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, timeText, new Vector2(timer.X + 16f, timer.Y + 21f - (3.5f * timeSize)), timeSize, timeColor);
+        PixelFont.Draw(_spriteBatch, _pixel, L.T("PROXIMO", "NEXT"), new Vector2(timer.X + 168f, timer.Y + 6f), 1.7f, StatBadgeLabelColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, $"+{_race.NextTimeBonus:0.0} S", new Vector2(timer.X + 168f, timer.Y + 20f), 2.4f, RecordColor);
+
+        var score = new Rectangle(8, MobileHudTop, 400, MobileHudHeight);
+        DrawHudPanel(score);
+        PixelFont.Draw(_spriteBatch, _pixel, L.T("PONTOS", "POINTS"), new Vector2(score.X + 12f, score.Y + 6f), 1.7f, StatBadgeLabelColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, $"{_player.Score:0}", new Vector2(score.X + 12f, score.Y + 19f), 2.6f, AccentColor);
+        string record = _saveData.BestScoreTimeAttack is > 0f and { } best ? L.T($"RECORDE {best:0}", $"RECORD {best:0}") : L.T("SEM RECORDE", "NO RECORD");
+        PixelFont.Draw(_spriteBatch, _pixel, record, new Vector2(score.X + 150f, score.Y + 6f), 1.8f, _recordBannerShown ? RecordColor : StatBadgeLabelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, L.T($"VOLTA {_player.Car.LapsCompleted + 1}", $"LAP {_player.Car.LapsCompleted + 1}"), new Vector2(score.X + 150f, score.Y + 21f), 2.2f, TextColor);
     }
 
     /// <summary>O HUD mora nas faixas de cenário (TrackMargin) acima e abaixo da pista, fora do asfalto.</summary>
@@ -695,16 +807,18 @@ public sealed partial class GameRoot
         DrawCenteredText(rect, _bannerText, rect.Y + 12f, size * scale, _bannerColor * alphaBanner, shadow: true);
         if (_bannerSubtext is not null)
         {
-            DrawCenteredText(rect, _bannerSubtext, rect.Y + 42f, 1.6f, TextColor * alphaBanner);
+            DrawCenteredText(rect, _bannerSubtext, rect.Y + 42f, MobileUi ? 2f : 1.6f, TextColor * alphaBanner);
         }
     }
 
     // ---------- Resultado ----------
 
     /// <summary>Fica abaixo da área do aviso de desbloqueio (que desce do topo), pra não cobrir nada.</summary>
-    private static readonly Rectangle ResultsPanel = new(294, 112, 600, 344);
+    private static Rectangle ResultsPanel => MobileUi ? new Rectangle(214, 104, 760, 378) : new Rectangle(294, 112, 600, 344);
 
-    private Rectangle ResultButtonRect(int i) => new(ResultsPanel.X + 70 + (i * 240), ResultsPanel.Bottom - 60, 220, 40);
+    private Rectangle ResultButtonRect(int i) => MobileUi
+        ? new Rectangle(ResultsPanel.X + 40 + (i * 350), ResultsPanel.Bottom - 88, 330, 74)
+        : new Rectangle(ResultsPanel.X + 70 + (i * 240), ResultsPanel.Bottom - 60, 220, 40);
 
     private void UpdateResults(float frameSeconds)
     {
@@ -786,19 +900,19 @@ public sealed partial class GameRoot
 
         DrawAccentPanel(panel, color);
         float pop = 1f + (MathF.Max(0f, 1f - (_resultsTime / 0.3f)) * 0.3f);
-        DrawCenteredText(panel, headline, panel.Y + 26f, 4.5f * pop, color, shadow: true);
+        DrawCenteredText(panel, headline, panel.Y + (MobileUi ? 18f : 26f), 4.5f * pop, color, shadow: true);
 
-        var rows = new Rectangle(panel.X + 40, panel.Y + 84, panel.Width - 80, 0);
+        var rows = new Rectangle(panel.X + 40, panel.Y + (MobileUi ? 66 : 84), panel.Width - 80, 0);
         foreach ((string label, string value, bool highlight) in BuildResultRows())
         {
             DrawResultRow(rows, label, value, highlight);
-            rows.Y += 32;
+            rows.Y += MobileUi ? 36 : 32;
         }
 
         string[] labels = [L.T("JOGAR NOVAMENTE", "PLAY AGAIN"), "MENU"];
         for (int i = 0; i < labels.Length; i++)
         {
-            DrawButton(ResultButtonRect(i), labels[i], _resultFocus == i, primary: i == 0, textSize: 1.8f);
+            DrawButton(ResultButtonRect(i), labels[i], _resultFocus == i, primary: i == 0, textSize: MobileUi ? 2.8f : 1.8f);
         }
 
         DrawKeyHints(("ENTER", L.T("CONFIRMAR", "CONFIRM")), ("R", L.T("JOGAR DE NOVO", "PLAY AGAIN")), ("ESC", "MENU"));
@@ -836,14 +950,16 @@ public sealed partial class GameRoot
 
     private void DrawResultRow(Rectangle area, string label, string value, bool highlight)
     {
-        DrawRoundedRect(new Rectangle(area.X, area.Y, area.Width, 26), highlight ? StatBadgeFill : new Color(28, 32, 46), 6f);
+        int height = MobileUi ? 32 : 26;
+        float valueSize = MobileUi ? 2.6f : 2f;
+        DrawRoundedRect(new Rectangle(area.X, area.Y, area.Width, height), highlight ? StatBadgeFill : new Color(28, 32, 46), 6f);
         if (highlight)
         {
-            _spriteBatch.Draw(_pixel, new Rectangle(area.X, area.Y, 4, 26), RecordColor);
+            _spriteBatch.Draw(_pixel, new Rectangle(area.X, area.Y, 4, height), RecordColor);
         }
 
-        PixelFont.Draw(_spriteBatch, _pixel, label, new Vector2(area.X + 12f, area.Y + 8f), SmallSize, StatBadgeLabelColor);
-        float valueWidth = PixelFont.Measure(value, 2f);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, value, new Vector2(area.Right - 12f - valueWidth, area.Y + 6f), 2f, highlight ? RecordColor : TextColor);
+        PixelFont.Draw(_spriteBatch, _pixel, label, new Vector2(area.X + 12f, area.Y + ((height - PixelFont.LineHeight(TextSmall)) / 2f)), TextSmall, StatBadgeLabelColor);
+        float valueWidth = PixelFont.Measure(value, valueSize);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, value, new Vector2(area.Right - 12f - valueWidth, area.Y + ((height - PixelFont.LineHeight(valueSize)) / 2f)), valueSize, highlight ? RecordColor : TextColor);
     }
 }

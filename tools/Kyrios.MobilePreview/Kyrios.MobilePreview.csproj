@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Simulador de celular pra desenvolvimento: roda o MESMO jogo (os fontes de src/Kyrios.Game) no desktop, com uma
+    plataforma "celular" — tamanho e densidade de tela de aparelhos reais, área segura (notch), toques com vários
+    dedos, inclinação, botão voltar e interrupções — seguindo um roteiro e salvando capturas de tela. Serve pra
+    validar as telas em várias proporções sem aparelho. Não vai pra loja.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <RootNamespace>Kyrios.MobilePreview</RootNamespace>
+    <AssemblyName>MegRacePreview</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\Kyrios.Game\**\*.cs" Exclude="..\..\src\Kyrios.Game\Program.cs;..\..\src\Kyrios.Game\obj\**;..\..\src\Kyrios.Game\bin\**" LinkBase="Game" />
+    <EmbeddedResource Include="..\..\src\Kyrios.Game\Assets\logo.png" LogicalName="MegRace.Logo.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.5.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Kyrios.Core\Kyrios.Core.csproj" />
+  </ItemGroup>
+
+</Project>

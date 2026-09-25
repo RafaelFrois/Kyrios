@@ -227,7 +227,8 @@ public sealed class SceneCanvas(SpriteBatch spriteBatch, Texture2D pixel, Textur
 /// </summary>
 public sealed class SceneryRenderer
 {
-    private const int CacheSize = 4;
+    /// <summary>Pistas desenhadas guardadas (cada uma ~3 MB de memória de vídeo) — menos no celular.</summary>
+    private static int CacheSize => Math.Max(1, GamePlatform.Current.SceneryCacheSize);
 
     private static readonly Color[] ConfettiColors =
     [
@@ -243,6 +244,7 @@ public sealed class SceneryRenderer
     private readonly Dictionary<string, RenderTarget2D> _cache = new();
     private readonly LinkedList<string> _recent = new();
     private readonly Random _ambientRandom = new();
+    private float _ambientDensity = 1f;
     private float _ambientTime;
     private Vector2[] _ambient = [];
     private float[] _ambientSeed = [];
@@ -285,6 +287,30 @@ public sealed class SceneryRenderer
     private static string CacheKey(TrackTheme theme) => $"{theme.Id}:{L.Code(L.Current)}";
 
     private static int SeedFor(TrackTheme theme) => theme.Id.Aggregate(17, (hash, c) => (hash * 31) + c);
+
+    /// <summary>Quantas partículas de clima (chuva, neve, folhas...) em relação ao normal — a qualidade gráfica baixa
+    /// usa menos. Só enfeite: não mexe em nada da corrida.</summary>
+    public void SetAmbientDensity(float density)
+    {
+        density = Math.Clamp(density, 0.1f, 1f);
+        if (MathF.Abs(density - _ambientDensity) > 0.01f)
+        {
+            _ambientDensity = density;
+            _ambientThemeId = null;
+        }
+    }
+
+    /// <summary>Libera todas as pistas desenhadas (memória baixa); elas são refeitas quando aparecerem de novo.</summary>
+    public void ReleaseCache()
+    {
+        foreach (RenderTarget2D target in _cache.Values)
+        {
+            target.Dispose();
+        }
+
+        _cache.Clear();
+        _recent.Clear();
+    }
 
     /// <summary>Garante a textura estática da pista pronta. Chamar FORA de um SpriteBatch.Begin/End.</summary>
     public void Prepare(TrackTheme theme, Track track)
@@ -615,7 +641,7 @@ public sealed class SceneryRenderer
         if (_ambientThemeId != theme.Id)
         {
             _ambientThemeId = theme.Id;
-            int count = style.Ambient == AmbientKind.None ? 0 : style.AmbientCount;
+            int count = style.Ambient == AmbientKind.None ? 0 : Math.Max(1, (int)(style.AmbientCount * _ambientDensity));
             _ambient = new Vector2[count];
             _ambientSeed = new float[count];
             for (int i = 0; i < count; i++)

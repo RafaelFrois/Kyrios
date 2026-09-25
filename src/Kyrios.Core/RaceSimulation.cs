@@ -64,6 +64,11 @@ public sealed class RaceSimulation
     /// <summary>Contra o Relógio: fração (0-1) do bônus de tempo que o próximo checkpoint vai dar — encolhe a
     /// cada volta completada até um piso.</summary>
     public float TimeBonusFactor => MathF.Max(MinTimeBonusFactor, MathF.Pow(TimeBonusDecayPerLap, ScoredEntrant.Car.LapsCompleted));
+
+    /// <summary>Contra o Relógio: segundos que o próximo checkpoint vai dar (se o próximo for a linha de chegada, o
+    /// bônus da volta), já com o decaimento — o mesmo cálculo aplicado ao cruzar.</summary>
+    public float NextTimeBonus =>
+        (ScoredEntrant.Car.NextCheckpointIndex > Track.CheckpointCount ? TimeBonusPerLap : TimeBonusPerCheckpoint) * TimeBonusFactor;
     private bool _scoredWasWallCollidingLastTick;
     private bool _scoredWasCarCollidingLastTick;
     private bool _scoredWasHazardCollidingLastTick;

@@ -34,12 +34,26 @@ public sealed partial class GameRoot
 
     // ---------- Menu principal ----------
 
-    private Rectangle MainButtonRect(MainItem item) => item switch
+    private Rectangle MainButtonRect(MainItem item) => MobileUi ? MobileMainButtonRect(item) : item switch
     {
         MainItem.Play => new Rectangle(50, 112, 320, 58),
         MainItem.Quit => new Rectangle(50, 382, 150, 32),
         _ => new Rectangle(50, 184 + (((int)item - 1) * 48), 320, 40),
     };
+
+    /// <summary>Celular: JOGAR grande e as outras quatro telas numa grade 2x2 de botões largos (bem acima de 48 dp).</summary>
+    private static Rectangle MobileMainButtonRect(MainItem item) => item switch
+    {
+        MainItem.Play => new Rectangle(40, 100, 452, 100),
+        MainItem.Skins => new Rectangle(40, 214, 220, 92),
+        MainItem.Tracks => new Rectangle(272, 214, 220, 92),
+        MainItem.Achievements => new Rectangle(40, 318, 220, 92),
+        MainItem.Settings => new Rectangle(272, 318, 220, 92),
+        _ => Rectangle.Empty,
+    };
+
+    /// <summary>O painel "pronto pra correr" do menu (no celular, tocar na skin ou na pista abre a tela delas).</summary>
+    private static Rectangle MenuShowcaseRect => MobileUi ? new Rectangle(560, 190, 610, 270) : new Rectangle(620, 196, 530, 226);
 
     private static Rectangle MenuLogoRect => new((int)(MenuLogoCenter.X - (48f * MenuLogoScale)), (int)(MenuLogoCenter.Y - (40f * MenuLogoScale)), (int)(96f * MenuLogoScale), (int)(80f * MenuLogoScale));
 
@@ -83,6 +97,19 @@ public sealed partial class GameRoot
             return;
         }
 
+        if (_input.Back && !GamePlatform.Current.CanQuit && GamePlatform.Current.IsMobile)
+        {
+            // Celular: "voltar" no menu principal manda o app pro fundo (sem perder nada), como qualquer app.
+            GamePlatform.Current.LeaveToBackground();
+            return;
+        }
+
+        if (MobileUi && MouseClicked && !MainItems.Any(item => MainButtonRect(item).Contains(LogicalMousePoint())) && MenuShowcaseRect.Contains(LogicalMousePoint()))
+        {
+            OpenCollection(LogicalMousePoint().X < MenuShowcaseRect.X + (MenuShowcaseRect.Width * 0.45f) ? State.SkinSelect : State.TrackSelect);
+            return;
+        }
+
         if (_input.Back && GamePlatform.Current.CanQuit)
         {
             // ESC leva o foco pro SAIR; um segundo ESC (ou ENTER) sai de verdade.
@@ -97,8 +124,21 @@ public sealed partial class GameRoot
             return;
         }
 
-        bool clicked = MouseClicked && MainButtonRect(MainItems[_mainFocus]).Contains(LogicalMousePoint());
-        if (_input.Confirm || clicked)
+        // No toque o item tocado é ativado direto (não existe "passar o mouse por cima" antes).
+        if (MouseClicked)
+        {
+            for (int i = 0; i < MainItems.Length; i++)
+            {
+                if (MainButtonRect(MainItems[i]).Contains(LogicalMousePoint()))
+                {
+                    _mainFocus = i;
+                    ActivateMainItem(MainItems[i]);
+                    return;
+                }
+            }
+        }
+
+        if (_input.Confirm)
         {
             ActivateMainItem(MainItems[_mainFocus]);
         }
@@ -106,6 +146,7 @@ public sealed partial class GameRoot
 
     private void ActivateMainItem(MainItem item)
     {
+        Haptic(Game.Haptic.Tap);
         switch (item)
         {
             case MainItem.Play:
@@ -133,6 +174,12 @@ public sealed partial class GameRoot
 
     private void DrawMainMenu()
     {
+        if (MobileUi)
+        {
+            DrawMobileMainMenu();
+            return;
+        }
+
         DimScreen(Color.Black * 0.35f);
         _spriteBatch.Draw(_pixel, new Rectangle(-TrackMargin, -TrackMargin, 460, _windowHeight), MenuBackground * 0.75f);
 
@@ -161,7 +208,7 @@ public sealed partial class GameRoot
         DrawCircle(MenuLogoCenter + new Vector2(0f, 64f), 80f, Color.Black * 0.12f);
         DrawLogo(MenuLogoCenter + new Vector2(0f, bob - (_logoBounce * 14f)), MenuLogoScale, _logoBounce);
 
-        DrawMenuShowcase(new Rectangle(620, 196, 530, 226));
+        DrawMenuShowcase(MenuShowcaseRect);
         DrawStudioLogo(new Vector2(20f, AreaHeight - 8f));
         DrawKeyHints((L.T("SETAS", "ARROWS"), L.T("NAVEGAR", "NAVIGATE")), ("ENTER", L.T("CONFIRMAR", "CONFIRM")), ("C", L.T("CONQUISTAS", "ACHIEVEMENTS")), ("Q", L.T("OPCOES", "OPTIONS")), ("ESC", L.T("SAIR", "QUIT")));
     }
@@ -169,24 +216,76 @@ public sealed partial class GameRoot
     /// <summary>Painel "pronto pra correr": a skin equipada, a pista escolhida e o último modo jogado.</summary>
     private void DrawMenuShowcase(Rectangle panel)
     {
+        // No celular tudo cresce na mesma proporção (o painel é maior) e os rótulos ficam legíveis.
+        float k = panel.Width / 530f;
+        float label = MobileUi ? 1.9f : 1.4f;
         DrawAccentPanel(panel, AccentColor);
-        PixelFont.Draw(_spriteBatch, _pixel, L.T("PRONTO PARA CORRER", "READY TO RACE"), new Vector2(panel.X + 20f, panel.Y + 18f), BodySize, AccentColor);
+        PixelFont.Draw(_spriteBatch, _pixel, L.T("PRONTO PARA CORRER", "READY TO RACE"), new Vector2(panel.X + (20f * k), panel.Y + 18f), TextBody, AccentColor);
 
-        var carCenter = new Vector2(panel.X + 120f, panel.Y + 106f);
-        DrawCircle(carCenter + new Vector2(0f, 6f), 58f, SkinCategories.Color(SelectedSkin.Category) * 0.08f);
-        _carPainter.Begin(carCenter, -0.3f + (MathF.Sin(_visualTime * 1.4f) * 0.12f), 62f, AccentColor, eliminated: false, _visualTime);
+        var carCenter = new Vector2(panel.X + (120f * k), panel.Y + (106f * k));
+        DrawCircle(carCenter + new Vector2(0f, 6f), 58f * k, SkinCategories.Color(SelectedSkin.Category) * 0.08f);
+        _carPainter.Begin(carCenter, -0.3f + (MathF.Sin(_visualTime * 1.4f) * 0.12f), 62f * k, AccentColor, eliminated: false, _visualTime);
         SelectedSkin.Paint(_carPainter);
-        var carColumn = new Rectangle(panel.X, 0, 240, 0);
-        DrawCenteredText(carColumn, SelectedSkin.Name, panel.Y + 172f, FitTextSize(SelectedSkin.Name, 220f, 2f), TextColor, shadow: true);
-        DrawCenteredText(carColumn, SkinCategories.Singular(SelectedSkin.Category), panel.Y + 196f, 1.4f, SkinCategories.Color(SelectedSkin.Category));
+        var carColumn = new Rectangle(panel.X, 0, (int)(240f * k), 0);
+        DrawCenteredText(carColumn, SelectedSkin.Name, panel.Y + (172f * k), FitTextSize(SelectedSkin.Name, 220f * k, MobileUi ? 2.6f : 2f), TextColor, shadow: true);
+        DrawCenteredText(carColumn, SkinCategories.Singular(SelectedSkin.Category), panel.Y + (172f * k) + (MobileUi ? 28f : 24f), label, SkinCategories.Color(SelectedSkin.Category));
 
-        var tile = new Rectangle(panel.X + 270, panel.Y + 58, 64, 64);
+        int tileSize = (int)(64f * k);
+        var tile = new Rectangle(panel.X + (int)(270f * k), panel.Y + (int)(58f * k), tileSize, tileSize);
         DrawIconTile(tile, AchievementIcons.Art(SelectedTrack.Icon), new Color(120, 230, 130), colored: true);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, SelectedTrack.Name, new Vector2(tile.Right + 14f, tile.Y + 8f), FitTextSize(SelectedTrack.Name, panel.Right - tile.Right - 30f, 2.2f), TextColor);
-        PixelFont.Draw(_spriteBatch, _pixel, L.T("PISTA", "TRACK"), new Vector2(tile.Right + 14f, tile.Y + 34f), 1.4f, StatBadgeLabelColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, SelectedTrack.Name, new Vector2(tile.Right + 14f, tile.Y + 8f), FitTextSize(SelectedTrack.Name, panel.Right - tile.Right - 30f, MobileUi ? 2.8f : 2.2f), TextColor);
+        PixelFont.Draw(_spriteBatch, _pixel, L.T("PISTA", "TRACK"), new Vector2(tile.Right + 14f, tile.Y + (MobileUi ? 40f : 34f)), label, StatBadgeLabelColor);
         string modeName = _selectedMode == RaceMode.TimeAttack ? L.T("CONTRA O RELOGIO", "TIME ATTACK") : L.T("CORRIDA MORTAL", "DEATH RACE");
-        PixelFont.Draw(_spriteBatch, _pixel, L.T("ULTIMO MODO", "LAST MODE"), new Vector2(panel.X + 270f, panel.Y + 140f), 1.4f, StatBadgeLabelColor);
-        PixelFont.Draw(_spriteBatch, _pixel, modeName, new Vector2(panel.X + 270f, panel.Y + 156f), BodySize, TextColor);
+        PixelFont.Draw(_spriteBatch, _pixel, L.T("ULTIMO MODO", "LAST MODE"), new Vector2(panel.X + (270f * k), panel.Y + (140f * k)), label, StatBadgeLabelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, modeName, new Vector2(panel.X + (270f * k), panel.Y + (140f * k) + (MobileUi ? 20f : 16f)), TextBody, TextColor);
+    }
+
+    /// <summary>Menu principal do celular: título, JOGAR grande, grade 2x2 com as outras telas, o mascote e o painel
+    /// "pronto pra correr" (tocável). Sem dicas de teclado e sem SAIR (o "voltar" do sistema manda o app pro fundo).</summary>
+    private void DrawMobileMainMenu()
+    {
+        DimScreen(Color.Black * 0.35f);
+        _spriteBatch.Draw(_pixel, new Rectangle(-TrackMargin, -TrackMargin, 532 + TrackMargin, _windowHeight), MenuBackground * 0.75f);
+        DrawGameTitle(new Vector2(40f, 20f), 7f);
+
+        (int skinsEarned, int skinsTotal) = Unlockables.Count(CarSkins.All, _saveData.UnlockedSkinIds);
+        (int tracksEarned, int tracksTotal) = Unlockables.Count(TrackThemes.All, _saveData.UnlockedTrackIds);
+        for (int i = 0; i < MainItems.Length; i++)
+        {
+            MainItem item = MainItems[i];
+            Rectangle rect = MainButtonRect(item);
+            if (item == MainItem.Play)
+            {
+                DrawButton(rect, L.T("JOGAR", "PLAY"), _mainFocus == i, primary: true, textSize: 4.4f);
+                continue;
+            }
+
+            (string label, string badge) = item switch
+            {
+                MainItem.Skins => ("SKINS", $"{skinsEarned + 1}/{skinsTotal + 1}"),
+                MainItem.Tracks => (L.T("PISTAS", "TRACKS"), $"{tracksEarned + 1}/{tracksTotal + 1}"),
+                MainItem.Achievements => (L.T("CONQUISTAS", "ACHIEVEMENTS"), $"{Achievements.UnlockedCount(_saveData)}/{Achievements.All.Count}"),
+                _ => (L.T("AJUSTES", "SETTINGS"), L.T("SOM, CONTROLES...", "SOUND, CONTROLS...")),
+            };
+
+            DrawMenuTile(rect, label, badge, _mainFocus == i);
+        }
+
+        float bob = MathF.Sin(_visualTime * 2.2f) * 3f;
+        DrawCircle(MenuLogoCenter + new Vector2(0f, 64f), 80f, Color.Black * 0.12f);
+        DrawLogo(MenuLogoCenter + new Vector2(0f, bob - (_logoBounce * 14f)), MenuLogoScale, _logoBounce);
+
+        DrawMenuShowcase(MenuShowcaseRect);
+        DrawStudioLogo(new Vector2(40f, AreaHeight + 16f));
+    }
+
+    /// <summary>Botão da grade do menu no celular: nome em cima, contador/detalhe embaixo, centralizados.</summary>
+    private void DrawMenuTile(Rectangle rect, string label, string detail, bool focused)
+    {
+        DrawButton(rect, string.Empty, focused);
+        float size = FitTextSize(label, rect.Width - 28f, 3f);
+        DrawCenteredText(rect, label, rect.Y + 22f, size, focused ? AccentColor : TextColor, shadow: true);
+        DrawCenteredText(rect, detail, rect.Y + 58f, FitTextSize(detail, rect.Width - 28f, 2f), StatBadgeLabelColor);
     }
 
 
@@ -283,17 +382,22 @@ public sealed partial class GameRoot
     {
         var area = new Rectangle((int)(centerX - 280f), 0, 560, 0);
         float bounce = selected ? MathF.Sin(_visualTime * 4f) * 2f : 0f;
-        DrawCenteredText(area, title, 300f + bounce, 4.2f, selected ? Color.White : StatBadgeLabelColor, shadow: true);
-        DrawCenteredText(area, line, 344f, 1.9f, color);
-        DrawCenteredText(area, stat, 372f, 1.6f, StatBadgeLabelColor);
-        if (selected)
+        float lineSize = FitTextSize(line, 540f, MobileUi ? 2.4f : 1.9f);
+        DrawCenteredText(area, title, (MobileUi ? 288f : 300f) + bounce, MobileUi ? 4.6f : 4.2f, selected ? Color.White : StatBadgeLabelColor, shadow: true);
+        DrawCenteredText(area, line, MobileUi ? 338f : 344f, lineSize, color);
+        DrawCenteredText(area, stat, MobileUi ? 370f : 372f, MobileUi ? 2.1f : 1.6f, StatBadgeLabelColor);
+
+        // No toque qualquer lado inicia a corrida direto; o chamado aparece nos dois.
+        if (selected || (MobileUi && _input.UsingTouch))
         {
             float pulse = (MathF.Sin(_visualTime * 5f) + 1f) / 2f;
-            string cta = L.T("ENTER PARA CORRER", "ENTER TO RACE");
-            float width = PixelFont.Measure(cta, 1.8f) + 28f;
-            var chip = new Rectangle((int)(centerX - (width / 2f)), 402, (int)width, 26);
-            DrawRoundedRect(chip, Color.Lerp(color, Color.White, pulse * 0.25f), 6f);
-            DrawCenteredText(chip, cta, chip.Y + 7f, 1.8f, MenuBackground);
+            string cta = _input.UsingTouch ? L.T("TOQUE PARA CORRER", "TAP TO RACE") : L.T("ENTER PARA CORRER", "ENTER TO RACE");
+            float ctaSize = MobileUi ? 2.4f : 1.8f;
+            float width = PixelFont.Measure(cta, ctaSize) + 32f;
+            int height = MobileUi ? 44 : 26;
+            var chip = new Rectangle((int)(centerX - (width / 2f)), MobileUi ? 402 : 402, (int)width, height);
+            DrawRoundedRect(chip, Color.Lerp(color, Color.White, pulse * 0.25f), 8f);
+            DrawCenteredText(chip, cta, chip.Y + ((height - PixelFont.LineHeight(ctaSize)) / 2f), ctaSize, MenuBackground);
         }
     }
 
@@ -367,7 +471,16 @@ public sealed partial class GameRoot
     private const float SettingsBarValueGap = 10f;
     private const float SettingsValueSlotWidth = 50f;
 
-    private readonly SettingsRow[] SettingsRows = [.. Enum.GetValues<SettingsRow>().Where(row => row != SettingsRow.Fullscreen || GamePlatform.Current.ControlsFullscreen)];
+    private readonly SettingsRow[] SettingsRows = [.. Enum.GetValues<SettingsRow>().Where(IsSettingsRowAvailable)];
+
+    /// <summary>Tela cheia só onde o jogo controla a janela; controles, vibração e qualidade só no celular.</summary>
+    private static bool IsSettingsRowAvailable(SettingsRow row) => row switch
+    {
+        SettingsRow.Fullscreen => GamePlatform.Current.ControlsFullscreen,
+        SettingsRow.Vibration => GamePlatform.Current.IsMobile && GamePlatform.Current.CanVibrate,
+        SettingsRow.Controls or SettingsRow.ButtonSize or SettingsRow.AutoAccelerate or SettingsRow.Quality => GamePlatform.Current.IsMobile,
+        _ => true,
+    };
 
     /// <summary>Abre as configurações lembrando de onde vieram (menu ou pausa), pra voltar exatamente pra lá.</summary>
     private void OpenSettings(State returnState)
@@ -379,6 +492,12 @@ public sealed partial class GameRoot
 
     private void UpdateSettings()
     {
+        if (MobileUi)
+        {
+            UpdateMobileSettings();
+            return;
+        }
+
         // Tocar/clicar fora do painel também fecha (no celular não existe ESC).
         bool tappedOutside = MouseClicked && _draggingSettingsRow is null && !ComputeSettingsLayout().Panel.Contains(LogicalMousePoint());
         if (_input.Back || tappedOutside)
@@ -492,6 +611,12 @@ public sealed partial class GameRoot
 
     private void DrawSettingsPopup()
     {
+        if (MobileUi)
+        {
+            DrawMobileSettings();
+            return;
+        }
+
         (Rectangle panelRect, Rectangle musicBar, Rectangle sfxBar, Rectangle fullscreenSwitch, Rectangle portuguese, Rectangle english) = ComputeSettingsLayout();
         DrawAccentPanel(panelRect, AccentColor);
         DrawCenteredText(panelRect, L.T("CONFIGURACOES", "SETTINGS"), panelRect.Y + SettingsPanelPaddingV, SettingsHeaderSize, AccentColor, shadow: true);

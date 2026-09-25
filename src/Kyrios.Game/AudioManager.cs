@@ -27,7 +27,9 @@ public sealed class AudioManager
     private const float EngineMaxVolume = 0.5f;
     private const float SfxPitchJitter = 0.1f;
 
-    private bool _available = true;
+    /// <summary>Só vira verdadeiro quando todos os sons foram gerados (antes disso, e sem áudio no aparelho, tudo
+    /// aqui é ignorado em silêncio).</summary>
+    private bool _available;
     private readonly Random _random = new();
 
     private float _musicVolume = 1f;
@@ -82,6 +84,8 @@ public sealed class AudioManager
             _goBeep = Soundtrack.BuildStartBeep(go: true);
             _lapChime = Soundtrack.BuildLapChime();
             _cluck = Soundtrack.BuildCluck();
+            _available = true;
+            ApplyMusicVolumeToActiveTrack();
         }
         catch (Exception)
         {

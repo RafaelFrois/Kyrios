@@ -37,6 +37,11 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         Sfx,
         Fullscreen,
         Language,
+        Vibration,
+        Controls,
+        ButtonSize,
+        AutoAccelerate,
+        Quality,
     }
 
     // Paleta da interface (menus, painéis, HUD) — a mesma em todas as telas.
@@ -112,6 +117,9 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
     private readonly RaceTracker _raceTracker = new();
 
     private float _visualTime;
+
+    /// <summary>Duração do quadro atual (s) — pras animações das telas, que não recebem o tempo por parâmetro.</summary>
+    private float _frameSeconds;
     private float _shakeTimer;
     private float _shakeDuration;
     private float _shakeMagnitude;
@@ -157,6 +165,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         }
 
         _input.UsingTouch = GamePlatform.Current.PrefersTouch;
+        _input.MouseEndsTouchMode = !GamePlatform.Current.IsMobile;
         _saveData = SaveData.Load();
         L.Current = L.FromCode(_saveData.Language);
         Progression.Normalize(_saveData);
@@ -208,7 +217,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         _player = _race.Entrants.First(e => e.Kind == DriverKind.Human);
         _recordsProcessed = false;
         _records = default;
-        _simulationClock = 0;
+        _simulationClock.Reset();
         _playerWasCollidingLastTick = false;
         _lastCountdownTickSecond = int.MaxValue;
         _raceTracker.Reset(_race, SelectedTrack.SecretSpot);
@@ -248,6 +257,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
 
         _raceRequest = mode;
         _raceRequestReleased = false;
+        Haptic(Game.Haptic.Tap);
         GamePlatform.Current.CommercialBreak(() => _raceRequestReleased = true);
         StartRequestedRaceIfReleased();
     }
@@ -386,7 +396,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
             var worldPos = new Vector2(car.Position.X * CellSize, car.Position.Y * CellSize);
             Vector2 forward = Rotate(new Vector2(1f, 0f), car.Angle);
 
-            if (car.IsBoosting)
+            if (car.IsBoosting && (EffectsDensity >= 1f || _particleRandom.NextDouble() < EffectsDensity))
             {
                 Vector2 boostVelocity = (-forward * 40f) + RandomSpread(20f);
                 Vector2 spawnPos = worldPos - (forward * CellSize * 0.7f);
@@ -395,7 +405,8 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
 
             if (car.HadHeadOnCollisionThisTick || car.HadCarCollisionThisTick || car.HadHazardCollisionThisTick)
             {
-                for (int i = 0; i < 3; i++)
+                int sparks = (int)MathF.Ceiling(3f * EffectsDensity);
+                for (int i = 0; i < sparks; i++)
                 {
                     _particles.Spawn(worldPos, RandomSpread(90f), life: 0.25f, size: CellSize * 0.15f, new Color(255, 225, 150, 220));
                 }
@@ -423,7 +434,72 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
     protected override void LoadContent()
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
+        CreateGraphicsResources();
+        WatchGraphicsContext();
+        GamePlatform.Current.Suspending += OnPlatformSuspending;
 
+        _audio = new AudioManager();
+        _audio.SetMusicVolume(_saveData.MusicVolume);
+        _audio.SetSfxVolume(_saveData.SfxVolume);
+        _audio.SetMusicMuted(_saveData.MusicMuted);
+        _audio.SetSfxMuted(_saveData.SfxMuted);
+        InitializeQuality();
+
+        // O que ainda falta carregar. No celular vai aos poucos, um pedaço por quadro, enquanto a abertura anima com a
+        // barra de progresso; no desktop e na web carrega tudo aqui mesmo, como sempre.
+        QueueLoadingStep(_audio.LoadContent);
+        QueueLoadingStep(() => _scenery.Prepare(SelectedTrack, _race.Track));
+        QueueLoadingStep(WarmUpCatalogs);
+        if (!GamePlatform.Current.ShowsLoadingScreen)
+        {
+            RunLoadingSteps(TimeSpan.MaxValue);
+        }
+
+        if (GamePlatform.Current.ControlsFullscreen && !_saveData.Windowed)
+        {
+            ToggleFullscreen();
+        }
+    }
+
+    private readonly Queue<Action> _loadingSteps = new();
+    private int _loadingTotal;
+
+    private bool StillLoading => _loadingSteps.Count > 0;
+
+    private float LoadingProgress => _loadingTotal == 0 ? 1f : 1f - (_loadingSteps.Count / (float)_loadingTotal);
+
+    private void QueueLoadingStep(Action step)
+    {
+        _loadingSteps.Enqueue(step);
+        _loadingTotal++;
+    }
+
+    /// <summary>Roda etapas de carregamento até esgotar o tempo do quadro (sempre pelo menos uma).</summary>
+    private void RunLoadingSteps(TimeSpan budget)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (_loadingSteps.Count > 0)
+        {
+            _loadingSteps.Dequeue()();
+            if (clock.Elapsed >= budget)
+            {
+                break;
+            }
+        }
+    }
+
+    /// <summary>Monta os catálogos (skins, pistas, conquistas) antes da primeira tela que precisa deles, pra ela não
+    /// engasgar ao abrir.</summary>
+    private void WarmUpCatalogs()
+    {
+        _ = CarSkins.All.Count + TrackThemes.All.Count + Achievements.All.Count + Achievements.UnlockedCount(_saveData);
+        _ = TabContents.Length;
+    }
+
+    /// <summary>Texturas feitas em código (pixel, círculos, logo) e quem desenha com elas. Chamado ao carregar e de novo
+    /// se o contexto gráfico for recriado (Android).</summary>
+    private void CreateGraphicsResources()
+    {
         _pixel = new Texture2D(GraphicsDevice, 1, 1);
         _pixel.SetData([Color.White]);
 
@@ -441,22 +517,12 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         }
 
         _circle.SetData(circleData);
+        CreateSoftTextures();
         _carPainter = new CarPainter(_spriteBatch, _pixel, _circle);
         _iconRenderer = new AchievementIconRenderer(_spriteBatch, _pixel, _carPainter);
         _scenery = new SceneryRenderer(GraphicsDevice, _spriteBatch, _pixel, _circle);
-
+        _appliedQuality = GraphicsQuality.Auto;
         _logo = LoadLogo();
-        _audio = new AudioManager();
-        _audio.LoadContent();
-        _audio.SetMusicVolume(_saveData.MusicVolume);
-        _audio.SetSfxVolume(_saveData.SfxVolume);
-        _audio.SetMusicMuted(_saveData.MusicMuted);
-        _audio.SetSfxMuted(_saveData.SfxMuted);
-
-        if (GamePlatform.Current.ControlsFullscreen && !_saveData.Windowed)
-        {
-            ToggleFullscreen();
-        }
     }
 
     protected override void UnloadContent()
@@ -468,6 +534,12 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
     protected override void Update(GameTime gameTime)
     {
         _input.Update();
+        if (StillLoading)
+        {
+            RunLoadingSteps(TimeSpan.FromMilliseconds(12));
+        }
+
+        HandlePlatformSignals();
         ApplyPlatformBackBufferSize();
         _input.PointerScale = GamePlatform.Current.PointerScale;
         if (!_loadingReported)
@@ -487,10 +559,13 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
             }
         }
 
-        float frameSeconds = (float)gameTime.ElapsedGameTime.TotalSeconds;
+        // Depois de uma pausa longa (app no fundo, aba escondida) o primeiro quadro não "pula" o tempo todo de uma vez.
+        float frameSeconds = MathF.Min((float)gameTime.ElapsedGameTime.TotalSeconds, 0.25f);
+        _frameSeconds = frameSeconds;
         _visualTime += frameSeconds;
         _stateTime += frameSeconds;
         DecayScreenShake(frameSeconds);
+        UpdateSceneAnchor(frameSeconds);
         UpdateUiAnimations(frameSeconds);
         UpdateUnlockToast(frameSeconds);
 
@@ -558,6 +633,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
 
         TrackStateChanges();
         ReportGameplayState();
+        UpdateTiltSensor();
         base.Update(gameTime);
     }
 
@@ -580,6 +656,8 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
 
     protected override void Draw(GameTime gameTime)
     {
+        RebuildGraphicsIfLost();
+        MonitorFrameRate();
         TrackTheme theme = WorldTheme;
 
         // Texturas estáticas dos cenários ficam prontas antes de começar a desenhar (troca de render target
@@ -620,7 +698,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
             case State.Racing:
                 DrawRaceFeedback();
                 DrawLiveHud();
-                DrawTouchControls();
+                DrawTouchPauseButton();
                 DrawCountdown();
                 break;
             case State.Paused:
@@ -643,6 +721,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         DrawUnlockToast();
         _spriteBatch.End();
 
+        DrawTouchControlsOverlay();
         DrawPortraitOverlay();
         base.Draw(gameTime);
     }
@@ -650,29 +729,97 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
     private IEnumerable<(Vector2 Position, float Angle)> CarLightSources() =>
         _race.Entrants.Where(e => !e.Eliminated).Select(e => (new Vector2(e.Car.Position.X * CellSize, e.Car.Position.Y * CellSize), e.Car.Angle));
 
+    /// <summary>Quantos pixels de tela vale um pixel lógico (a escala do letterbox).</summary>
+    private float CurrentScreenScale
+    {
+        get
+        {
+            Rectangle safe = SafeScreenRect;
+            return MathF.Min((float)safe.Width / _windowWidth, (float)safe.Height / _windowHeight);
+        }
+    }
+
+    /// <summary>A parte da tela que pode ter conteúdo (sem notch, furo da câmera, cantos arredondados), em pixels. No
+    /// desktop e na web é a tela inteira.</summary>
+    private Rectangle SafeScreenRect
+    {
+        get
+        {
+            int width = GraphicsDevice.PresentationParameters.BackBufferWidth;
+            int height = GraphicsDevice.PresentationParameters.BackBufferHeight;
+            SafeInsets insets = GamePlatform.Current.SafeInsets;
+            int left = Math.Clamp(insets.Left, 0, width / 3);
+            int right = Math.Clamp(insets.Right, 0, width / 3);
+            int top = Math.Clamp(insets.Top, 0, height / 3);
+            int bottom = Math.Clamp(insets.Bottom, 0, height / 3);
+            return new Rectangle(left, top, Math.Max(1, width - left - right), Math.Max(1, height - top - bottom));
+        }
+    }
+
+    /// <summary>Onde a cena fica na sobra vertical da tela: 0,5 = no meio (padrão); menos que isso = mais pra cima,
+    /// abrindo espaço embaixo pros controles de toque durante a corrida no celular.</summary>
+    private float _sceneAnchorY = 0.5f;
+
+    private bool SceneMakesRoomForControls =>
+        GamePlatform.Current.IsMobile && ShowTouchControls
+        && (_state is State.Racing or State.Paused or State.Results || (_state == State.Settings && _settingsReturnState == State.Paused));
+
+    /// <summary>Quanto a cena sobe na corrida: só o necessário pra os controles caberem abaixo da pista (a faixa de
+    /// cenário de baixo da própria cena também serve). Tela com sobra (tablet, dobrável) fica centralizada; celular
+    /// 16:9 encosta em cima; 20:9 praticamente não tem sobra e os controles ficam por cima dos cantos, translúcidos.</summary>
+    private float RaceSceneAnchor()
+    {
+        Rectangle safe = SafeScreenRect;
+        float scale = CurrentScreenScale;
+        float slack = safe.Height - (_windowHeight * scale);
+        if (slack <= 1f)
+        {
+            return 0.5f;
+        }
+
+        TouchLayout layout = CurrentTouchLayout();
+        float controlsTop = layout.Buttons.Min(button => button.Center.Y - button.Radius);
+        if (layout.HasJoystick)
+        {
+            controlsTop = MathF.Min(controlsTop, layout.JoystickRest.Center.Y - layout.JoystickRest.Radius);
+        }
+
+        float needed = MathF.Max(0f, safe.Bottom - controlsTop - (TrackMargin * scale));
+        float bottom = MathF.Min(slack, needed);
+        return Math.Clamp((slack - bottom) / slack, 0f, 0.5f);
+    }
+
+    private void UpdateSceneAnchor(float dt)
+    {
+        float target = SceneMakesRoomForControls ? RaceSceneAnchor() : 0.5f;
+        float step = dt * 2.5f;
+        _sceneAnchorY = MathF.Abs(target - _sceneAnchorY) <= step ? target : _sceneAnchorY + (MathF.Sign(target - _sceneAnchorY) * step);
+    }
+
     /// <summary>
     /// Todo o jogo é desenhado numa resolução "lógica" fixa (<see cref="_windowWidth"/> x <see cref="_windowHeight"/>).
-    /// Este método escala e centraliza essa cena no back buffer de verdade (igual em janela; em tela cheia,
-    /// com letterbox), já com o tremor de câmera.
+    /// Este método escala e posiciona essa cena na área segura da tela (em janela, tela cheia ou celular, com
+    /// letterbox), já com o tremor de câmera.
     /// </summary>
-    /// <summary>Quantos pixels de tela vale um pixel lógico (a escala do letterbox).</summary>
-    private float CurrentScreenScale => MathF.Min(
-        (float)GraphicsDevice.PresentationParameters.BackBufferWidth / _windowWidth,
-        (float)GraphicsDevice.PresentationParameters.BackBufferHeight / _windowHeight);
-
     private Matrix BuildScreenTransform()
     {
-        int actualWidth = GraphicsDevice.PresentationParameters.BackBufferWidth;
-        int actualHeight = GraphicsDevice.PresentationParameters.BackBufferHeight;
-
-        float scale = MathF.Min((float)actualWidth / _windowWidth, (float)actualHeight / _windowHeight);
-        float offsetX = (actualWidth - (_windowWidth * scale)) / 2f;
-        float offsetY = (actualHeight - (_windowHeight * scale)) / 2f;
+        Rectangle safe = SafeScreenRect;
+        float scale = CurrentScreenScale;
+        float offsetX = safe.X + ((safe.Width - (_windowWidth * scale)) / 2f);
+        float offsetY = safe.Y + ((safe.Height - (_windowHeight * scale)) * _sceneAnchorY);
 
         return Matrix.CreateTranslation(TrackMargin, TrackMargin, 0f)
             * Matrix.CreateScale(scale, scale, 1f)
             * Matrix.CreateTranslation(offsetX + (_shakeOffset.X * scale), offsetY + (_shakeOffset.Y * scale), 0f);
     }
+
+    /// <summary>Um ponto do espaço lógico do jogo em pixels da tela (a inversa de <see cref="ScreenToLogicalPosition"/>).</summary>
+    internal Vector2 LogicalToScreen(Vector2 logical) => Vector2.Transform(logical, BuildScreenTransform());
+
+    /// <summary>Pro simulador de celular (tools/Kyrios.MobilePreview): a tela atual e onde estão os controles de toque.</summary>
+    internal string StateNameForTools => _state.ToString();
+
+    internal TouchLayout TouchLayoutForTools => CurrentTouchLayout();
 
     // ---------- Mundo (pista + carros) ----------
 
@@ -731,7 +878,8 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
             var center = new Vector2(target.X * CellSize, target.Y * CellSize);
             float bob = MathF.Sin(_visualTime * 6f) * 3f;
             DrawChevron(center + new Vector2(0f, -30f + bob), color);
-            PixelFont.DrawShadowed(_spriteBatch, _pixel, L.T("PROXIMO", "NEXT"), center + new Vector2(-PixelFont.Measure(L.T("PROXIMO", "NEXT"), 1.2f) / 2f, -50f + bob), 1.2f, color);
+            float labelSize = MobileUi ? 1.7f : 1.2f;
+            PixelFont.DrawShadowed(_spriteBatch, _pixel, L.T("PROXIMO", "NEXT"), center + new Vector2(-PixelFont.Measure(L.T("PROXIMO", "NEXT"), labelSize) / 2f, -50f - (MobileUi ? 4f : 0f) + bob), labelSize, color);
         }
     }
 
