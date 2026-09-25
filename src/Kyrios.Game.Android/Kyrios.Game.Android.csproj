@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Versão Android (Play Store) do MegRace. NÃO é outro jogo: compila exatamente os mesmos arquivos de
+    ../Kyrios.Game (menos o Program.cs do desktop) sobre o MonoGame para Android — a mesma engine e a mesma
+    versão do desktop. Aqui fica só a "casca" Android: a Activity, a ponte com o sistema (área segura, vibração,
+    sensor, botão voltar, ciclo de vida), o manifesto, o ícone e a splash.
+
+    Precisa do SDK .NET 10 com o workload "android" (dotnet workload install android), Android SDK (plataforma 36
+    + build-tools) e JDK 17 ou 21. Por isso fica fora do Kyrios.sln (que continua em .NET 8). Ver build-android.sh.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>24</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Kyrios.Game.Android</RootNamespace>
+    <AssemblyName>MegRace</AssemblyName>
+
+    <ApplicationId>com.rafaelfrois.megrace</ApplicationId>
+    <ApplicationTitle>MegRace</ApplicationTitle>
+    <!-- Subir o ApplicationVersion (inteiro) a cada envio pra Play Store; o DisplayVersion é o que o jogador vê. -->
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
+
+    <!-- ARM 64 bits (quase todos os celulares), ARM 32 bits (celulares de entrada antigos) e x86_64 (Chromebooks e
+         emuladores). A Play Store entrega a cada aparelho só a parte dele (AAB). -->
+    <RuntimeIdentifiers>android-arm64;android-arm;android-x64</RuntimeIdentifiers>
+
+    <!-- Textos próprios, sem formatação por cultura: não precisa dos dados de globalização (app menor). -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EnableDefaultAndroidAssetItems>false</EnableDefaultAndroidAssetItems>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <!-- Play Store: .aab; teste direto no aparelho: .apk. -->
+    <AndroidPackageFormats>aab;apk</AndroidPackageFormats>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <AndroidEnableProfiledAot>true</AndroidEnableProfiledAot>
+    <AndroidLinkTool>r8</AndroidLinkTool>
+    <TrimMode>partial</TrimMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Os usings automáticos do Android (Android.App, Android.Widget...) não entram no código compartilhado. -->
+    <Using Remove="Android.App" />
+    <Using Remove="Android.Widget" />
+    <Using Remove="Android.OS.Bundle" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Kyrios.Game\**\*.cs" Exclude="..\Kyrios.Game\Program.cs;..\Kyrios.Game\obj\**;..\Kyrios.Game\bin\**" LinkBase="Game" />
+    <EmbeddedResource Include="..\Kyrios.Game\Assets\logo.png" LogicalName="MegRace.Logo.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Kyrios.Core\Kyrios.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MonoGame.Framework.Android" Version="3.8.5.1" />
+  </ItemGroup>
+
+</Project>

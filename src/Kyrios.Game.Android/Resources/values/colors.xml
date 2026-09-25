@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- As mesmas cores do jogo: fundo dos menus e o gradiente do título. -->
+  <color name="megrace_background">#14161F</color>
+  <color name="megrace_icon_center">#FFD84A</color>
+  <color name="megrace_icon_edge">#F07A1E</color>
+</resources>

@@ -10,3 +10,8 @@ obj/
 
 ## Builds gerados
 dist/
+
+## Chaves de assinatura (nunca no repositório)
+*.keystore
+*.jks
+signing.properties

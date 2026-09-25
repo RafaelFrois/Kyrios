@@ -1,7 +1,6 @@
 using Kyrios.Core;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
-using Microsoft.Xna.Framework.Input.Touch;
 
 namespace Kyrios.Game;
 
@@ -19,8 +18,11 @@ public sealed class GameInput
     private MouseState _previousMouse;
     private GamePadState _pad;
     private GamePadState _previousPad;
+    private readonly List<TouchPoint> _rawTouches = [];
+    private readonly List<TouchPoint> _touchPoints = [];
     private readonly List<Vector2> _touches = [];
     private readonly List<Vector2> _touchesStarted = [];
+    private bool _systemBack;
     private bool _touchDown;
     private bool _previousTouchDown;
     private Point _touchPosition;
@@ -42,6 +44,9 @@ public sealed class GameInput
     /// <summary>Dedos que encostaram na tela neste quadro.</summary>
     public IReadOnlyList<Vector2> TouchesStarted => _touchesStarted;
 
+    /// <summary>Dedos na tela com identificador (acompanhar o mesmo dedo entre quadros), em pixels da área de desenho.</summary>
+    public IReadOnlyList<TouchPoint> TouchPoints => _touchPoints;
+
     public void Update()
     {
         _previous = _current;
@@ -59,6 +64,7 @@ public sealed class GameInput
         }
 
         UpdateTouches();
+        _systemBack = GamePlatform.Current.ConsumeBackRequest();
 
         // Modo toque: liga com qualquer dedo na tela; desliga com o teclado ou com um mouse de verdade (alguns
         // navegadores ainda mandam um "mouse" sintético logo depois do toque, então ele só conta um tempo depois).
@@ -78,27 +84,30 @@ public sealed class GameInput
 
     private void UpdateTouches()
     {
+        _rawTouches.Clear();
+        _touchPoints.Clear();
         _touches.Clear();
         _touchesStarted.Clear();
         _previousTouchDown = _touchDown;
         try
         {
-            foreach (TouchLocation touch in TouchPanel.GetState())
-            {
-                if (touch.State is TouchLocationState.Pressed or TouchLocationState.Moved)
-                {
-                    Vector2 position = touch.Position * PointerScale;
-                    _touches.Add(position);
-                    if (touch.State == TouchLocationState.Pressed)
-                    {
-                        _touchesStarted.Add(position);
-                    }
-                }
-            }
+            GamePlatform.Current.ReadTouches(_rawTouches);
         }
         catch (Exception)
         {
             // Plataforma sem tela de toque: segue só com teclado/mouse.
+            _rawTouches.Clear();
+        }
+
+        foreach (TouchPoint touch in _rawTouches)
+        {
+            Vector2 position = touch.Position * PointerScale;
+            _touchPoints.Add(touch with { Position = position });
+            _touches.Add(position);
+            if (touch.JustPressed)
+            {
+                _touchesStarted.Add(position);
+            }
         }
 
         _touchDown = _touches.Count > 0;
@@ -161,10 +170,11 @@ public sealed class GameInput
 
     public bool Confirm => Any(Keys.Enter, Keys.Space) || PadPressed(Buttons.A);
 
-    public bool Back => Any(Keys.Escape, Keys.Back) || PadPressed(Buttons.B) || PadPressed(Buttons.Back);
+    /// <summary>Voltar: ESC, BACKSPACE, B/BACK do controle ou o botão/gesto "voltar" do celular.</summary>
+    public bool Back => Any(Keys.Escape, Keys.Back) || PadPressed(Buttons.B) || PadPressed(Buttons.Back) || _systemBack;
 
-    /// <summary>Pausar/retomar a corrida (ESC, P ou START).</summary>
-    public bool Pause => Any(Keys.Escape, Keys.P) || PadPressed(Buttons.Start);
+    /// <summary>Pausar/retomar a corrida (ESC, P, START ou o "voltar" do celular).</summary>
+    public bool Pause => Any(Keys.Escape, Keys.P) || PadPressed(Buttons.Start) || _systemBack;
 
     public CarInput BuildCarInput()
     {
