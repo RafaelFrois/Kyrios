@@ -74,3 +74,64 @@ mantém os 10.
 - `src/Kyrios.Game.Web` — projeto KNI BlazorGL que compila os mesmos arquivos do jogo
   e adiciona só a casca web (página, ponte da Poki, save no navegador).
 - A versão desktop (`.exe`) continua sendo gerada como antes.
+
+## Fases 3-13 — o que foi feito
+
+| Fase | Resultado |
+|---|---|
+| 3 Ambiente | KNI 4.3.9001 (BlazorGL) + .NET 8; projeto `src/Kyrios.Game.Web` na solution |
+| 4 Build mínima | o jogo inteiro compila e roda no navegador sem reescrever nada |
+| 5 Gameplay | passo fixo de 1/60 s; **teste de paridade: mesma corrida (10 carros, IA, colisões, voltas, eliminações) dá resultado idêntico bit a bit no desktop e na web** |
+| 6 Save | `localStorage` principal + backup, `SaveVersion` com migração, reparo de valores impossíveis; sincronizado pela nuvem da Poki automaticamente |
+| 7 UI / input | canvas nítido em qualquer densidade de tela, toque em todos os menus, controles de toque na corrida, aviso de rotação, dicas de teclado escondidas no toque |
+| 8 Otimização | 2,8 MB zipados / 3,4 MB descompactados; logo decodificada pelo navegador (carregamento ~1 s mais rápido em aparelho lento); console limpo |
+| 9 Poki SDK | `init` → `gameLoadingFinished` → `commercialBreak` antes de cada largada → `gameplayStart`/`gameplayStop` sem duplicar; áudio suspenso só durante anúncio; tudo funciona sem o SDK (bloqueador) |
+| 10 Testes | ver abaixo |
+| 13 Produção | `build-web.ps1` (Windows) / `build-web.sh` → `dist/web` + `dist/MegRace-web.zip` |
+
+### Anúncios
+- **Intervalo comercial** (`commercialBreak`): antes de toda largada — "JOGAR" no menu de modos, "JOGAR
+  NOVAMENTE" no resultado e "REINICIAR" na pausa. A Poki decide quando realmente exibe. O jogo fica congelado e
+  mudo só enquanto o anúncio passa. Nunca no meio de uma corrida.
+- **Anúncio recompensado** (`rewardedBreak`): **não usado**. O jogo não tem moeda nem vidas extras, e dar
+  vantagem na corrida (tempo extra, turbo) mudaria o equilíbrio dos recordes e conquistas. Fica pronto pra ser
+  ligado se um dia existir uma recompensa que não mexa no gameplay.
+
+### Testes executados (Chromium, automatizados)
+- Save: skin, pista, conquista, recorde e vários desbloqueios de uma vez — fechando o navegador no instante do
+  desbloqueio e reabrindo: tudo preservado (inclusive a cópia de segurança).
+- Armazenamento bloqueado (aba anônima/bloqueador): o jogo abre e joga uma partida inteira sem erro.
+- Interrupções: pausa/retomar, perda de foco (pausa sozinho), reiniciar pela pausa, sair no meio, jogar de novo,
+  Enter repetido rápido (uma largada só).
+- Poki: sequência de eventos conferida com SDK simulado; sem SDK (bloqueado) o jogo carrega normalmente.
+- Página da Poki: dentro de um iframe, setas/espaço/PageDown/End/roda **não rolam** a página de fora.
+- Celular (844x390, densidade 3x, toque): menus por toque, corrida com multitoque, pausa, retrato.
+- Desempenho (GPU emulada por software — pior caso): 51 fps normal; 40 fps com a CPU 4-6x mais lenta.
+  Carregamento: ~2 s (CPU normal), ~6,4 s (CPU 4x mais lenta).
+- Rede: só o próprio jogo e o `game-cdn.poki.com` (SDK). Sem fontes, CDNs ou APIs externas.
+
+### Ainda precisa de verificação fora deste ambiente
+Este ambiente não tem acesso aos servidores da Poki nem a Safari/Firefox/aparelhos reais:
+1. **Poki Inspector** — enviar `dist/MegRace-web.zip` e seguir os avisos (ver abaixo).
+2. **SDK real** — os eventos foram validados com um SDK simulado com a mesma interface.
+3. **Safari (iPhone/iPad) e Firefox** — o jogo usa só recursos padrão (WebAssembly, WebGL, Web Audio,
+   localStorage); vale jogar uma partida em cada.
+4. **Som em aparelho real** — a liberação do áudio no primeiro toque foi verificada pelo estado do contexto de
+   áudio, não ouvindo.
+
+### Como testar no Poki Inspector
+1. Rodar `./build-web.ps1` (Windows) ou `./build-web.sh`.
+2. Abrir o Poki Inspector (no painel de desenvolvedor da Poki) e enviar `dist/MegRace-web.zip`.
+3. Conferir: carregamento, eventos do SDK, anúncio de teste antes da largada, mobile (use a visualização de
+   celular do Inspector) e a checklist abaixo.
+
+### Checklist Poki
+- [x] Web build funcionando · [x] Desktop funcionando · [x] Mobile/tablet (toque, testado em emulação)
+- [x] Teclado · [x] Pausa (ESC/P/botão) · [x] Loading com logo, barra e porcentagem
+- [x] `gameLoadingFinished` · [x] `gameplayStart` · [x] `gameplayStop` · [x] `commercialBreak`
+- [x] Save persistente (skins, pistas, conquistas, recordes, estatísticas, escolhas, idioma, volumes)
+- [x] Sem dependências externas além do SDK · [x] Sem debug/logs/ferramentas de desenvolvimento
+- [x] Build otimizada (2,8 MB) · [x] Sem referências ao antigo modo clássico
+- [x] UI responsiva, nada cortado (letterbox), aviso de rotação · [x] Jogável sem teclado
+- [x] Tela cheia: fica com a Poki (o canvas acompanha o tamanho)
+- [ ] Poki Inspector e aparelhos reais (itens acima)

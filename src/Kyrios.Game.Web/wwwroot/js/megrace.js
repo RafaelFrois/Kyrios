@@ -46,7 +46,7 @@
     // ---------- Página ----------
     // Setas, espaço e roda do mouse não podem rolar a página da Poki onde o jogo está embutido.
     window.addEventListener('keydown', (event) => {
-        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Spacebar', 'Tab'].includes(event.key)) {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Spacebar', 'Tab', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) {
             event.preventDefault();
         }
     }, { passive: false });

@@ -106,6 +106,24 @@ O resultado fica em `dist/<sistema>/`: um executável (`MegRace.exe` no Windows,
 `MegRace` no macOS/Linux) junto de algumas bibliotecas nativas (SDL2, OpenAL) —
 copie a pasta inteira, não só o executável.
 
+### Versão web (navegador / Poki)
+
+O mesmo jogo roda no navegador (WebAssembly + WebGL, via [KNI](https://github.com/kniEngine/kni)) — mesmo
+código, mesmo conteúdo, mesmo save, mesma física. Detalhes, testes e checklist da Poki em
+[`docs/WEB_PORT.md`](docs/WEB_PORT.md).
+
+```bash
+./build-web.sh          # Linux/macOS
+./build-web.ps1         # Windows (PowerShell)
+```
+
+Gera `dist/web/` (pasta pronta pra servir) e `dist/MegRace-web.zip` (index.html na raiz — o formato do Poki
+Inspector). Pra testar localmente sirva a pasta por HTTP (ex.: `cd dist/web && python3 -m http.server 8080`) —
+abrir o `index.html` direto do disco não funciona em navegador nenhum.
+
+Na web: toque em celular/tablet (botões na corrida), save no navegador (sincronizado pela Poki), sem botão SAIR
+e com a tela cheia controlada pelo site.
+
 ### Versão de terminal (ASCII)
 
 ```bash

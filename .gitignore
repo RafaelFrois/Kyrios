@@ -7,3 +7,6 @@ obj/
 .vs/
 .vscode/
 *.suo
+
+## Builds gerados
+dist/
