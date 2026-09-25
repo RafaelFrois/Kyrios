@@ -53,6 +53,14 @@ public sealed record Achievement(
     bool IsSecret = false,
     AchievementIcon LockedIcon = null) : IUnlockable
 {
+    private readonly string _name = Name;
+    private readonly string _description = Description;
+
+    // Textos no idioma atual (o catálogo guarda o português; ver L.Tr).
+    public string Name { get => L.Tr(_name); init => _name = value; }
+
+    public string Description { get => L.Tr(_description); init => _description = value; }
+
     UnlockRequirement IUnlockable.Requirement => Condition;
 }
 
@@ -71,12 +79,12 @@ public static class ProgressionStyle
 
     public static string CategoryName(AchievementCategory category) => category switch
     {
-        AchievementCategory.DeathRace => "MORTAL",
-        AchievementCategory.TimeAttack => "RELOGIO",
-        AchievementCategory.Tracks => "PISTAS",
-        AchievementCategory.Skins => "SKINS",
-        AchievementCategory.General => "GERAL",
-        _ => "IDIOTAS",
+        AchievementCategory.DeathRace => L.T("MORTAL", "DEATH RACE"),
+        AchievementCategory.TimeAttack => L.T("RELOGIO", "TIME ATTACK"),
+        AchievementCategory.Tracks => L.T("PISTAS", "TRACKS"),
+        AchievementCategory.Skins => L.T("SKINS", "SKINS"),
+        AchievementCategory.General => L.T("GERAL", "GENERAL"),
+        _ => L.T("IDIOTAS", "SILLY"),
     };
 
     public static Color CategoryColor(AchievementCategory category) => category switch

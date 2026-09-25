@@ -281,15 +281,18 @@ public sealed class SceneryRenderer
     private SceneCanvas CreateCanvas(Track track, float time, int seed) =>
         new(_spriteBatch, _pixel, _circle, _glow, track) { Time = time, Rng = new Random(seed) };
 
+    /// <summary>A textura estática de cada pista, por idioma (alguns cenários têm placas escritas).</summary>
+    private static string CacheKey(TrackTheme theme) => $"{theme.Id}:{L.Code(L.Current)}";
+
     private static int SeedFor(TrackTheme theme) => theme.Id.Aggregate(17, (hash, c) => (hash * 31) + c);
 
     /// <summary>Garante a textura estática da pista pronta. Chamar FORA de um SpriteBatch.Begin/End.</summary>
     public void Prepare(TrackTheme theme, Track track)
     {
-        if (_cache.TryGetValue(theme.Id, out RenderTarget2D cached) && !cached.IsDisposed)
+        if (_cache.TryGetValue(CacheKey(theme), out RenderTarget2D cached) && !cached.IsDisposed)
         {
-            _recent.Remove(theme.Id);
-            _recent.AddFirst(theme.Id);
+            _recent.Remove(CacheKey(theme));
+            _recent.AddFirst(CacheKey(theme));
             return;
         }
 
@@ -316,9 +319,9 @@ public sealed class SceneryRenderer
         _spriteBatch.End();
         _device.SetRenderTarget(null);
 
-        _cache[theme.Id] = target;
-        _recent.Remove(theme.Id);
-        _recent.AddFirst(theme.Id);
+        _cache[CacheKey(theme)] = target;
+        _recent.Remove(CacheKey(theme));
+        _recent.AddFirst(CacheKey(theme));
     }
 
     private static void PaintStaticLayer(TrackTheme theme, SceneCanvas c)
@@ -588,7 +591,7 @@ public sealed class SceneryRenderer
     /// <summary>Cenário da pista: a textura estática + o que se mexe. Chamar dentro do SpriteBatch principal.</summary>
     public void DrawBase(TrackTheme theme, Track track, float time)
     {
-        if (_cache.TryGetValue(theme.Id, out RenderTarget2D target))
+        if (_cache.TryGetValue(CacheKey(theme), out RenderTarget2D target))
         {
             _spriteBatch.Draw(target, new Vector2(-SceneCanvas.Margin, -SceneCanvas.Margin), Color.White);
         }
@@ -599,7 +602,7 @@ public sealed class SceneryRenderer
     /// <summary>Miniatura da pista (a textura estática reduzida) — usada no seletor de pistas.</summary>
     public void DrawPreview(TrackTheme theme, Rectangle destination, Color tint)
     {
-        if (_cache.TryGetValue(theme.Id, out RenderTarget2D target))
+        if (_cache.TryGetValue(CacheKey(theme), out RenderTarget2D target))
         {
             _spriteBatch.Draw(target, destination, null, tint, 0f, Vector2.Zero, SpriteEffects.None, 0f);
         }

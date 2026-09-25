@@ -351,7 +351,7 @@ public static partial class TrackSceneries
             }
 
             c.Rect(252f, 192f, 60f, 10f, new Color(120, 80, 45));
-            c.TextC("SUCO", 282f, 197f, 1.1f, Color.White);
+            c.TextC(L.T("SUCO", "JUICE"), 282f, 197f, 1.1f, Color.White);
             Color[] umbrellaColors = [new(230, 70, 70), new(60, 140, 230), new(250, 200, 40), new(90, 190, 90)];
             for (int i = 0; i < 6; i++)
             {

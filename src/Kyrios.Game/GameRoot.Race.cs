@@ -135,14 +135,14 @@ public sealed partial class GameRoot
             string text = shown.ToString();
             float size = 8f * pop;
             PixelFont.DrawShadowed(_spriteBatch, _pixel, text, center - new Vector2(PixelFont.Measure(text, size) / 2f, PixelFont.LineHeight(size) / 2f), size, Color.Lerp(AccentColor, Color.White, local * 0.5f));
-            DrawCenteredText(new Rectangle(0, 0, (int)AreaWidth, 0), "PREPARE-SE", center.Y + 76f, 2f, TextColor, shadow: true);
+            DrawCenteredText(new Rectangle(0, 0, (int)AreaWidth, 0), L.T("PREPARE-SE", "GET READY"), center.Y + 76f, 2f, TextColor, shadow: true);
         }
         else if (_goTimer > 0f)
         {
             float t = 1f - (_goTimer / GoSeconds);
             float size = 8f * (1f + (t * 0.35f));
             float alpha = 1f - (t * t);
-            PixelFont.DrawShadowed(_spriteBatch, _pixel, "VAI!", center - new Vector2(PixelFont.Measure("VAI!", size) / 2f, PixelFont.LineHeight(size) / 2f), size, RecordColor * alpha, Color.Black * (0.6f * alpha));
+            PixelFont.DrawShadowed(_spriteBatch, _pixel, L.T("VAI!", "GO!"), center - new Vector2(PixelFont.Measure(L.T("VAI!", "GO!"), size) / 2f, PixelFont.LineHeight(size) / 2f), size, RecordColor * alpha, Color.Black * (0.6f * alpha));
         }
     }
 
@@ -324,7 +324,7 @@ public sealed partial class GameRoot
             if (!_recordBannerShown && _saveData.BestScoreTimeAttack is > 0f and { } best && _player.Score > best)
             {
                 _recordBannerShown = true;
-                ShowBanner("NOVO RECORDE!", RecordColor, "CONTINUE PONTUANDO");
+                ShowBanner(L.T("NOVO RECORDE!", "NEW RECORD!"), RecordColor, L.T("CONTINUE PONTUANDO", "KEEP SCORING"));
                 _audio.PlayUnlock(isSkin: false);
             }
 
@@ -340,7 +340,7 @@ public sealed partial class GameRoot
         }
         else if (car.LapsCompleted > _lastPlayerLaps && !_player.Eliminated && !_player.Finished)
         {
-            AddFloatingText($"VOLTA {car.LapsCompleted + 1}", playerPos + new Vector2(0f, -20f), TextColor, 2f);
+            AddFloatingText(L.T($"VOLTA {car.LapsCompleted + 1}", $"LAP {car.LapsCompleted + 1}"), playerPos + new Vector2(0f, -20f), TextColor, 2f);
         }
 
         _lastPlayerLaps = car.LapsCompleted;
@@ -362,22 +362,22 @@ public sealed partial class GameRoot
             if (_race.EliminationsThisTick.Contains(_player))
             {
                 TriggerScreenShake(8f);
-                ShowBanner("VOCE FOI ELIMINADO!", DangerColor, "ENTER: VER RESULTADO", seconds: 3.5f);
+                ShowBanner(L.T("VOCE FOI ELIMINADO!", "YOU'VE BEEN ELIMINATED!"), DangerColor, L.T("ENTER: VER RESULTADO", "ENTER: SEE RESULTS"), seconds: 3.5f);
             }
             else if (!_player.Eliminated && _race.EliminationsThisTick.Count > 1)
             {
-                ShowBanner($"{_race.EliminationsThisTick.Count} ELIMINADOS!", DangerColor, left > 1 ? $"RESTAM {left}" : null);
+                ShowBanner(L.T($"{_race.EliminationsThisTick.Count} ELIMINADOS!", $"{_race.EliminationsThisTick.Count} ELIMINATED!"), DangerColor, left > 1 ? L.T($"RESTAM {left}", $"{left} LEFT") : null);
             }
             else if (!_player.Eliminated)
             {
-                ShowBanner($"{_carNames[last]} ELIMINADO!", _carColors[last], left > 1 ? $"RESTAM {left}" : null);
+                ShowBanner(L.T($"{_carNames[last]} ELIMINADO!", $"{_carNames[last]} ELIMINATED!"), _carColors[last], left > 1 ? L.T($"RESTAM {left}", $"{left} LEFT") : null);
             }
         }
 
         if (_raceTracker.SecretFoundThisTick)
         {
             _audio.PlayUnlock(isSkin: false);
-            ShowBanner("SEGREDO ENCONTRADO!", new Color(215, 125, 235), SelectedTrack.SecretName);
+            ShowBanner(L.T("SEGREDO ENCONTRADO!", "SECRET FOUND!"), new Color(215, 125, 235), SelectedTrack.SecretName);
             for (int i = 0; i < 12; i++)
             {
                 _particles.Spawn(playerPos, RandomSpread(120f), life: 0.8f, size: 3f, new Color(255, 230, 120));
@@ -498,14 +498,14 @@ public sealed partial class GameRoot
         DimScreen(OverlayDimColor);
         var panel = new Rectangle((int)(AreaWidth / 2f) - 180, 96, 360, 310);
         DrawAccentPanel(panel, AccentColor);
-        DrawCenteredText(panel, "PAUSADO", panel.Y + 24f, TitleSize, AccentColor, shadow: true);
-        string[] labels = ["CONTINUAR", "REINICIAR", "CONFIGURACOES", "SAIR PARA O MENU"];
+        DrawCenteredText(panel, L.T("PAUSADO", "PAUSED"), panel.Y + 24f, TitleSize, AccentColor, shadow: true);
+        string[] labels = [L.T("CONTINUAR", "RESUME"), L.T("REINICIAR", "RESTART"), L.T("CONFIGURACOES", "SETTINGS"), L.T("SAIR PARA O MENU", "QUIT TO MENU")];
         for (int i = 0; i < labels.Length; i++)
         {
             DrawButton(PauseButtonRect(i), labels[i], _pauseFocus == i, primary: i == 0);
         }
 
-        DrawKeyHints(("SETAS", "NAVEGAR"), ("ENTER", "CONFIRMAR"), ("ESC", "CONTINUAR"));
+        DrawKeyHints((L.T("SETAS", "ARROWS"), L.T("NAVEGAR", "NAVIGATE")), ("ENTER", L.T("CONFIRMAR", "CONFIRM")), ("ESC", L.T("CONTINUAR", "RESUME")));
     }
 
     // ---------- HUD ----------
@@ -524,7 +524,7 @@ public sealed partial class GameRoot
         }
 
         DrawBoostBar(new Vector2(14f, AreaHeight + 13f));
-        const string pauseHint = "ESC: PAUSA";
+        string pauseHint = L.T("ESC: PAUSA", "ESC: PAUSE");
         PixelFont.DrawShadowed(_spriteBatch, _pixel, pauseHint, new Vector2(AreaWidth - PixelFont.Measure(pauseHint, 1.4f) - 12f, AreaHeight + 15f), 1.4f, StatBadgeLabelColor);
     }
 
@@ -553,12 +553,12 @@ public sealed partial class GameRoot
         float afterNumber = panel.X + 12f + PixelFont.Measure(place, 2.8f) + 2f;
         if (!isOut)
         {
-            PixelFont.Draw(_spriteBatch, _pixel, "º", new Vector2(afterNumber, panel.Y + 6f), 1.4f, placeColor);
+            PixelFont.Draw(_spriteBatch, _pixel, L.OrdinalSuffix(position), new Vector2(afterNumber, panel.Y + 6f), 1.4f, placeColor);
         }
 
-        PixelFont.Draw(_spriteBatch, _pixel, $"DE {_race.Entrants.Count}", new Vector2(afterNumber, panel.Y + 18f), 1.2f, StatBadgeLabelColor);
-        PixelFont.Draw(_spriteBatch, _pixel, isOut ? "ELIMINADO" : $"VOLTA {_player.Car.LapsCompleted + 1}", new Vector2(panel.X + 104f, panel.Y + 9f), 1.8f, isOut ? DangerColor : TextColor);
-        PixelFont.Draw(_spriteBatch, _pixel, $"RESTAM {remaining}", new Vector2(panel.X + 222f, panel.Y + 11f), 1.4f, StatBadgeLabelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, L.T($"DE {_race.Entrants.Count}", $"OF {_race.Entrants.Count}"), new Vector2(afterNumber, panel.Y + 18f), 1.2f, StatBadgeLabelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, isOut ? L.T("ELIMINADO", "ELIMINATED") : L.T($"VOLTA {_player.Car.LapsCompleted + 1}", $"LAP {_player.Car.LapsCompleted + 1}"), new Vector2(panel.X + 104f, panel.Y + 9f), 1.8f, isOut ? DangerColor : TextColor);
+        PixelFont.Draw(_spriteBatch, _pixel, L.T($"RESTAM {remaining}", $"{remaining} LEFT"), new Vector2(panel.X + 222f, panel.Y + 11f), 1.4f, StatBadgeLabelColor);
 
         // Próxima eliminação: acontece quando o líder completar a volta — a barra mostra o quanto falta.
         // Quando o jogador é o último, o próprio painel pisca em vermelho com o aviso.
@@ -577,7 +577,7 @@ public sealed partial class GameRoot
                 DrawHudPanel(box);
             }
 
-            string label = inDanger ? "VOCE ESTA EM ULTIMO!" : "PROXIMA ELIMINACAO";
+            string label = inDanger ? L.T("VOCE ESTA EM ULTIMO!", "YOU'RE IN LAST PLACE!") : L.T("PROXIMA ELIMINACAO", "NEXT ELIMINATION");
             DrawCenteredText(box, label, box.Y + 5f, 1.3f, inDanger ? Color.White : StatBadgeLabelColor);
             var bar = new Rectangle(box.X + 20, box.Y + 18, box.Width - 40, 7);
             DrawProgressBar(bar, LapFraction(leader), inDanger ? Color.White : DangerColor * 0.9f, 3f);
@@ -614,11 +614,11 @@ public sealed partial class GameRoot
 
         var score = new Rectangle(10, HudTop, 340, HudPanelHeight);
         DrawHudPanel(score);
-        PixelFont.Draw(_spriteBatch, _pixel, "PONTOS", new Vector2(score.X + 12f, score.Y + 6f), 1.2f, StatBadgeLabelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, L.T("PONTOS", "POINTS"), new Vector2(score.X + 12f, score.Y + 6f), 1.2f, StatBadgeLabelColor);
         PixelFont.DrawShadowed(_spriteBatch, _pixel, $"{_player.Score:0}", new Vector2(score.X + 64f, score.Y + 7f), 2.4f, AccentColor);
-        string record = _saveData.BestScoreTimeAttack is > 0f and { } best ? $"RECORDE {best:0}" : "SEM RECORDE";
+        string record = _saveData.BestScoreTimeAttack is > 0f and { } best ? L.T($"RECORDE {best:0}", $"RECORD {best:0}") : L.T("SEM RECORDE", "NO RECORD");
         PixelFont.Draw(_spriteBatch, _pixel, record, new Vector2(score.X + 170f, score.Y + 6f), 1.2f, _recordBannerShown ? RecordColor : StatBadgeLabelColor);
-        PixelFont.Draw(_spriteBatch, _pixel, $"VOLTA {_player.Car.LapsCompleted + 1}", new Vector2(score.X + 170f, score.Y + 17f), 1.4f, TextColor);
+        PixelFont.Draw(_spriteBatch, _pixel, L.T($"VOLTA {_player.Car.LapsCompleted + 1}", $"LAP {_player.Car.LapsCompleted + 1}"), new Vector2(score.X + 170f, score.Y + 17f), 1.4f, TextColor);
     }
 
     private void DrawBoostBar(Vector2 position)
@@ -629,7 +629,7 @@ public sealed partial class GameRoot
         DrawRoundedRect(back, HudFrameFill, 4f);
         float fraction = Math.Clamp(_player.Car.BoostFuel / _player.Car.Settings.BoostMaxFuel, 0f, 1f);
         _spriteBatch.Draw(_pixel, new Rectangle((int)position.X, (int)position.Y, (int)(width * fraction), (int)height), _player.Car.IsBoosting ? BoostActiveColor : BoostFillColor);
-        PixelFont.DrawShadowed(_spriteBatch, _pixel, "TURBO (SHIFT)", new Vector2(position.X + width + 12f, position.Y + 1f), 1.3f, TextColor);
+        PixelFont.DrawShadowed(_spriteBatch, _pixel, L.T("TURBO (SHIFT)", "BOOST (SHIFT)"), new Vector2(position.X + width + 12f, position.Y + 1f), 1.3f, TextColor);
     }
 
     /// <summary>Textos subindo a partir do carro, anéis de checkpoint e a faixa de aviso no centro da tela.</summary>
@@ -757,8 +757,8 @@ public sealed partial class GameRoot
 
         bool timeAttack = _race.Mode == RaceMode.TimeAttack;
         (string headline, Color color) = timeAttack
-            ? (_records.NewScoreRecord ? "NOVO RECORDE!" : "TEMPO ESGOTADO!", _records.NewScoreRecord ? RecordColor : BoostFillColor)
-            : _player.Finished ? ("VITORIA!", AccentColor) : ("ELIMINADO", DangerColor);
+            ? (_records.NewScoreRecord ? L.T("NOVO RECORDE!", "NEW RECORD!") : L.T("TEMPO ESGOTADO!", "TIME'S UP!"), _records.NewScoreRecord ? RecordColor : BoostFillColor)
+            : _player.Finished ? (L.T("VITORIA!", "VICTORY!"), AccentColor) : (L.T("ELIMINADO", "ELIMINATED"), DangerColor);
 
         DrawAccentPanel(panel, color);
         float pop = 1f + (MathF.Max(0f, 1f - (_resultsTime / 0.3f)) * 0.3f);
@@ -771,13 +771,13 @@ public sealed partial class GameRoot
             rows.Y += 32;
         }
 
-        string[] labels = ["JOGAR NOVAMENTE", "MENU"];
+        string[] labels = [L.T("JOGAR NOVAMENTE", "PLAY AGAIN"), "MENU"];
         for (int i = 0; i < labels.Length; i++)
         {
             DrawButton(ResultButtonRect(i), labels[i], _resultFocus == i, primary: i == 0, textSize: 1.8f);
         }
 
-        DrawKeyHints(("ENTER", "CONFIRMAR"), ("R", "JOGAR DE NOVO"), ("ESC", "MENU"));
+        DrawKeyHints(("ENTER", L.T("CONFIRMAR", "CONFIRM")), ("R", L.T("JOGAR DE NOVO", "PLAY AGAIN")), ("ESC", "MENU"));
         DrawConfetti();
     }
 
@@ -789,24 +789,24 @@ public sealed partial class GameRoot
             string record = _saveData.BestScoreTimeAttack is { } best ? $"{best:0} PTS" : "--";
             return
             [
-                ("PONTUACAO", $"{_player.Score:0} PTS", true),
-                (_records.NewScoreRecord ? "NOVO RECORDE PESSOAL" : "RECORDE PESSOAL", record, _records.NewScoreRecord),
-                ("VOLTAS", _player.Car.LapsCompleted.ToString(), false),
-                ("MELHOR VOLTA", lap, _records.NewLapRecord),
-                ("BATIDAS", _raceTracker.Collisions.ToString(), false),
-                ("TEMPO JOGADO", TimeFormat.Short(_race.ElapsedTime), false),
+                (L.T("PONTUACAO", "SCORE"), $"{_player.Score:0} PTS", true),
+                (_records.NewScoreRecord ? L.T("NOVO RECORDE PESSOAL", "NEW PERSONAL BEST") : L.T("RECORDE PESSOAL", "PERSONAL BEST"), record, _records.NewScoreRecord),
+                (L.T("VOLTAS", "LAPS"), _player.Car.LapsCompleted.ToString(), false),
+                (L.T("MELHOR VOLTA", "BEST LAP"), lap, _records.NewLapRecord),
+                (L.T("BATIDAS", "CRASHES"), _raceTracker.Collisions.ToString(), false),
+                (L.T("TEMPO JOGADO", "TIME PLAYED"), TimeFormat.Short(_race.ElapsedTime), false),
             ];
         }
 
         int place = _player.FinishPlace ?? _race.Entrants.Count;
         return
         [
-            ("POSICAO FINAL", $"{place}º DE {_race.Entrants.Count}", _player.Finished),
-            ("VITORIAS NA MORTAL", _saveData.EliminationWins.ToString(), _player.Finished),
-            ("SEQUENCIA DE VITORIAS", _saveData.EliminationWinStreak.ToString(), false),
-            ("MELHOR VOLTA", lap, _records.NewLapRecord),
-            ("BATIDAS", _raceTracker.Collisions.ToString(), false),
-            ("TEMPO DE CORRIDA", TimeFormat.Short(_player.FinishTime ?? _race.ElapsedTime), false),
+            (L.T("POSICAO FINAL", "FINAL POSITION"), L.T($"{place}º DE {_race.Entrants.Count}", $"{L.Ordinal(place)} OF {_race.Entrants.Count}"), _player.Finished),
+            (L.T("VITORIAS NA MORTAL", "DEATH RACE WINS"), _saveData.EliminationWins.ToString(), _player.Finished),
+            (L.T("SEQUENCIA DE VITORIAS", "WIN STREAK"), _saveData.EliminationWinStreak.ToString(), false),
+            (L.T("MELHOR VOLTA", "BEST LAP"), lap, _records.NewLapRecord),
+            (L.T("BATIDAS", "CRASHES"), _raceTracker.Collisions.ToString(), false),
+            (L.T("TEMPO DE CORRIDA", "RACE TIME"), TimeFormat.Short(_player.FinishTime ?? _race.ElapsedTime), false),
         ];
     }
 

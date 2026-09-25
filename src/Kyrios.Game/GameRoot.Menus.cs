@@ -144,12 +144,12 @@ public sealed partial class GameRoot
             MainItem item = MainItems[i];
             (string label, string badge) = item switch
             {
-                MainItem.Play => ("JOGAR", null),
+                MainItem.Play => (L.T("JOGAR", "PLAY"), null),
                 MainItem.Skins => ("SKINS", $"{skinsEarned + 1}/{skinsTotal + 1}"),
-                MainItem.Tracks => ("PISTAS", $"{tracksEarned + 1}/{tracksTotal + 1}"),
-                MainItem.Achievements => ("CONQUISTAS", $"{Achievements.UnlockedCount(_saveData)}/{Achievements.All.Count}"),
-                MainItem.Settings => ("CONFIGURACOES", null),
-                _ => ("SAIR", null),
+                MainItem.Tracks => (L.T("PISTAS", "TRACKS"), $"{tracksEarned + 1}/{tracksTotal + 1}"),
+                MainItem.Achievements => (L.T("CONQUISTAS", "ACHIEVEMENTS"), $"{Achievements.UnlockedCount(_saveData)}/{Achievements.All.Count}"),
+                MainItem.Settings => (L.T("CONFIGURACOES", "SETTINGS"), null),
+                _ => (L.T("SAIR", "QUIT"), null),
             };
 
             DrawButton(MainButtonRect(item), label, _mainFocus == i, primary: item == MainItem.Play, badge, textSize: item == MainItem.Play ? 3.2f : 2f);
@@ -162,14 +162,14 @@ public sealed partial class GameRoot
 
         DrawMenuShowcase(new Rectangle(620, 196, 530, 226));
         DrawStudioLogo(new Vector2(20f, AreaHeight - 8f));
-        DrawKeyHints(("SETAS", "NAVEGAR"), ("ENTER", "CONFIRMAR"), ("C", "CONQUISTAS"), ("Q", "OPCOES"), ("ESC", "SAIR"));
+        DrawKeyHints((L.T("SETAS", "ARROWS"), L.T("NAVEGAR", "NAVIGATE")), ("ENTER", L.T("CONFIRMAR", "CONFIRM")), ("C", L.T("CONQUISTAS", "ACHIEVEMENTS")), ("Q", L.T("OPCOES", "OPTIONS")), ("ESC", L.T("SAIR", "QUIT")));
     }
 
     /// <summary>Painel "pronto pra correr": a skin equipada, a pista escolhida e o último modo jogado.</summary>
     private void DrawMenuShowcase(Rectangle panel)
     {
         DrawAccentPanel(panel, AccentColor);
-        PixelFont.Draw(_spriteBatch, _pixel, "PRONTO PARA CORRER", new Vector2(panel.X + 20f, panel.Y + 18f), BodySize, AccentColor);
+        PixelFont.Draw(_spriteBatch, _pixel, L.T("PRONTO PARA CORRER", "READY TO RACE"), new Vector2(panel.X + 20f, panel.Y + 18f), BodySize, AccentColor);
 
         var carCenter = new Vector2(panel.X + 120f, panel.Y + 106f);
         DrawCircle(carCenter + new Vector2(0f, 6f), 58f, SkinCategories.Color(SelectedSkin.Category) * 0.08f);
@@ -182,9 +182,9 @@ public sealed partial class GameRoot
         var tile = new Rectangle(panel.X + 270, panel.Y + 58, 64, 64);
         DrawIconTile(tile, AchievementIcons.Art(SelectedTrack.Icon), new Color(120, 230, 130), colored: true);
         PixelFont.DrawShadowed(_spriteBatch, _pixel, SelectedTrack.Name, new Vector2(tile.Right + 14f, tile.Y + 8f), FitTextSize(SelectedTrack.Name, panel.Right - tile.Right - 30f, 2.2f), TextColor);
-        PixelFont.Draw(_spriteBatch, _pixel, "PISTA", new Vector2(tile.Right + 14f, tile.Y + 34f), 1.4f, StatBadgeLabelColor);
-        string modeName = _selectedMode == RaceMode.TimeAttack ? "CONTRA O RELOGIO" : "CORRIDA MORTAL";
-        PixelFont.Draw(_spriteBatch, _pixel, "ULTIMO MODO", new Vector2(panel.X + 270f, panel.Y + 140f), 1.4f, StatBadgeLabelColor);
+        PixelFont.Draw(_spriteBatch, _pixel, L.T("PISTA", "TRACK"), new Vector2(tile.Right + 14f, tile.Y + 34f), 1.4f, StatBadgeLabelColor);
+        string modeName = _selectedMode == RaceMode.TimeAttack ? L.T("CONTRA O RELOGIO", "TIME ATTACK") : L.T("CORRIDA MORTAL", "DEATH RACE");
+        PixelFont.Draw(_spriteBatch, _pixel, L.T("ULTIMO MODO", "LAST MODE"), new Vector2(panel.X + 270f, panel.Y + 140f), 1.4f, StatBadgeLabelColor);
         PixelFont.Draw(_spriteBatch, _pixel, modeName, new Vector2(panel.X + 270f, panel.Y + 156f), BodySize, TextColor);
     }
 
@@ -257,10 +257,10 @@ public sealed partial class GameRoot
         DrawDeathRaceArt(new Vector2(leftX, 196f));
         DrawTimeAttackArt(new Vector2(rightX, 190f));
 
-        string best = _saveData.BestScoreTimeAttack is > 0f and { } score ? $"RECORDE: {score:0} PTS" : "SEM RECORDE AINDA";
-        string wins = _saveData.EliminationWins == 1 ? "1 VITORIA" : $"{_saveData.EliminationWins} VITORIAS";
-        DrawModeTitle(leftX, "CORRIDA MORTAL", "10 CARROS, SO O ULTIMO DE PE VENCE", wins, DangerColor, _modeFocus == 0);
-        DrawModeTitle(rightX, "CONTRA O RELOGIO", "CHECKPOINTS DAO TEMPO E PONTOS", best, BoostFillColor, _modeFocus == 1);
+        string best = _saveData.BestScoreTimeAttack is > 0f and { } score ? L.T($"RECORDE: {score:0} PTS", $"RECORD: {score:0} PTS") : L.T("SEM RECORDE AINDA", "NO RECORD YET");
+        string wins = _saveData.EliminationWins == 1 ? L.T("1 VITORIA", "1 WIN") : L.T($"{_saveData.EliminationWins} VITORIAS", $"{_saveData.EliminationWins} WINS");
+        DrawModeTitle(leftX, L.T("CORRIDA MORTAL", "DEATH RACE"), L.T("10 CARROS, SO O ULTIMO DE PE VENCE", "10 CARS, ONLY THE LAST ONE STANDING WINS"), wins, DangerColor, _modeFocus == 0);
+        DrawModeTitle(rightX, L.T("CONTRA O RELOGIO", "TIME ATTACK"), L.T("CHECKPOINTS DAO TEMPO E PONTOS", "CHECKPOINTS GIVE TIME AND POINTS"), best, BoostFillColor, _modeFocus == 1);
 
         // O lado não escolhido apaga; a faixa do meio acende na cor do escolhido.
         Color focusColor = _modeFocus == 0 ? DangerColor : BoostFillColor;
@@ -275,7 +275,7 @@ public sealed partial class GameRoot
         }
 
         DrawArrowButton(BackButtonRect, pointRight: false, BackButtonRect.Contains(LogicalMousePoint()), flashing: false);
-        DrawKeyHints(("SETAS", "ESCOLHER"), ("ENTER", "CORRER"), ("ESC", "VOLTAR"));
+        DrawKeyHints((L.T("SETAS", "ARROWS"), L.T("ESCOLHER", "CHOOSE")), ("ENTER", L.T("CORRER", "RACE")), ("ESC", L.T("VOLTAR", "BACK")));
     }
 
     private void DrawModeTitle(float centerX, string title, string line, string stat, Color color, bool selected)
@@ -288,7 +288,7 @@ public sealed partial class GameRoot
         if (selected)
         {
             float pulse = (MathF.Sin(_visualTime * 5f) + 1f) / 2f;
-            const string cta = "ENTER PARA CORRER";
+            string cta = L.T("ENTER PARA CORRER", "ENTER TO RACE");
             float width = PixelFont.Measure(cta, 1.8f) + 28f;
             var chip = new Rectangle((int)(centerX - (width / 2f)), 402, (int)width, 26);
             DrawRoundedRect(chip, Color.Lerp(color, Color.White, pulse * 0.25f), 6f);
@@ -355,7 +355,7 @@ public sealed partial class GameRoot
     // ---------- Configurações ----------
 
     private const float SettingsPanelWidth = 480f;
-    private const float SettingsPanelHeight = 280f;
+    private const float SettingsPanelHeight = 326f;
     private const float SettingsPanelPaddingV = 26f;
     private const float SettingsHeaderSize = 3f;
     private const float SettingsRowSpacing = 46f;
@@ -404,6 +404,10 @@ public sealed partial class GameRoot
             {
                 ToggleFullscreenSetting();
             }
+            else if (_settingsSelection == SettingsRow.Language)
+            {
+                SetLanguage(_input.MenuRight ? Language.English : Language.Portuguese);
+            }
             else
             {
                 AdjustSelectedVolume(_input.MenuRight ? 0.1f : -0.1f);
@@ -415,6 +419,10 @@ public sealed partial class GameRoot
             if (_settingsSelection == SettingsRow.Fullscreen)
             {
                 ToggleFullscreenSetting();
+            }
+            else if (_settingsSelection == SettingsRow.Language)
+            {
+                SetLanguage(L.English ? Language.Portuguese : Language.English);
             }
             else
             {
@@ -431,16 +439,35 @@ public sealed partial class GameRoot
         _audio.PlayMenuConfirm();
     }
 
+    /// <summary>Troca o idioma do jogo inteiro na hora (telas, catálogos e placas dos cenários) e salva a escolha.</summary>
+    private void SetLanguage(Language language)
+    {
+        if (L.Current == language)
+        {
+            return;
+        }
+
+        L.Current = language;
+        _saveData.Language = L.Code(language);
+        _saveData.Save();
+        _audio.PlayMenuConfirm();
+    }
+
     /// <summary>Retângulos do painel, das barras de volume e do botão de tela cheia — usados pra desenhar e pro
     /// mouse, então os dois lados sempre concordam sobre onde cada coisa está.</summary>
-    private (Rectangle Panel, Rectangle MusicBar, Rectangle SfxBar, Rectangle FullscreenSwitch) ComputeSettingsLayout()
+    private (Rectangle Panel, Rectangle MusicBar, Rectangle SfxBar, Rectangle FullscreenSwitch, Rectangle Portuguese, Rectangle English) ComputeSettingsLayout()
     {
         var panelRect = new Rectangle((int)((AreaWidth - SettingsPanelWidth) / 2f), (int)((AreaHeight - SettingsPanelHeight) / 2f), (int)SettingsPanelWidth, (int)SettingsPanelHeight);
         float rowY = panelRect.Y + SettingsPanelPaddingV + PixelFont.LineHeight(SettingsHeaderSize) + 34f;
         Rectangle music = ComputeVolumeBarRect(panelRect, rowY);
         Rectangle sfx = ComputeVolumeBarRect(panelRect, rowY + SettingsRowSpacing);
         var fullscreen = new Rectangle(music.X, (int)(rowY + (2f * SettingsRowSpacing)) - 3, 60, 20);
-        return (panelRect, music, sfx, fullscreen);
+        int languageY = (int)(rowY + (3f * SettingsRowSpacing)) - 4;
+        int englishWidth = (int)PixelFont.Measure("ENGLISH", LanguageChipSize) + 18;
+        int portugueseWidth = (int)PixelFont.Measure("PORTUGUES", LanguageChipSize) + 18;
+        var english = new Rectangle(panelRect.Right - (int)SettingsPaddingH - englishWidth, languageY, englishWidth, 22);
+        var portuguese = new Rectangle(english.X - 6 - portugueseWidth, languageY, portugueseWidth, 22);
+        return (panelRect, music, sfx, fullscreen, portuguese, english);
     }
 
     private static Rectangle ComputeVolumeBarRect(Rectangle panel, float y)
@@ -461,16 +488,17 @@ public sealed partial class GameRoot
 
     private void DrawSettingsPopup()
     {
-        (Rectangle panelRect, Rectangle musicBar, Rectangle sfxBar, Rectangle fullscreenSwitch) = ComputeSettingsLayout();
+        (Rectangle panelRect, Rectangle musicBar, Rectangle sfxBar, Rectangle fullscreenSwitch, Rectangle portuguese, Rectangle english) = ComputeSettingsLayout();
         DrawAccentPanel(panelRect, AccentColor);
-        DrawCenteredText(panelRect, "CONFIGURACOES", panelRect.Y + SettingsPanelPaddingV, SettingsHeaderSize, AccentColor, shadow: true);
+        DrawCenteredText(panelRect, L.T("CONFIGURACOES", "SETTINGS"), panelRect.Y + SettingsPanelPaddingV, SettingsHeaderSize, AccentColor, shadow: true);
 
-        DrawSettingsRow(panelRect, musicBar, "TRILHA SONORA", _audio.MusicVolume, _audio.MusicMuted, _settingsSelection == SettingsRow.Music);
-        DrawSettingsRow(panelRect, sfxBar, "EFEITOS SONOROS", _audio.SfxVolume, _audio.SfxMuted, _settingsSelection == SettingsRow.Sfx);
+        DrawSettingsRow(panelRect, musicBar, L.T("TRILHA SONORA", "MUSIC"), _audio.MusicVolume, _audio.MusicMuted, _settingsSelection == SettingsRow.Music);
+        DrawSettingsRow(panelRect, sfxBar, L.T("EFEITOS SONOROS", "SOUND EFFECTS"), _audio.SfxVolume, _audio.SfxMuted, _settingsSelection == SettingsRow.Sfx);
         DrawFullscreenRow(panelRect, fullscreenSwitch, _settingsSelection == SettingsRow.Fullscreen);
+        DrawLanguageRow(panelRect, portuguese, english, _settingsSelection == SettingsRow.Language);
 
-        DrawCenteredText(panelRect, "SETAS OU MOUSE: AJUSTAR    ENTER: MUDO / LIGAR", fullscreenSwitch.Y + 40f, SmallSize, StatBadgeLabelColor);
-        DrawCenteredText(panelRect, "F11: TELA CHEIA    ESC: VOLTAR", fullscreenSwitch.Y + 60f, SmallSize, StatBadgeLabelColor);
+        DrawCenteredText(panelRect, L.T("SETAS OU MOUSE: AJUSTAR    ENTER: MUDO / LIGAR", "ARROWS OR MOUSE: ADJUST    ENTER: MUTE / TOGGLE"), portuguese.Y + 42f, SmallSize, StatBadgeLabelColor);
+        DrawCenteredText(panelRect, L.T("F11: TELA CHEIA    ESC: VOLTAR", "F11: FULLSCREEN    ESC: BACK"), portuguese.Y + 62f, SmallSize, StatBadgeLabelColor);
     }
 
     private void DrawSettingsLabel(Rectangle panel, float y, string label, bool selected)
@@ -496,7 +524,7 @@ public sealed partial class GameRoot
             DrawCircle(new Vector2(barRect.X + (barRect.Width * fraction), barRect.Y + (barRect.Height / 2f)), barRect.Height * 0.6f, Color.White);
         }
 
-        string valueText = muted ? "MUDO" : $"{(int)MathF.Round(volume * 100f)}%";
+        string valueText = muted ? L.T("MUDO", "MUTED") : $"{(int)MathF.Round(volume * 100f)}%";
         float valueWidth = PixelFont.Measure(valueText, 1.75f);
         PixelFont.Draw(_spriteBatch, _pixel, valueText, new Vector2(panel.Right - SettingsPaddingH - valueWidth, barRect.Y), 1.75f, muted ? StatBadgeLabelColor : TextColor);
     }
@@ -504,22 +532,46 @@ public sealed partial class GameRoot
     /// <summary>Interruptor de tela cheia (liga/desliga, com a bolinha deslizando pro lado).</summary>
     private void DrawFullscreenRow(Rectangle panel, Rectangle toggle, bool selected)
     {
-        DrawSettingsLabel(panel, toggle.Y + 3f, "TELA CHEIA", selected);
+        DrawSettingsLabel(panel, toggle.Y + 3f, L.T("TELA CHEIA", "FULLSCREEN"), selected);
         bool on = _isFullscreen;
         DrawRoundedRect(toggle, on ? RecordColor * 0.8f : new Color(60, 64, 76), 10f);
         DrawCircle(new Vector2(on ? toggle.Right - 10f : toggle.X + 10f, toggle.Center.Y), 8f, Color.White);
-        string valueText = on ? "LIGADA" : "DESLIGADA";
+        string valueText = on ? L.T("LIGADA", "ON") : L.T("DESLIGADA", "OFF");
         float valueWidth = PixelFont.Measure(valueText, 1.5f);
         PixelFont.Draw(_spriteBatch, _pixel, valueText, new Vector2(panel.Right - SettingsPaddingH - valueWidth, toggle.Y + 4f), 1.5f, on ? RecordColor : StatBadgeLabelColor);
+    }
+
+    private const float LanguageChipSize = 1.4f;
+
+    /// <summary>Idioma: o rótulo aparece nas duas línguas (pra achar mesmo sem entender a atual) e as duas opções
+    /// ficam lado a lado, com a escolhida acesa.</summary>
+    private void DrawLanguageRow(Rectangle panel, Rectangle portuguese, Rectangle english, bool selected)
+    {
+        DrawSettingsLabel(panel, portuguese.Y + 4f, "IDIOMA / LANGUAGE", selected);
+        DrawLanguageChip(portuguese, "PORTUGUES", !L.English);
+        DrawLanguageChip(english, "ENGLISH", L.English);
+    }
+
+    private void DrawLanguageChip(Rectangle rect, string label, bool active)
+    {
+        DrawRoundedRect(rect, active ? AccentColor : new Color(46, 50, 62), 6f);
+        DrawCenteredText(rect, label, rect.Y + 5f, LanguageChipSize, active ? MenuBackground : StatBadgeLabelColor);
     }
 
     /// <summary>Clicar/arrastar numa barra de volume ajusta direto pra posição apontada (e tira do mudo); clicar no
     /// interruptor liga/desliga a tela cheia.</summary>
     private void UpdateSettingsMouse()
     {
-        (Rectangle _, Rectangle musicBar, Rectangle sfxBar, Rectangle fullscreenSwitch) = ComputeSettingsLayout();
+        (Rectangle _, Rectangle musicBar, Rectangle sfxBar, Rectangle fullscreenSwitch, Rectangle portuguese, Rectangle english) = ComputeSettingsLayout();
         Vector2 mouseLogical = ScreenToLogicalPosition(_input.MousePosition);
         var mousePoint = new Point((int)mouseLogical.X, (int)mouseLogical.Y);
+
+        if (MouseClicked && (portuguese.Contains(mousePoint) || english.Contains(mousePoint)))
+        {
+            _settingsSelection = SettingsRow.Language;
+            SetLanguage(english.Contains(mousePoint) ? Language.English : Language.Portuguese);
+            return;
+        }
 
         if (MouseClicked && InflateRect(fullscreenSwitch, 6f, 6f).Contains(mousePoint))
         {

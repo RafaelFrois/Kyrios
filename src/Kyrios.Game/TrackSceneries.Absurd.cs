@@ -102,7 +102,7 @@ public static partial class TrackSceneries
             c.TextC("!", 702f, 240f, 2f, Color.Black);
             c.Rect(760f, 212f, 120f, 56f, new Color(120, 120, 128));
             c.Rect(764f, 216f, 112f, 48f, new Color(210, 40, 40));
-            c.TextC("OFERTA", 820f, 240f, 2.5f, Color.White);
+            c.TextC(L.T("OFERTA", "SALE"), 820f, 240f, 2.5f, Color.White);
 
             // Luz fria de lâmpada fluorescente em faixas.
             for (float y = -20f; y < H + 40f; y += 110f)

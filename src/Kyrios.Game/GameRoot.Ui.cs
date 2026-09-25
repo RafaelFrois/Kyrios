@@ -300,7 +300,7 @@ public sealed partial class GameRoot
         string[] parts = progress.Split('/');
         if (parts.Length == 2 && float.TryParse(parts[0], out float have) && float.TryParse(parts[1], out float need) && need > have)
         {
-            return $"{progress}  -  FALTAM {need - have:0}";
+            return L.T($"{progress}  -  FALTAM {need - have:0}", $"{progress}  -  {need - have:0} TO GO");
         }
 
         return progress;

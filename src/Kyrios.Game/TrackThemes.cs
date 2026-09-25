@@ -22,7 +22,26 @@ public sealed record TrackTheme(
     Vector2D SecretSpot,
     string SecretName,
     string SecretDescription,
-    bool IsSecret = false) : IUnlockable;
+    bool IsSecret = false) : IUnlockable
+{
+    private readonly string _name = Name;
+    private readonly string _tagline = Tagline;
+    private readonly string _secretName = SecretName;
+    private readonly string _secretDescription = SecretDescription;
+
+    // Textos no idioma atual (o catálogo guarda o português; ver L.Tr).
+    public string Name { get => L.Tr(_name); init => _name = value; }
+
+    public string Tagline { get => L.Tr(_tagline); init => _tagline = value; }
+
+    public string SecretName { get => L.Tr(_secretName); init => _secretName = value; }
+
+    public string SecretDescription { get => L.Tr(_secretDescription); init => _secretDescription = value; }
+
+    /// <summary>Os textos do segredo como estão no catálogo (português) — a conquista gerada guarda estes e traduz
+    /// na hora de mostrar, qualquer que seja o idioma no momento em que o catálogo é montado.</summary>
+    internal (string Name, string Description) SecretTexts => (_secretName, _secretDescription);
+}
 
 /// <summary>
 /// Catálogo de pistas, na ordem do seletor. Pra criar uma nova: monte um <see cref="SceneryStyle"/> em

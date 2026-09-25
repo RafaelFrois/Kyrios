@@ -142,13 +142,13 @@ public sealed partial class GameRoot
         int unlockedCount = Achievements.UnlockedCount(_saveData);
         int totalCount = Achievements.All.Count;
         int secretsLeft = Achievements.All.Count(a => a.IsSecret && !IsAchievementUnlocked(a));
-        DrawScreenHeader("CONQUISTAS", secretsLeft > 0 ? $"{secretsLeft} CONQUISTAS SECRETAS AINDA ESCONDIDAS" : "TODAS AS SECRETAS REVELADAS!");
+        DrawScreenHeader(L.T("CONQUISTAS", "ACHIEVEMENTS"), secretsLeft > 0 ? L.T($"{secretsLeft} CONQUISTAS SECRETAS AINDA ESCONDIDAS", $"{secretsLeft} SECRET ACHIEVEMENTS STILL HIDDEN") : L.T("TODAS AS SECRETAS REVELADAS!", "ALL SECRETS REVEALED!"));
 
         float fraction = totalCount == 0 ? 0f : unlockedCount / (float)totalCount;
         const float progressWidth = 380f;
         float progressX = AreaWidth - 20f - progressWidth;
-        string countText = $"{unlockedCount} / {totalCount} CONQUISTAS";
-        string percentText = $"{MathF.Floor(fraction * 100f):0}% CONCLUIDO";
+        string countText = L.T($"{unlockedCount} / {totalCount} CONQUISTAS", $"{unlockedCount} / {totalCount} ACHIEVEMENTS");
+        string percentText = L.T($"{MathF.Floor(fraction * 100f):0}% CONCLUIDO", $"{MathF.Floor(fraction * 100f):0}% COMPLETE");
         PixelFont.DrawShadowed(_spriteBatch, _pixel, countText, new Vector2(progressX, 16f), 1.7f, TextColor);
         PixelFont.DrawShadowed(_spriteBatch, _pixel, percentText, new Vector2(AreaWidth - 20f - PixelFont.Measure(percentText, 1.7f), 16f), 1.7f, RecordColor);
         DrawProgressBar(new Rectangle((int)progressX, 36, (int)progressWidth, 12), fraction, AccentColor, 6f);
@@ -187,13 +187,13 @@ public sealed partial class GameRoot
             DrawRoundedRect(new Rectangle(track.X, thumbY, track.Width, thumbHeight), AccentColor, 3f);
         }
 
-        DrawKeyHints(("A/D", "CATEGORIA"), ("W/S", "ROLAR"), ("ESC", "VOLTAR"));
+        DrawKeyHints(("A/D", L.T("CATEGORIA", "CATEGORY")), ("W/S", L.T("ROLAR", "SCROLL")), ("ESC", L.T("VOLTAR", "BACK")));
     }
 
     private void DrawAchievementTab(Rectangle rect, int tab, bool selected, bool hovered)
     {
         List<Achievement> items = AchievementsInTab(tab);
-        string label = tab == 0 ? "TODAS" : ProgressionStyle.CategoryName(ProgressionStyle.CategoryOrder[tab - 1]);
+        string label = tab == 0 ? L.T("TODAS", "ALL") : ProgressionStyle.CategoryName(ProgressionStyle.CategoryOrder[tab - 1]);
         Color color = tab == 0 ? AllTabColor : ProgressionStyle.CategoryColor(ProgressionStyle.CategoryOrder[tab - 1]);
         string count = $"{items.Count(IsAchievementUnlocked)}/{items.Count}";
 
@@ -238,7 +238,7 @@ public sealed partial class GameRoot
         float textX = rect.X + 64f;
         float textRight = rect.Right - 10f;
 
-        string name = hiddenSecret ? "CONQUISTA SECRETA" : achievement.Name;
+        string name = hiddenSecret ? L.T("CONQUISTA SECRETA", "SECRET ACHIEVEMENT") : achievement.Name;
         float nameSize = FitTextSize(name, textRight - textX, 1.9f);
         Color nameColor = unlocked ? TextColor : hiddenSecret ? AccentColor * 0.85f : LockedTextColor;
         PixelFont.DrawShadowed(_spriteBatch, _pixel, name, new Vector2(textX, rect.Y + 8f), nameSize, nameColor);
@@ -360,17 +360,17 @@ public sealed partial class GameRoot
         switch (notice)
         {
             case null:
-                title = "VOCE DESBLOQUEOU MUITA COISA!";
-                name = $"{toast.SummaryCount} NOVIDADES";
-                detail = "VEJA EM CONQUISTAS, SKINS E PISTAS";
+                title = L.T("VOCE DESBLOQUEOU MUITA COISA!", "YOU UNLOCKED A LOT!");
+                name = L.T($"{toast.SummaryCount} NOVIDADES", $"{toast.SummaryCount} NEW THINGS");
+                detail = L.T("VEJA EM CONQUISTAS, SKINS E PISTAS", "CHECK ACHIEVEMENTS, SKINS AND TRACKS");
                 detailColor = RecordColor;
                 DrawIconTile(tile, AchievementIcons.Art(AchievementIcons.Medal), AccentColor, colored: true);
                 break;
 
             case { Skin: { } skin }:
-                title = "NOVA SKIN DESBLOQUEADA!";
+                title = L.T("NOVA SKIN DESBLOQUEADA!", "NEW SKIN UNLOCKED!");
                 name = skin.Name;
-                detail = "AGORA DISPONIVEL!";
+                detail = L.T("AGORA DISPONIVEL!", "NOW AVAILABLE!");
                 detailColor = RecordColor;
                 DrawCircle(iconCenter, 34f, AccentColor * 0.1f);
                 DrawToastSparkles(iconCenter, elapsed);
@@ -380,9 +380,9 @@ public sealed partial class GameRoot
                 break;
 
             case { Track: { } track }:
-                title = "NOVA PISTA DESBLOQUEADA!";
+                title = L.T("NOVA PISTA DESBLOQUEADA!", "NEW TRACK UNLOCKED!");
                 name = track.Name;
-                detail = "AGORA DISPONIVEL!";
+                detail = L.T("AGORA DISPONIVEL!", "NOW AVAILABLE!");
                 detailColor = RecordColor;
                 DrawToastSparkles(iconCenter, elapsed);
                 DrawIconTile(tile, AchievementIcons.Art(track.Icon), accent, colored: true);
@@ -390,7 +390,7 @@ public sealed partial class GameRoot
 
             default:
                 Achievement achievement = notice.Achievement;
-                title = "CONQUISTA DESBLOQUEADA!";
+                title = L.T("CONQUISTA DESBLOQUEADA!", "ACHIEVEMENT UNLOCKED!");
                 name = achievement.Name;
                 detail = achievement.Description;
                 DrawIconTile(tile, achievement.Icon, accent, colored: true);

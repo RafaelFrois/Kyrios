@@ -204,12 +204,12 @@ public sealed partial class GameRoot
         (int earned, int earnable) = CollectionIsTracks
             ? Unlockables.Count(TrackThemes.All, _saveData.UnlockedTrackIds)
             : Unlockables.Count(CarSkins.All, _saveData.UnlockedSkinIds);
-        string noun = CollectionIsTracks ? "PISTAS" : "SKINS";
-        DrawScreenHeader(noun, $"{earned + 1}/{earnable + 1} {noun} DESBLOQUEADAS");
+        string noun = CollectionIsTracks ? L.T("PISTAS", "TRACKS") : "SKINS";
+        DrawScreenHeader(noun, L.T($"{earned + 1}/{earnable + 1} {noun} DESBLOQUEADAS", $"{earned + 1}/{earnable + 1} {noun} UNLOCKED"));
 
         DrawCollectionShowcase();
         DrawCollectionGrid();
-        DrawKeyHints(("SETAS", "NAVEGAR"), ("ENTER", "EQUIPAR"), ("MOUSE", "CLIQUE 2X PRA EQUIPAR"), ("ESC", "VOLTAR"));
+        DrawKeyHints((L.T("SETAS", "ARROWS"), L.T("NAVEGAR", "NAVIGATE")), ("ENTER", L.T("EQUIPAR", "EQUIP")), ("MOUSE", L.T("CLIQUE 2X PRA EQUIPAR", "DOUBLE-CLICK TO EQUIP")), ("ESC", L.T("VOLTAR", "BACK")));
     }
 
     private void DrawCollectionShowcase()
@@ -250,21 +250,21 @@ public sealed partial class GameRoot
         PixelFont.Draw(_spriteBatch, _pixel, counter, new Vector2(stage.Right - PixelFont.Measure(counter, 1.4f) - 8f, stage.Bottom - 16f), 1.4f, StatBadgeLabelColor);
 
         var column = new Rectangle(20, 0, 540, 0);
-        string name = hidden ? (CollectionIsTracks ? "PISTA SECRETA" : "SKIN SECRETA") : CollectionIsTracks ? TrackThemes.All[index].Name : CarSkins.All[index].Name;
+        string name = hidden ? (CollectionIsTracks ? L.T("PISTA SECRETA", "SECRET TRACK") : L.T("SKIN SECRETA", "SECRET SKIN")) : CollectionIsTracks ? TrackThemes.All[index].Name : CarSkins.All[index].Name;
         DrawCenteredText(column, name, 294f, FitTextSize(name, 520f, 3.2f), unlocked ? TextColor : MutedLabelColor, shadow: true);
 
         DrawCollectionChips(new Vector2(290f, 336f), index, unlocked, equipped, hidden);
 
         if (unlocked)
         {
-            string line = CollectionIsTracks ? TrackThemes.All[index].Tagline : equipped ? "PRONTA PARA CORRER" : "ENTER PARA EQUIPAR";
+            string line = CollectionIsTracks ? TrackThemes.All[index].Tagline : equipped ? L.T("PRONTA PARA CORRER", "READY TO RACE") : L.T("ENTER PARA EQUIPAR", "ENTER TO EQUIP");
             DrawCenteredText(column, line, 364f, FitTextSize(line, 520f, 1.7f), StatBadgeLabelColor);
-            DrawButton(CollectionEquipButton, equipped ? "EQUIPADA" : "EQUIPAR", focused: !equipped, primary: !equipped);
+            DrawButton(CollectionEquipButton, equipped ? L.T("EQUIPADA", "EQUIPPED") : L.T("EQUIPAR", "EQUIP"), focused: !equipped, primary: !equipped);
         }
         else if (hidden)
         {
             DrawCenteredText(column, "\"???\"", 366f, 1.8f, AccentColor);
-            DrawCenteredText(column, "ALGUNS SEGREDOS SO APARECEM PRA QUEM PROCURA", 392f, 1.4f, StatBadgeLabelColor);
+            DrawCenteredText(column, L.T("ALGUNS SEGREDOS SO APARECEM PRA QUEM PROCURA", "SOME SECRETS ONLY SHOW UP FOR THOSE WHO SEARCH"), 392f, 1.4f, StatBadgeLabelColor);
         }
         else
         {
@@ -282,7 +282,7 @@ public sealed partial class GameRoot
     private void DrawCollectionChips(Vector2 center, int index, bool unlocked, bool equipped, bool hidden)
     {
         const float size = 1.6f;
-        string status = equipped ? "EQUIPADA" : unlocked ? "DESBLOQUEADA" : "BLOQUEADA";
+        string status = equipped ? L.T("EQUIPADA", "EQUIPPED") : unlocked ? L.T("DESBLOQUEADA", "UNLOCKED") : L.T("BLOQUEADA", "LOCKED");
         Color statusColor = equipped ? AccentColor : unlocked ? RecordColor : MutedLabelColor;
         float statusWidth = PixelFont.Measure(status, size) + 34f;
 
@@ -344,7 +344,7 @@ public sealed partial class GameRoot
         }
 
         int done = combination.Parts.Count(part => part.IsMet(_saveData));
-        DrawCenteredText(area, $"COMPLETE TUDO ({done}/{combination.Parts.Count}):", area.Y, 1.5f, AccentColor);
+        DrawCenteredText(area, L.T($"COMPLETE TUDO ({done}/{combination.Parts.Count}):", $"COMPLETE ALL ({done}/{combination.Parts.Count}):"), area.Y, 1.5f, AccentColor);
         float rowY = area.Y + 18f;
         float rowHeight = MathF.Min(20f, (area.Height - 18f) / combination.Parts.Count);
         foreach (UnlockRequirement part in combination.Parts)
@@ -450,7 +450,7 @@ public sealed partial class GameRoot
         if (CollectionIsTracks)
         {
             int found = TrackThemes.All.Count(t => _saveData.FoundTrackSecrets.Contains(t.Id));
-            string text = $"SEGREDOS ENCONTRADOS NAS PISTAS: {found}/{TrackThemes.All.Count}";
+            string text = L.T($"SEGREDOS ENCONTRADOS NAS PISTAS: {found}/{TrackThemes.All.Count}", $"TRACK SECRETS FOUND: {found}/{TrackThemes.All.Count}");
             DrawCenteredText(area, text, area.Y + 4f, 1.4f, StatBadgeLabelColor);
             return;
         }

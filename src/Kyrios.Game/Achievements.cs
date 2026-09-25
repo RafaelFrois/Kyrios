@@ -132,7 +132,7 @@ public static class Achievements
         new("cirurgico", "CIRURGICO", "PASSE POR 24 CHECKPOINTS SEGUIDOS SEM BATER", TimeAttack, VeryHard,
             Unlock.Stat("24 CHECKPOINTS SEM BATER", p => p.BestCleanCheckpointStreak, 24), Art(Recolor(Speedometer, "RC"), "24")),
         new("por_um_triz", "POR UM TRIZ", "PASSE NUM CHECKPOINT COM MENOS DE 0.2 S NO RELOGIO", TimeAttack, VeryHard,
-            new TimeBelowRequirement("CHECKPOINT COM MENOS DE 0.2 S", p => p.ClosestTimeAttackCall, 0.2f), Art(Recolor(Hourglass, "YR", "DR"), "0.2")),
+            new TimeBelowRequirement(() => L.Tr("CHECKPOINT COM MENOS DE 0.2 S"), p => p.ClosestTimeAttackCall, 0.2f), Art(Recolor(Hourglass, "YR", "DR"), "0.2")),
         new("relojoeiro", "RELOJOEIRO", "ACUMULE 50000 PTS NO CONTRA O RELOGIO", TimeAttack, VeryHard,
             Unlock.TimeAttackTotal(50000), Art(Recolor(Stopwatch, "EP"), "50K")),
         new("lenda_do_relogio", "LENDA DO RELOGIO", "FACA 2500 PTS NUMA PARTIDA DO RELOGIO", TimeAttack, Rare,
@@ -437,8 +437,8 @@ public static class Achievements
     /// <summary>Achar o segredo de uma pista difícil de liberar também conta como feito mais difícil.</summary>
     private static Achievement TrackSecretAchievement(TrackTheme track) => new(
         TrackSecretId(track),
-        track.SecretName,
-        track.SecretDescription,
+        track.SecretTexts.Name,
+        track.SecretTexts.Description,
         Tracks,
         track.Difficulty switch
         {

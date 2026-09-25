@@ -21,26 +21,29 @@ public static class SkinCategories
 {
     public static string Singular(SkinCategory category) => category switch
     {
-        Vehicle => "VEICULO",
-        Animal => "ANIMAL",
-        Food => "COMIDA",
-        Thing => "OBJETO",
-        _ => "COISA ABSURDA",
+        Vehicle => L.T("VEICULO", "VEHICLE"),
+        Animal => L.T("ANIMAL", "ANIMAL"),
+        Food => L.T("COMIDA", "FOOD"),
+        Thing => L.T("OBJETO", "OBJECT"),
+        _ => L.T("COISA ABSURDA", "ABSURD THING"),
     };
 
     public static string Plural(SkinCategory category) => category switch
     {
-        Vehicle => "VEICULOS",
-        Animal => "ANIMAIS",
-        Food => "COMIDAS",
-        Thing => "OBJETOS",
-        _ => "COISAS ABSURDAS",
+        Vehicle => L.T("VEICULOS", "VEHICLES"),
+        Animal => L.T("ANIMAIS", "ANIMALS"),
+        Food => L.T("COMIDAS", "FOODS"),
+        Thing => L.T("OBJETOS", "OBJECTS"),
+        _ => L.T("COISAS ABSURDAS", "ABSURD THINGS"),
     };
 
     /// <summary>Rótulo curto pra legendas apertadas (a grade da coleção).</summary>
-    public static string ShortPlural(SkinCategory category) => category == Absurd ? "ABSURDOS" : Plural(category);
+    public static string ShortPlural(SkinCategory category) => category == Absurd ? L.T("ABSURDOS", "ABSURD") : Plural(category);
 
-    public static string Article(SkinCategory category) => category is Food or Absurd ? "UMA" : "UM";
+    /// <summary>Artigo antes do singular ("UM VEICULO", "UMA COMIDA", "A VEHICLE", "AN ANIMAL").</summary>
+    public static string Article(SkinCategory category) => L.English
+        ? (category is Animal or Thing or Absurd ? "AN" : "A")
+        : (category is Food or Absurd ? "UMA" : "UM");
 
     public static Color Color(SkinCategory category) => category switch
     {
@@ -65,7 +68,13 @@ public sealed record CarSkin(
     Action<CarPainter> Paint,
     UnlockRequirement Requirement,
     Difficulty Difficulty = Difficulty.Easy,
-    bool IsSecret = false) : IUnlockable;
+    bool IsSecret = false) : IUnlockable
+{
+    private readonly string _name = Name;
+
+    /// <summary>Nome no idioma atual (o catálogo guarda o português; ver <see cref="L.Tr"/>).</summary>
+    public string Name { get => L.Tr(_name); init => _name = value; }
+}
 
 /// <summary>
 /// Catálogo de skins, na ordem do seletor (das mais fáceis às mais raras). Pra adicionar uma nova: escreva um

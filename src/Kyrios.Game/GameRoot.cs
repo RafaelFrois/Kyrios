@@ -36,6 +36,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         Music,
         Sfx,
         Fullscreen,
+        Language,
     }
 
     // Paleta da interface (menus, painéis, HUD) — a mesma em todas as telas.
@@ -80,17 +81,17 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
     };
 
     // Cores e nomes de exibição dos rivais (o jogador é sempre o amarelo de destaque).
-    private static readonly (Color Color, string Name)[] AiLooks =
+    private static readonly (Color Color, string Portuguese, string English)[] AiLooks =
     [
-        (new Color(64, 200, 220), "AZUL"),
-        (new Color(220, 90, 220), "ROXO"),
-        (new Color(120, 220, 90), "VERDE"),
-        (new Color(230, 90, 70), "VERMELHO"),
-        (new Color(90, 120, 230), "ANIL"),
-        (new Color(240, 130, 50), "LARANJA"),
-        (new Color(190, 225, 60), "LIMA"),
-        (new Color(255, 110, 180), "ROSA"),
-        (new Color(165, 110, 70), "MARROM"),
+        (new Color(64, 200, 220), "AZUL", "BLUE"),
+        (new Color(220, 90, 220), "ROXO", "PURPLE"),
+        (new Color(120, 220, 90), "VERDE", "GREEN"),
+        (new Color(230, 90, 70), "VERMELHO", "RED"),
+        (new Color(90, 120, 230), "ANIL", "INDIGO"),
+        (new Color(240, 130, 50), "LARANJA", "ORANGE"),
+        (new Color(190, 225, 60), "LIMA", "LIME"),
+        (new Color(255, 110, 180), "ROSA", "PINK"),
+        (new Color(165, 110, 70), "MARROM", "BROWN"),
     ];
 
     private readonly GraphicsDeviceManager _graphics;
@@ -148,6 +149,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
         _graphics.HardwareModeSwitch = false;
 
         _saveData = SaveData.Load();
+        L.Current = L.FromCode(_saveData.Language);
         Progression.Normalize(_saveData);
 
         // Progresso que já cumpre algum requisito (ex.: um save de uma versão anterior) libera tudo logo ao
@@ -213,13 +215,13 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
             if (entrant.Kind == DriverKind.Human)
             {
                 _carColors[entrant] = AccentColor;
-                _carNames[entrant] = "VOCE";
+                _carNames[entrant] = L.T("VOCE", "YOU");
             }
             else
             {
-                (Color color, string name) = AiLooks[aiIndex++ % AiLooks.Length];
+                (Color color, string portuguese, string english) = AiLooks[aiIndex++ % AiLooks.Length];
                 _carColors[entrant] = color;
-                _carNames[entrant] = name;
+                _carNames[entrant] = L.T(portuguese, english);
             }
         }
     }
@@ -663,7 +665,7 @@ public sealed partial class GameRoot : Microsoft.Xna.Framework.Game
             var center = new Vector2(target.X * CellSize, target.Y * CellSize);
             float bob = MathF.Sin(_visualTime * 6f) * 3f;
             DrawChevron(center + new Vector2(0f, -30f + bob), color);
-            PixelFont.DrawShadowed(_spriteBatch, _pixel, "PROXIMO", center + new Vector2(-PixelFont.Measure("PROXIMO", 1.2f) / 2f, -50f + bob), 1.2f, color);
+            PixelFont.DrawShadowed(_spriteBatch, _pixel, L.T("PROXIMO", "NEXT"), center + new Vector2(-PixelFont.Measure(L.T("PROXIMO", "NEXT"), 1.2f) / 2f, -50f + bob), 1.2f, color);
         }
     }
 

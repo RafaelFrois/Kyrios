@@ -237,6 +237,9 @@ public sealed class SaveData
     /// (Campo novo de propósito: o antigo "Fullscreen" salvo como falso nos saves velhos é ignorado.)</summary>
     public bool Windowed { get; set; }
 
+    /// <summary>Idioma do jogo: "pt" (padrão) ou "en".</summary>
+    public string Language { get; set; } = "pt";
+
     private static string FilePath
     {
         get
@@ -306,6 +309,7 @@ public sealed class SaveData
     /// pelo menos uma vez), pra não zerar progresso já cumprido.</summary>
     public void FillStatsMissingFromOldSaves()
     {
+        Language = L.Code(L.FromCode(Language));
         WinsBySkin ??= [];
         RecordsBySkin ??= [];
         BestScoreBySkin ??= [];

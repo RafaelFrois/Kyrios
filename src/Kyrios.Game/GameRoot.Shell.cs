@@ -174,7 +174,7 @@ public sealed partial class GameRoot
         }
 
         float credit = Math.Clamp((t - 1.1f) / 0.4f, 0f, 1f) * alpha;
-        DrawCenteredText(new Rectangle(0, 0, (int)AreaWidth, 0), "UM JOGO DOMUS ARCIS", 378f, 1.6f, StatBadgeLabelColor * credit);
+        DrawCenteredText(new Rectangle(0, 0, (int)AreaWidth, 0), L.T("UM JOGO DOMUS ARCIS", "A DOMUS ARCIS GAME"), 378f, 1.6f, StatBadgeLabelColor * credit);
     }
 
     // ---------- Segredos do menu principal ----------
